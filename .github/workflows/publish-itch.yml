@@ -1,0 +1,64 @@
+# Test -> build the web bundle -> validate -> butler push to itch.io (html5 channel).
+# Needs repository secret BUTLER_API_KEY. Publishes only from main; PRs only run tests.
+name: CI and publish to itch.io
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: itch-production-${{ github.event_name }}
+  cancel-in-progress: false
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Unit, determinism and bot tests
+        run: node --test test/*.test.js
+      - name: Build web bundle
+        run: scripts/build-web.sh dist
+      - name: Validate HTML5 bundle
+        run: node scripts/check-html5.mjs dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-bundle
+          path: dist
+          retention-days: 14
+
+  publish:
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: itch-production
+      url: https://stevenli-phoenix-work.itch.io/halcyon-compute
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-bundle
+          path: dist
+      - name: Install official butler
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            https://broth.itch.zone/butler/linux-amd64/15.31.0/archive/default -o "$RUNNER_TEMP/butler.zip"
+          unzip -q "$RUNNER_TEMP/butler.zip" -d "$RUNNER_TEMP/butler"
+          chmod +x "$RUNNER_TEMP/butler/butler"
+      - name: Push
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          set -euo pipefail
+          test -n "$BUTLER_API_KEY" || { echo '::error::Missing BUTLER_API_KEY repository secret'; exit 1; }
+          "$RUNNER_TEMP/butler/butler" push dist stevenli-phoenix-work/halcyon-compute:html5 --userversion "$GITHUB_SHA"
+          "$RUNNER_TEMP/butler/butler" status stevenli-phoenix-work/halcyon-compute:html5
