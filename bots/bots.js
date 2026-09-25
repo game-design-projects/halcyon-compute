@@ -25,6 +25,48 @@
   let DEBUG = false;
   const dbg = (s, ...m) => { if (DEBUG) console.debug(`[bot d${Math.floor(s.day)}]`, ...m); };
 
+  /* ---------------- human pacing (DECISIONS D42) ----------------
+     Every state change a bot makes goes through ap(). In human-paced mode (Casual / Expert) a decision session has an
+     action budget and each chapter's mechanics are off-limits until the bot has "learnt" them; declines are free
+     no-ops (a person lets an offer expire). BUDGET is null for the full-speed bots. */
+  let BUDGET = null;
+  function ap(s, a) {
+    if (!BUDGET) return Sim.apply(s, a);
+    if (a.type === "declineContract" || a.type === "declineRound") return { ok: true, msg: "ignored" };
+    // chores that answer a visible problem (traffic capped, parts broken, a queue of jobs) need no learning time
+    const key = CHORES.has(a.type) ? null : chapterOf(s, a);
+    if (key && BUDGET.learn[key] != null && BUDGET.learn[key] > s.day) return { ok: false, msg: `still learning ${key}` };
+    // a decision = one kind of action on one thing (dragging six web servers in a row is one decision); the
+    // workload toggle and the switch that go with placing a card are part of that placement
+    const dk = a.type === "workload" || (a.type === "buy" && a.item === "sw") ? null : a.type + ":" + (a.item || a.id || a.mode || a.hall || "");
+    const repeat = dk && BUDGET.last === dk && BUDGET.reps < HUMAN.REPEAT;
+    if (dk && !repeat && BUDGET.left <= 0) return { ok: false, msg: "no attention left" };
+    const r = Sim.apply(s, a);
+    if (r.ok && dk) {
+      if (repeat) BUDGET.reps++;
+      else { BUDGET.left--; BUDGET.last = dk; BUDGET.reps = 1; }
+    }
+    return r;
+  }
+  const CHORES = new Set(["transit", "repairPolicy", "hire", "repair"]);
+  const GATE_KEY = { hire: "ops", fire: "ops", repairPolicy: "ops", repair: "ops", store: "ops", unstore: "ops", spine: "fabric",
+    transit: "fabric", forward: "memory", borrow: "finance", repay: "finance", lease: "finance", returnLease: "finance",
+    buildHall: "facilities", ups: "facilities", crac: "facilities", ppa: "energy", solar: "energy", cooling: "environment",
+    acceptRound: "investors", buyback: "investors", pr: "reputation", lobby: "policy", mode: "power", grid: "power", workload: "gpu", tank: "disrupt" };
+  /* the chapter whose mechanic an action uses (for the learning delay) */
+  function chapterOf(s, a) {
+    if (a.type === "buy" || a.type === "lease" || a.type === "forward") {
+      const it = s.items[a.item];
+      if (a.type !== "buy") return GATE_KEY[a.type];
+      return it.role === "gpu" ? (it.gen > 1 ? "gens" : "gpu") : it.role === "cool" ? "heat" : it.role === "exotic" || it.role === "mem" ? "disrupt" : null;
+    }
+    if (a.type === "signContract") {
+      const o = s.offers.find(x => x.id === a.id);
+      return !o ? null : o.bts ? "contracts" : o.kind === "frontier" ? "fabric" : o.kind === "web" ? null : "gpu";
+    }
+    return GATE_KEY[a.type] || null;
+  }
+
   /* ---------------- shared helpers ---------------- */
   const itemRole = (s, d) => s.items[d.type].role;
   function needsSwitch(s, r) { return !r.devices.concat(r.pending).some(d => itemRole(s, d) === "net"); }
@@ -46,7 +88,7 @@
   function candidates(s, opts) {
     const out = [], shop = Sim.shopItems(s).filter(k => !opts.skip || !opts.skip(k));
     const st = opts.st || Sim.stats(s);
-    const racks = s.racks.filter(r => r.devices.length || r.pending.length || r.tank).concat(emptyRacks(s, 2));
+    const racks = opts.racks || s.racks.filter(r => r.devices.length || r.pending.length || r.tank).concat(emptyRacks(s, 2));
     const seen = new Set();
     for (const r of racks) {
       const sig = rackSig(s, r, st);
@@ -81,33 +123,63 @@
     }
     return p === s ? Sim.shallowClone(s) : p;
   }
-  function doActs(s, acts) { for (const a of acts) if (!Sim.apply(s, a).ok) return false; return true; }
+  function doActs(s, acts) { for (const a of acts) if (!ap(s, a).ok) return false; return true; }
 
   /* economics of a (projected) state assuming internet transit follows traffic, as both bots keep it (ch7).
      Without this every extra web/inference card would look transit-capped. `p` must be a copy we own. */
   function statsT(p, opts) {
-    if (!Sim.on(p, "fabric")) return Sim.stats(p, opts);
+    if (!Sim.on(p, "fabric")) return earnView(Sim.stats(p, opts));
     p.transit = K.TRANSIT_MAX;
     const st = Sim.stats(p, opts);
     const need = Math.max(0, Math.ceil((st.supply.web + st.supply.infer) / K.TRANSIT_PER) - K.TRANSIT_FREE + 1);
     st.net += (K.TRANSIT_MAX - need) * K.TRANSIT_COST;
-    return st;
+    st.earn += (K.TRANSIT_MAX - need) * K.TRANSIT_COST;
+    return earnView(st);
   }
+  /* v4: bots value states by economic profit: cash profit plus the value of training-job progress (paid on completion) */
+  function earnView(st) { st.cashNet = st.net; st.net = st.earn; return st; }
 
   /* chores both bots do the same way: internet transit a unit ahead of web + inference traffic (ch7) */
   function keepTransit(s) {
     if (!Sim.on(s, "fabric")) return false;
     const st = Sim.stats(s), need = Math.ceil((st.supply.web + st.supply.infer) / st.transitF / K.TRANSIT_PER) - K.TRANSIT_FREE + 1;
     const cur = Sim.transitTarget(s);
-    if (need > cur) return Sim.apply(s, { type: "transit", delta: need - cur }).ok;
-    if (cur > need + 3) return Sim.apply(s, { type: "transit", delta: need + 1 - cur }).ok;
+    if (need > cur) return ap(s, { type: "transit", delta: need - cur }).ok;
+    if (cur > need + 3) return ap(s, { type: "transit", delta: need + 1 - cur }).ok;
     return false;
   }
 
   /* ---------------- greedy ---------------- */
+  /* greedy sees every signed contract as if it had already started (it buys for what it owes, lead time or not) */
+  function startedNow(s) {
+    return s.contracts.map(c => c.start > s.day ? Object.assign({}, c, { start: s.day, end: c.end - (c.start - s.day) }) : c);
+  }
+  function gNet(s, p, cs) { p.contracts = cs; return statsT(p, { eq: true }).net; }
+  /* a small seeded stream for the human-paced bots' noise and sampling (kept in mem: deterministic per game) */
+  function hRand(mem) {
+    let t = (mem.h.rng = (mem.h.rng + 0x6D2B79F5) >>> 0);
+    t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  }
+  const payback = mem => mem.h ? HUMAN.PAYBACK : CFG.GREEDY_PAYBACK;   // Casual wants its money back sooner
+  const noisy = (mem, v) => mem.h && mem.h.noise ? v * (1 + (hRand(mem) - 0.5) * 2 * mem.h.noise) : v;
+  /* gut reflex for v4: a rack that serves no contract goes Off (it costs power and earns nothing); a parked rack
+     comes back on when its market owes more than the running racks deliver */
+  function greedyPark(s) {
+    const cs = startedNow(s), p = Sim.shallowClone(s);
+    p.contracts = cs;
+    const sv = Sim.stats(p, { eq: true });
+    for (const r of s.racks) {
+      if (!r.devices.length || r.tank) continue;
+      const pr = sv.perRack[r.id], w = r.devices.some(d => itemRole(s, d) === "gpu") ? r.workload : "web";
+      if (r.mode !== "off" && pr.to && !pr.to.length && sv.owed[w] <= sv.supply[w] - pr.out[w] + 1e-6 && pr.out[w] > 0) ap(s, { type: "mode", rack: r.id, mode: "off" });
+      else if (r.mode === "off" && sv.owed[w] > sv.supply[w] + 0.5) ap(s, { type: "mode", rack: r.id, mode: "std" });
+    }
+  }
   /* sell any part whose removal raises today's income (it loses money right now); identical racks once */
-  function greedySellLosers(s) {
-    let base = statsT(Sim.shallowClone(s), { eq: true }).net;
+  function greedySellLosers(s, mem) {
+    const cs = startedNow(s);
+    let base = gNet(s, Sim.shallowClone(s), cs);
     const st = Sim.stats(s), seen = new Set();
     for (const r of s.racks) {
       const sig = rackSig(s, r, st);
@@ -119,48 +191,107 @@
         seen.add(key);
         const a = { type: "sell", rack: r.id, uid: d.uid };
         if (!Sim.check(s, a).ok) continue;
-        const n = statsT(Sim.project(s, a), { eq: true }).net;
-        if (n > base + 0.05) { Sim.apply(s, a); base = statsT(Sim.shallowClone(s), { eq: true }).net; seen.delete(key); }
+        const n = gNet(s, Sim.project(s, a), cs);
+        if (noisy(mem, n - base) > 0.05) { if (ap(s, a).ok) { base = gNet(s, Sim.shallowClone(s), cs); seen.delete(key); } }
       }
     }
   }
+  /* gut feeling: keep ~CFG.GREEDY_RUNWAY days of bills (plus any debt) in the bank */
+  function greedyReserve(s) { return 40 + Math.max(0, s.debt) + CFG.GREEDY_RUNWAY * Math.max(0, Sim.stats(s).opex); }
+  /* promised units per market: capacity already sold (serving units, jobs at their nominal rate, build-to-suit too) */
+  function owedBy(s) {
+    const o = { web: 0, train: 0, infer: 0, frontier: 0 };
+    for (const c of s.contracts) o[c.kind === "frontier" ? "frontier" : c.w] += Sim.isJob(c) ? c.work / c.days : c.units;
+    return o;
+  }
+  /* gut feeling on an offer: fine if it pays for the cards it needs beyond today's free capacity (every offer is
+     judged against the SAME free capacity, so a batch can overcommit), the cards are affordable now, and they pay back
+     within the payback horizon. No thought for failures, summer, launches or lead times. */
+  function greedySign(s, mem) {
+    const st = Sim.stats(s), cap = Sim.capacity(s, st), owed = owedBy(s), left = END - s.day;
+    const reserve = greedyReserve(s);
+    let spent = 0;
+    // Casual: "I'm still catching up" - no new promises while any market owes more than it can deliver
+    if (mem.h && ["web", "train", "infer"].some(w => owed[w] > cap[w] + 0.5)) return;
+    for (const o of s.offers.slice()) {
+      if (mem.offerSeen.has(o.id)) continue;
+      mem.offerSeen.add(o.id);
+      const m = o.kind === "frontier" ? "frontier" : o.w;
+      const free = Math.max(0, cap[m] - owed[m]), short = Math.max(0, o.units - free);
+      const card = Sim.bestCard(s, m === "frontier" ? "train" : m);
+      let capex = o.bts ? o.fitout : 0, n = 0;
+      if (short > 0) {
+        if (m === "frontier" || !card) { ap(s, { type: "declineContract", id: o.id }); continue; }   // can't whip up a cluster
+        n = Math.ceil(short / card.u);
+        if (n > Sim.roomFor(s, card.k, m)) { ap(s, { type: "declineContract", id: o.id }); continue; }   // no room for the cards
+        capex += n * card.price + Math.ceil(n / (m === "web" ? 16 : 4)) * s.items.sw.price;
+        if (mem.h && n > HUMAN.REPEAT) { ap(s, { type: "declineContract", id: o.id }); continue; }   // too big a build to take on
+      }
+      const term = Math.max(0, Math.min(o.days, left - (o.lead || 0)));
+      const revenue = Sim.isJob(o) ? (o.days <= left ? o.pay : 0) : o.units * term * o.price;
+      const perDay = revenue / Math.max(1, Sim.isJob(o) ? o.days : term);
+      const profit = noisy(mem, revenue * 0.85 - capex * 0.5);
+      const ok = revenue > 0 && profit > 0 && capex + spent <= s.cash - reserve && (capex === 0 || capex / Math.max(1e-6, perDay) <= payback(mem));
+      if (ok) {
+        // Casual keeps a running tally of what it just promised and what that will cost; full-speed greedy does not
+        if (ap(s, { type: "signContract", id: o.id }).ok && mem.h) { owed[m] += o.units; spent += capex; }
+      } else ap(s, { type: "declineContract", id: o.id });
+    }
+  }
   function greedy(s, mem) {
+    if (!mem.offerSeen) mem.offerSeen = new Set();
     if (s.day >= (mem.nextHk || 0)) {
       mem.nextHk = s.day + 2;
       keepTransit(s);
       if (Sim.on(s, "ops")) {
-        if (!s.repairAuto) Sim.apply(s, { type: "repairPolicy", on: true });
-        if (waitingJobs(s) > 5 && !s.hires.length && s.techs < 6) Sim.apply(s, { type: "hire" });
+        if (!s.repairAuto) ap(s, { type: "repairPolicy", on: true });
+        if (waitingJobs(s) > 5 && !s.hires.length && s.techs < 6) ap(s, { type: "hire" });
         mem.quiet = s.jobs.length ? 0 : (mem.quiet || 0) + 2;          // idle staff costs money: let one go
-        if (mem.quiet >= 30 && s.techs > 3) { Sim.apply(s, { type: "fire" }); mem.quiet = 0; }
+        if (mem.quiet >= 30 && s.techs > 3) { ap(s, { type: "fire" }); mem.quiet = 0; }
       }
+      greedySign(s, mem);
+      greedyPark(s);
     }
-    if (s.day >= (mem.nextSell || 0)) { mem.nextSell = s.day + 20; greedySellLosers(s); }
+    if (s.day >= (mem.nextSell || 0)) { mem.nextSell = s.day + 20; greedySellLosers(s, mem); }
     if (s.day < (mem.next || 0)) return;
     mem.next = s.day + 4;
-    const reserve = 40 + Math.max(0, s.debt);        // gut feeling: keep a little cash for bills and taxes
-    for (let n = 0; n < 4; n++) {
-      const st = Sim.stats(s, { eq: true }), base = statsT(Sim.shallowClone(s), { eq: true }).net;
+    const reserve = greedyReserve(s);                // gut feeling: keep some cash for bills and taxes
+    const cs = startedNow(s);
+    for (let n = 0; n < (mem.h ? HUMAN.REPEAT : 4); n++) {
+      const st = Sim.stats(s, { eq: true }), base = gNet(s, Sim.shallowClone(s), cs);
       let best = null, gridBlocked = false;
-      for (const c of candidates(s, { st })) {
+      // a person looks at a few racks, not the whole floor x the whole catalogue
+      const racks = mem.h ? sampleRacks(s, mem, 3) : null;
+      for (const c of candidates(s, { st, racks })) {
         if (c.cost > s.cash - reserve) continue;
         const p = preview(s, c.acts);
         if (!p) { const chk = Sim.check(s, c.acts[c.acts.length - 1]); if (/Grid/.test(chk.msg)) gridBlocked = true; continue; }
-        const gain = statsT(p, { eq: true }).net - base;
-        if (gain <= 0 || c.cost / gain > CFG.GREEDY_PAYBACK) continue;
+        const gain = noisy(mem, gNet(s, p, cs) - base);
+        if (gain <= 0 || c.cost / gain > payback(mem)) continue;
         const score = gain / c.cost;
         if (!best || score > best.score) best = Object.assign({ score }, c);
       }
-      if (best) { doActs(s, best.acts); continue; }
+      if (best) { if (!doActs(s, best.acts)) break; continue; }
       const g = Sim.gridNext(s);
-      if (gridBlocked && g && Sim.check(s, { type: "grid" }).ok && s.cash > g.cost + 150) Sim.apply(s, { type: "grid" });
+      if (gridBlocked && g && Sim.check(s, { type: "grid" }).ok && s.cash > g.cost + 150) ap(s, { type: "grid" });
       break;
     }
+  }
+  function sampleRacks(s, mem, n) {
+    const used = s.racks.filter(r => (r.devices.length || r.pending.length || r.tank) && K.RACK_U - Sim.usedU(s, r) >= 4), out = [];
+    const pool = used.concat(emptyRacks(s, 2));
+    while (out.length < n && out.length < pool.length) {
+      const r = pool[Math.floor(hRand(mem) * pool.length)];
+      if (!out.includes(r)) out.push(r);
+    }
+    return out;
   }
 
   /* ================= planner ================= */
   const CFG = { STEP: 4, ENDGAME: 420, SPAN: 150, RESIDUAL: 0.3, SPARES: 2, TECH_MAX: 8,
-    GREEDY_PAYBACK: 300 };            // greedy: buys only what pays for itself within this many days (gut feeling)
+    PH_PRICE: 0.85, PH_DELAY: 15,
+    HEADROOM_OPS: 0.06, HEADROOM_HEAT: 0.03, HEADROOM_BTS: 0.05, HEADROOM_HUMAN: 0.05,   // spare capacity over SLA-required units, per unlocked risk     // planner's pipeline belief (v4): idle capacity finds contracts at 85 % of the index
+    GREEDY_PAYBACK: 300, GREEDY_RUNWAY: 15 };            // greedy: buys only what pays for itself within this many days (gut feeling)
   const SCARE_TITLES = new Set(C.SCARES.map(x => x.title));
 
   function use(mem, s, key, what) {           // tally: which chapter's mechanic changed the planner's actions
@@ -174,7 +305,7 @@
     dbg(s, key, "(kept)", what);
   }
   function act(s, mem, a, key, why) {
-    const r = Sim.apply(s, a);
+    const r = ap(s, a);
     if (r.ok && key) use(mem, s, key, why || a.type);
     return r.ok;
   }
@@ -268,26 +399,77 @@
     p.heatWave = null; p.outage = null;
     return p;
   }
+  /* a view at day d: training jobs are assumed on schedule (done by their deadline, at the rate that meets it),
+     serving contracts run to their end, and the pipeline belief fills what is left of market demand */
   function evalAt(p, B, d) {
     const a = B.at(d);
     p.items = B.items; p.market = a.market; p.vendors = a.vendors; p.policyFx = a.fx; p.drought = a.drought;
-    p.contracts = contractsOf(p).filter(c => c.end > d);
+    const real = [];
+    for (const c of contractsOf(p)) {
+      if (Sim.isJob(c)) {
+        if (d >= c.deadline) continue;
+        const rate = Math.max(0, c.work - c.done) / Math.max(1, c.deadline - B.day);
+        real.push(Object.assign({}, c, { done: Math.min(c.work, c.done + rate * Math.max(0, d - B.day)), maxRate: rate + 1e-9 }));
+      } else if (c.end > d) real.push(c);
+    }
+    p.contracts = real.concat(pipeline(p, B, d, real));
     return statsT(p, { day: d, eq: true });
   }
+  /* the planner's belief about future signings: from PH_DELAY days on, capacity that no contract uses would find
+     contracts at PH_PRICE x the price index (after the public launch calendar), up to the market's open demand.
+     These "phantom" contracts carry no SLA and are served last. They are what makes buying ahead of offers, keeping
+     idle cards, and hedging before a launch valuable in the planner's eyes (the v3 spot market played that role). */
+  function pipeline(p, B, d, real) {
+    if (!Sim.contractsOn(p) || d < B.day + CFG.PH_DELAY) return [];
+    const mk = Sim.marketAt(p, d), h = { web: 0, train: 0, infer: 0, frontier: 0 }, out = [];
+    for (const c of real) {
+      if (c.bts) continue;
+      if (c.kind === "frontier") h.frontier += c.work / c.days;
+      else if (c.kind === "train") h.train += c.work / c.days;
+      else h[c.w] += c.units;
+    }
+    const ph = (id, w, units, price, fr) => { if (units > 0.5) out.push({ id, phantom: true, kind: "pipe", w, units, price: price * CFG.PH_PRICE, sla: 0, penalty: 0, start: 0, end: 1e9, frontier: !!fr }); };
+    ph("~web", "web", mk.web.demand - h.web, mk.web.price);
+    if (Sim.on(p, "gpu")) {
+      ph("~infer", "infer", mk.infer.demand - h.infer, mk.infer.price);
+      ph("~train", "train", mk.train.demand - h.train, mk.train.price * (1 + K.JOB_PREMIUM));
+    }
+    if (Sim.on(p, "fabric")) ph("~fr", "train", mk.frontier.demand - h.frontier, mk.frontier.price * (1 + K.JOB_PREMIUM), true);
+    return out;
+  }
   const missing = st => { let n = 0; for (const k in st.cMiss) if (st.cMiss[k] > 1e-6) n++; return n; };
+  /* v4: a customer whose SLA is missed K.SLA_WALK_DAYS in a row walks away. A miss in a forecast view persists, so
+     it costs that contract's revenue from the walk-out to its end (within the horizon) */
+  function walkLoss(p, st, B) {
+    let v = 0;
+    const until = B.day + B.span, from = B.day + K.SLA_WALK_DAYS;
+    for (const c of p.contracts) {
+      if (c.phantom || Sim.isJob(c) || !(st.cMiss[c.id] > 1e-6)) continue;
+      v += c.units * c.price * Math.max(0, Math.min(c.end, until) - from);
+    }
+    return v;
+  }
+  function termMiss(p, st) {      // daily revenue of contracts that would have walked by the valuation day
+    let v = 0;
+    for (const c of p.contracts) if (!c.phantom && !Sim.isJob(c) && st.cMiss[c.id] > 1e-6) v += c.units * c.price;
+    return v;
+  }
   function value(s, B, p) {
     prep(s, p);
-    let net = 0, gross = 0, miss = 0;
-    for (const d of B.days) { const st = evalAt(p, B, d); net += st.net; gross += st.gross; miss += missing(st); }
-    const term = B.termDay ? evalAt(p, B, B.termDay).net : 0;
+    let net = 0, gross = 0, miss = 0, walk = 0;
+    for (const d of B.days) { const st = evalAt(p, B, d); net += st.net; gross += st.gross; miss += missing(st); walk += walkLoss(p, st, B); }
+    let term = 0;
+    if (B.termDay) { const st = evalAt(p, B, B.termDay); term = st.net - termMiss(p, st); }
     // SLA misses also cost reputation (ch15): per missing contract-day, valued at what a point is worth at the end
-    const rep = -miss / B.days.length * B.span * K.REP_SLA_DAY * B.repPoint;
+    const rep = -miss / B.days.length * B.span * K.REP_SLA_DAY * B.repPoint - walk / B.days.length;
     return { mid: net / B.days.length, gross: gross / B.days.length, term, rep };
   }
   function screen(s, B, p) {                 // cheap one-sample estimate used to shortlist candidates
     prep(s, p);
-    const st = evalAt(p, B, B.days[1]);
-    return { mid: st.net, gross: st.gross, term: B.termDay ? evalAt(p, B, B.termDay).net : 0, rep: -missing(st) * B.span * K.REP_SLA_DAY * B.repPoint };
+    const st = evalAt(p, B, B.days[1]), rep = -missing(st) * B.span * K.REP_SLA_DAY * B.repPoint - walkLoss(p, st, B);
+    let term = 0;
+    if (B.termDay) { const s2 = evalAt(p, B, B.termDay); term = s2.net - termMiss(p, s2); }
+    return { mid: st.net, gross: st.gross, term, rep };
   }
   const gainOf = (B, v0, v) => (v.mid - v0.mid) * B.span + (v.term - v0.term) * B.termW + (v.rep - v0.rep);
 
@@ -369,6 +551,7 @@
   // A contract it can't serve today is still worth signing if buying the capacity for it pays (that is the
   // expansion that turns the grid tier and Hall 2 into good investments).
   function bestCardFor(s, w) {
+    if (w === "web") return { k: "cpu", u: 1, price: s.items.cpu.price };
     let best = null;
     for (const k of Sim.shopItems(s)) {
       const it = s.items[k];
@@ -378,41 +561,49 @@
     }
     return best;
   }
-  function expand(s, p, w, n, card) {   // hypothetically add n cards for workload w; returns {p, n} placed
-    let placed = 0;
+  function expand(s, p, w, n, card) {   // hypothetically add n cards for workload w; returns {p, placed, grid}
+    let placed = 0, grid = false;
     for (const r0 of p.racks) {
       if (placed >= n) break;
       const r = r0;
       if (r.tank) continue;
       const hasGpu = r.devices.concat(r.pending).some(d => itemRole(s, d) === "gpu");
-      if (hasGpu && r.workload !== w) continue;
+      if (w === "web" ? hasGpu : hasGpu && r.workload !== w) continue;
       while (placed < n) {
         const acts = [];
-        if (!hasGpu && r.workload !== w) acts.push({ type: "workload", rack: r.id, workload: w });
+        if (w !== "web" && !hasGpu && r.workload !== w) acts.push({ type: "workload", rack: r.id, workload: w });
         if (needsSwitch(p, Sim.rackById(p, r.id))) acts.push({ type: "buy", item: "sw", rack: r.id });
         acts.push({ type: "buy", item: card.k, rack: r.id });
         let q = p, ok = true;
         for (const a of acts) {
           const chk = Sim.check(q, a);
-          if (!chk.ok && !/Needs \$/.test(chk.msg)) { ok = false; break; }
+          if (!chk.ok && !/Needs \$/.test(chk.msg)) { ok = false; if (/Grid/.test(chk.msg)) grid = true; break; }
           q = Sim.project(q, a);
         }
         if (!ok) break;
         p = q; placed++;
       }
     }
-    return { p, placed };
+    return { p, placed, grid: grid || (placed < n && !p.racks.some(r => !r.tank && !r.devices.length && !r.pending.length)) };
   }
+  /* v4: every offer is judged against the planner's pipeline belief (idle capacity would find contracts at ~85 % of
+     the price index, up to open market demand), so signing means "this beats what the capacity would earn anyway";
+     it must keep 10 % (build-to-suit 15 %) headroom over everything owed on that market at every sampled day
+     (summer heat, droughts and failures take output away), and it may buy up to 10 cards (30 for build-to-suit) if
+     that pays and is affordable before delivery starts. */
   function contractsModule(s, mem, B, v0) {
-    if (!Sim.on(s, "contracts")) return;
+    if (!Sim.contractsOn(s)) return;
     for (const o of s.offers.slice()) {
       if (mem.offerSeen.has(o.id)) continue;
       mem.offerSeen.add(o.id);
+      const job = Sim.isJob(o), fr = o.kind === "frontier";
+      const key = o.bts ? "contracts" : fr ? "fabric" : o.kind === "web" ? "racks" : "gpu";
       const ex = B.odds.export;
       if (o.foreign && ex && ex.p > 0.5 && ex.vote < s.day + o.days) { act(s, mem, { type: "declineContract", id: o.id }, "policy", `decline foreign ${o.cust} (export P=${ex.p.toFixed(2)})`); continue; }
-      const start = s.day + (o.bts ? o.lead : 0);
-      const c = Object.assign({}, o, { start, end: start + o.days });
-      if (start >= END - 10) { if (Sim.apply(s, { type: "declineContract", id: o.id }).ok) note(mem, s, "contracts", "decline: starts too late"); continue; }
+      const start = s.day + (o.lead || 0);
+      const c = Object.assign({}, o, { start, signed: s.day, delivered: 0, missed: 0 },
+        job ? { done: 0, deadline: s.day + o.days, end: s.day + o.days + o.lateMax } : { end: start + o.days });
+      if (start >= END - 10 || (job && c.deadline > END - 3)) { if (ap(s, { type: "declineContract", id: o.id }).ok) note(mem, s, key, "decline: runs past the end"); continue; }
       let term = Math.min(o.days, END - start);
       // an inference build-to-suit customer walks away if the efficiency breakthrough is real (ch17): after the
       // preprint the planner weighs that; once "reproduced" it expects the deal to end at the shock
@@ -420,16 +611,22 @@
         const cutAt = mem.cutDay || 1400;
         if (start + term > cutAt) term = Math.max(0, cutAt - start) + (mem.demandCut ? 0 : 0.5 * (start + term - cutAt));
       }
-      if (term <= 5) { if (Sim.apply(s, { type: "declineContract", id: o.id }).ok) note(mem, s, "disrupt", `decline ${o.cust}: demand cut expected`); continue; }
-      const days = [0.1, 0.5, 0.9].map(f => Math.min(END - 1, Math.round(start + 8 + f * (Math.min(o.days, END - start) - 8))));
+      if (term <= 5) { if (ap(s, { type: "declineContract", id: o.id }).ok) note(mem, s, "disrupt", `decline ${o.cust}: demand cut expected`); continue; }
+      const t0 = job ? s.day + 2 : start + 8, t1 = job ? c.deadline - 2 : start + Math.min(o.days, END - start);
+      const days = [0.1, 0.5, 0.9].map(f => Math.min(END - 1, Math.round(t0 + f * Math.max(0, t1 - t0))));
       const base = prep(s, Sim.shallowClone(s));
       const evalWith = p => {
         setContracts(p, s.contracts.concat([c]));
         let d0 = 0, d1 = 0, miss = 0, mc = 0, cover = Infinity;
         for (const d of days) {
           const s0 = evalAt(base, B, d); d0 += s0.net; const st = evalAt(p, B, d); d1 += st.net; miss = Math.max(miss, st.cMiss[c.id] || 0); mc += missing(st) - missing(s0);
-          const owed = contractsOf(p).filter(x => x.w === o.w && !(x.start > d) && x.end > d).reduce((a, x) => a + x.units, 0);
-          cover = Math.min(cover, owed > 0 ? st.supply[o.w] / owed : Infinity);
+          let owed = 0;
+          for (const x of contractsOf(p)) {
+            if (x.start > d || x.end <= d || (Sim.isJob(x) && d >= x.deadline)) continue;
+            if (fr ? x.kind === "frontier" : x.w === o.w && x.kind !== "frontier") owed += Sim.isJob(x) ? x.work / x.days : x.units * x.sla;
+          }
+          const sup = fr ? st.frontierElig : st.supply[o.w];
+          cover = Math.min(cover, owed > 0 ? sup / owed : Infinity);
         }
         let g = (d1 - d0) / days.length * term - mc / days.length * term * K.REP_SLA_DAY * B.repPoint;
         if (B.termDay && c.end > B.termDay) g += (evalAt(p, B, B.termDay).net - evalAt(base, B, B.termDay).net) * B.termW;
@@ -438,30 +635,41 @@
       let r = evalWith(prep(s, Sim.shallowClone(s))), how = "";
       const fit = o.bts ? o.fitout : 0;
       r.g -= fit;
-      if (o.w !== "web" && (r.miss > 0 || r.g <= 5) && END - s.day > 150) {
+      // headroom over what the SLAs require: only for risks that exist yet (failures from ch6, heat from ch4)
+      const need = 1 + (Sim.on(s, "ops") ? CFG.HEADROOM_OPS : 0) + (Sim.on(s, "heat") ? CFG.HEADROOM_HEAT : 0) + (o.bts ? CFG.HEADROOM_BTS : 0)
+        + (mem.h ? CFG.HEADROOM_HUMAN : 0);        // Expert reacts every ~2 weeks, not every 4 days: more slack
+      if (!fr && (r.miss > 0 || r.cover < need || r.g <= 5) && END - s.day > 150) {
         // with extra capacity: the cards outlive the contract (residual), and they must fit on the floor
         const card = bestCardFor(s, o.w);
-        const n = card ? Math.min(o.bts ? 30 : 10, Math.ceil(o.units / (card.u * 0.9))) : 0;
+        const n = card ? Math.min(o.w === "web" ? 30 : o.bts ? 30 : 10, Math.ceil(o.units * 1.15 / (card.u * 0.9))) : 0;
         if (n > 0) {
           const e = expand(s, Sim.shallowClone(s), o.w, n, card);
+          if (e.placed < n && e.grid) mem.floorBlocked = s.day;      // offers outgrow the floor: a signal for the growth module
           // only if the fit-out and the hardware are affordable before delivery starts (cash, profit over the lead,
           // credit line); otherwise the "option" is a promise it can't keep (penalties can bankrupt it)
           const credit = Sim.on(s, "finance") ? Math.max(0, K.LOAN_LTV * Sim.netWorth(s) - s.debt) : 0;
           const avail = s.cash - 60 + Math.max(0, v0.mid) * (start - s.day) * 0.7 + credit * 0.8 - (mem.committed || 0);
-          if (e.placed > 0 && fit + e.placed * card.price <= avail) {
+          const hw = e.placed * card.price + (o.w === "web" ? Math.ceil(e.placed / 16) : Math.ceil(e.placed / 4)) * s.items.sw.price;
+          if (e.placed > 0 && fit + hw <= avail) {
             const x = evalWith(prep(s, e.p));
             const gx = x.g - fit - e.placed * (card.price - residual(s, B, card.k) - 0.35 * card.price * Math.max(0, B.span - term) / B.span);
-            if (gx > r.g) { r = { g: gx, miss: x.miss, cover: x.cover, cost: e.placed * card.price }; how = ` +${e.placed}x${card.k}`; }
+            if (gx > r.g || (x.cover >= need && r.cover < need && gx > 5)) { r = { g: gx, miss: x.miss, cover: x.cover, cost: hw }; how = ` +${e.placed}x${card.k}`; }
           }
         }
       }
-      // don't oversell capacity: keep 10 % headroom over everything owed on this workload (heat, droughts and
-      // failures take output away; a build-to-suit penalty is 3x the price)
-      const gain = r.g - (r.miss > 0.02 * o.units ? 100 : 0) - (r.cover < (o.bts ? 1.15 : 1.1) ? 1e9 : 0);
+      // don't oversell capacity: keep headroom over everything owed on this market (heat, droughts and failures take
+      // output away; a build-to-suit penalty is 3x the price)
+      const gain = r.g - (r.miss > 0.02 * o.units ? 100 : 0) - (r.cover < need ? 1e9 : 0);
       if ((gain > 5 || (mem.rescue && gain > -20 && !o.bts)) && (!o.bts || fund(s, mem, o.fitout + 50))) {
-        act(s, mem, { type: "signContract", id: o.id }, "contracts", `sign ${o.bts ? "BUILD-TO-SUIT " : ""}${o.w} ${o.units}u x${o.days}d gain ${gain.toFixed(0)}${how}`);
-        if (how) { mem.expandFor = s.day; mem.committed = (mem.committed || 0) + 0.5 * (r.cost || 0); }
-      } else if (Sim.apply(s, { type: "declineContract", id: o.id }).ok) note(mem, s, "contracts", `decline ${o.w} gain ${gain.toFixed(0)}`);
+        const why = `sign ${o.bts ? "BUILD-TO-SUIT " : ""}${o.kind} ${job ? o.work + "ud" : o.units + "u"} x${o.days}d gain ${gain.toFixed(0)}${how}`;
+        if (act(s, mem, { type: "signContract", id: o.id }, key, why)) {
+          if (how) { mem.expandFor = s.day; mem.committed = (mem.committed || 0) + 0.5 * (r.cost || 0); }
+          if (mem.h) return;                  // Expert takes on one new deal per sitting
+          // a long fixed price signed ahead of a known launch is the hedge the generations chapter teaches
+          const nl = B.launches[0];
+          if (!job && nl != null && nl - s.day <= 90 && c.end > nl + 60) use(mem, s, "gens", `locked ${o.kind} ${o.days}d before the d${nl} launch`);
+        }
+      } else if (ap(s, { type: "declineContract", id: o.id }).ok) note(mem, s, key, `decline ${o.kind} gain ${gain.toFixed(0)} cover ${r.cover.toFixed(2)}`);
     }
   }
 
@@ -546,6 +754,8 @@
   // left to pay it back
   function growthModule(s, mem, B, st, blocked) {
     const left = END - s.day;
+    // v4: contracts the planner had to decline for lack of power or floor space count as "power binds"
+    if (mem.floorBlocked != null && s.day - mem.floorBlocked < 30) { blocked.grid = true; blocked.space = true; }
     const g = Sim.gridNext(s);
     // ch2: the first grid tier, as soon as power binds while demand is unmet
     if (g && s.gridTier === 0 && !s.jobs.some(j => j.kind === "grid") && left > 150 && (Sim.gridKwAll(s) > s.gridKw - 12 || blocked.grid)
@@ -617,7 +827,7 @@
       const ok = safe && o.valuation * rf >= cv * 1.02 && left > 30 && (!s.board || s.board.misses === 0);
       const why = `${Math.round(o.pct * 100)}% at ${Math.round(o.valuation)} vs value ${Math.round(cv)} (growth ${(growth * 100).toFixed(0)}%, can't be fired ${safe})`;
       if (ok) act(s, mem, { type: "acceptRound", id: o.id }, "investors", "accept " + why);
-      else if (Sim.apply(s, { type: "declineRound", id: o.id }).ok) note(mem, s, "investors", "decline " + why);
+      else if (ap(s, { type: "declineRound", id: o.id }).ok) note(mem, s, "investors", "decline " + why);
     }
     const b = s.board;
     mem.rescue = false;
@@ -716,6 +926,11 @@
     const st = Sim.stats(s, { eq: true });
     const tick = Math.round(s.day / CFG.STEP);
 
+    // Expert (human-paced): a shortfall on signed work comes first - buy capacity, don't read new offers
+    if (mem.h) {
+      const cap = Sim.capacity(s, Sim.stats(s)), owed = Sim.owedNow(s);
+      if (["web", "train", "infer"].some(w => owed[w] > cap[w] + 0.5)) { buyLoop(s, mem, B, memoryModule(s, mem), { grid: false, space: false }); return; }
+    }
     opsModule(s, mem);
     disruptModule(s, mem);
     let v0 = value(s, B, Sim.shallowClone(s));
@@ -912,17 +1127,69 @@
     mem.canBorrow = Sim.on(s, "finance") ? Math.max(0, Math.min(1500, K.LOAN_LTV * Sim.netWorth(s) - s.debt - 200)) : 0;
   }
 
-  const POLICIES = { idle: () => {}, greedy, planner };
+  /* ---------------- human-paced reference players (DECISIONS D42) ----------------
+     "Casual" (human-paced greedy) and "Expert" (human-paced planner) are what the pace chip and the end screen compare
+     the player with. Same rules and lead times as everyone; on top, a person's limits:
+     - attention: one decision session every HUMAN.EVERY..+HUMAN.JITTER days, 1-2 actions per session;
+     - salient events (a new offer, a new failure, a chapter card) call an extra session after a 3-7 day reaction delay;
+     - a chapter card pauses them HUMAN.READ days, and its mechanics are used only HUMAN.LEARN..+HUMAN.LEARN_J days
+       after the unlock;
+     - Casual also misjudges values by +-HUMAN.NOISE and looks at only 3 racks per purchase decision.
+     All jitter comes from a per-game seeded stream in `mem.h`, so a human-paced game is deterministic. */
+  const HUMAN = { EVERY: 12, JITTER: 6, REACT: 3, REACT_J: 4, READ: 5, LEARN: 20, LEARN_J: 20, NOISE: 0.15, SAMPLE: 3, REPEAT: 6, TWO: 0.5, PAYBACK: 300,
+    // Expert's own attention profile: a skilled player looks more often and does a little more per look
+    EXPERT_EVERY: 8, EXPERT_JITTER: 4, EXPERT_BASE: 2 };
+  function humanize(fn, name, noise) {
+    const expert = name === "expert";
+    return function (s, mem) {
+      let h = mem.h;
+      if (!h) {
+        h = mem.h = { rng: (s.seed * 2654435761 + (name === "casual" ? 17 : 91)) >>> 0, next: 0, salient: null, chap: -1,
+          learn: {}, quiet: 0, offers: new Set(), fails: 0, noise, sessions: 0 };
+      }
+      if (s.chapter !== h.chap) {                        // a chapter card: read it, then learn its mechanics
+        for (let i = h.chap + 1; i <= s.chapter; i++) h.learn[Sim.CHAPTERS[i].key] = i === 0 ? 0 : s.day + HUMAN.LEARN + Math.round(hRand(mem) * HUMAN.LEARN_J);
+        if (h.chap >= 0) { h.quiet = s.day + HUMAN.READ; if (h.salient == null) h.salient = s.day + HUMAN.READ; }
+        h.chap = s.chapter;
+      }
+      let salient = false;
+      for (const o of s.offers) if (!h.offers.has(o.id)) { h.offers.add(o.id); salient = true; }
+      let fails = 0;
+      for (const r of s.racks) for (const d of r.devices) if (d.failed) fails++;
+      if (fails > h.fails) salient = true;
+      h.fails = fails;
+      if (salient && h.salient == null) h.salient = s.day + HUMAN.REACT + Math.round(hRand(mem) * HUMAN.REACT_J);
+      if (s.day < h.quiet) return;
+      if (s.day < h.next && !(h.salient != null && s.day >= h.salient)) return;
+      h.next = s.day + (expert ? HUMAN.EXPERT_EVERY + Math.round(hRand(mem) * HUMAN.EXPERT_JITTER) : HUMAN.EVERY + Math.round(hRand(mem) * HUMAN.JITTER));
+      h.salient = null; h.sessions++;
+      mem.next = mem.nextHk = 0;                         // the inner player thinks now (its sell pass keeps its own cadence)
+      BUDGET = { left: (expert ? HUMAN.EXPERT_BASE : 1) + (hRand(mem) < HUMAN.TWO ? 1 : 0), learn: h.learn, last: null, reps: 0 };
+      try { fn(s, mem); } finally { BUDGET = null; }
+    };
+  }
+  const casual = humanize(greedy, "casual", HUMAN.NOISE), expert = humanize(planner, "expert", 0);
+  /* per-step policies: fn(s, mem, opts); opts.human switches greedy/planner to their human-paced versions */
+  const POLICIES = {
+    idle: () => {},
+    greedy: (s, mem, opts) => (opts && opts.human ? casual : greedy)(s, mem),
+    planner: (s, mem, opts) => (opts && opts.human ? expert : planner)(s, mem),
+    casual, expert,
+  };
+  const LABELS = { idle: "Idle", greedy: "Greedy", planner: "Planner", casual: "Casual", expert: "Expert" };
 
-  /* play a whole game headlessly. Returns final net worth, score and which chapters the planner used */
+  /* play a whole game headlessly. opts: newGame options (mech, sandbox) + human (bool) + trace (bool).
+     Returns final net worth, score and which chapters the bot's actions used */
   function play(seed, policy, opts) {
+    opts = opts || {};
     const s = Sim.newGame(seed, opts);
-    const mem = {}, fn = POLICIES[policy];
-    if (opts && opts.trace) mem.trace = [];
-    while (!s.over) { fn(s, mem); Sim.advance(s, 1); }
-    return { seed, policy, worth: Sim.netWorth(s), score: Sim.score(s), over: s.over, used: mem.used || {}, noted: mem.noted || {}, trace: mem.trace, state: s };
+    const mem = {}, fn = POLICIES[policy], po = { human: !!opts.human };
+    if (opts.trace) mem.trace = [];
+    while (!s.over) { fn(s, mem, po); Sim.advance(s, 1); }
+    return { seed, policy, human: po.human || policy === "casual" || policy === "expert", worth: Sim.netWorth(s), score: Sim.score(s), over: s.over,
+      used: mem.used || {}, noted: mem.noted || {}, trace: mem.trace, sessions: mem.h ? mem.h.sessions : null, state: s };
   }
 
-  return { play, POLICIES, greedy, planner, CFG, setDebug(v) { DEBUG = !!v; },
+  return { play, POLICIES, LABELS, HUMAN, greedy, planner, casual, expert, CFG, setDebug(v) { DEBUG = !!v; },
     _internal: { belief, value, screen, gainOf, residual, residualDev, candidates, preview, prep, evalAt } };
 });

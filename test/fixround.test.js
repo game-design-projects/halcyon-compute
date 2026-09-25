@@ -11,29 +11,31 @@ const rack = (s, id) => Sim.rackById(s, id);
 const mk = (s, type, extra) => Object.assign({ uid: s.nextId++, type, born: s.day - 100, inst: s.day - 100 }, extra || {});
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps * Math.max(1, Math.abs(b));
 
-/* ============ P1 chapter pacing ============ */
-test("chapter pacing: front half respaced, ch17 unlocks early enough for its arc to finish before d1800", () => {
+/* ============ P1 chapter pacing (v4: player-triggered, DECISIONS D41) ============ */
+test("chapter pacing: ordered earliest days, at most one chapter per CH_GAP days, ch17 early enough for its arc", () => {
   const days = Sim.CHAPTERS.map(c => c.day);
-  assert.deepEqual(days.slice(0, 4), [0, 45, 100, 170]);
-  for (let i = 1; i < days.length; i++) assert.ok(days[i] > days[i - 1], "chapters in order");
+  assert.equal(days[0], 0);
+  for (let i = 1; i < days.length; i++) assert.ok(days[i] > days[i - 1], "earliest days in order");
+  for (const c of Sim.CHAPTERS.slice(1)) assert.ok(c.hint && c.hint.length > 5, `${c.key} has a trigger hint for the UI`);
   const byKey = k => Sim.CHAPTERS.find(c => c.key === k).day;
-  assert.ok(byKey("disrupt") <= 1290, "ch17 arc (launches 1290/1440/1590, vendor death 1500) must still play out");
-  // no two consecutive chapters closer than 45 days: the first four no longer land inside 120 days
-  for (let i = 1; i < days.length; i++) assert.ok(days[i] - days[i - 1] >= 45, `gap before ${Sim.CHAPTERS[i].key}`);
-  assert.ok(byKey("heat") > 120);
+  assert.ok(byKey("disrupt") <= 1290, "ch17 arc (launches 1290/1440/1590, vendor death 1500) can still play out");
+  // a planner game: unlocks are spaced by at least CH_GAP days and follow the chapter order
+  const Bots = require("../bots/bots.js");
+  const s = Bots.play(3, "planner").state;
+  const un = Sim.CHAPTERS.map(c => s.unlocked[c.key]).filter(d => d != null);
+  assert.ok(un.length >= 14, `planner reached ${un.length} chapters`);
+  for (let i = 1; i < un.length; i++) assert.ok(un[i] - un[i - 1] >= K.CH_GAP - 1e-9, `gap before chapter ${i + 1}: ${un[i] - un[i - 1]}`);
 });
 
-test("hardware goes on sale with its chapter (GPUs with ch3, CRU coolers with ch4)", () => {
-  const gpuDay = Sim.CHAPTERS.find(c => c.key === "gpu").day, heatDay = Sim.CHAPTERS.find(c => c.key === "heat").day;
-  assert.equal(Sim.BASE_ITEMS.c1.avail, gpuDay);
-  assert.equal(Sim.BASE_ITEMS.m1.avail, gpuDay);
-  assert.equal(Sim.BASE_ITEMS.cru.avail, heatDay);
+test("hardware goes on sale with its chapter (GPUs with ch3, CRU coolers with ch4), never by the calendar", () => {
+  assert.equal(Sim.BASE_ITEMS.c1.ch, "gpu");
+  assert.equal(Sim.BASE_ITEMS.m1.ch, "gpu");
+  assert.equal(Sim.BASE_ITEMS.cru.ch, "heat");
   const s = camp(5);
-  Sim.advance(s, gpuDay - 1);
-  assert.ok(!Sim.shopItems(s).includes("c1"), "no GPUs before the GPU chapter");
-  Sim.advance(s, 1.25);
-  assert.equal(s.chapter, 2);
-  assert.ok(Sim.shopItems(s).includes("c1") && Sim.shopItems(s).includes("m1"));
+  Sim.advance(s, 300);
+  assert.ok(!Sim.on(s, "gpu") && !Sim.shopItems(s).includes("c1"), "an idle player never sees GPUs");
+  const t = sb(5);
+  assert.ok(Sim.shopItems(t).includes("c1") && Sim.shopItems(t).includes("m1") && Sim.shopItems(t).includes("cru"), "sandbox: all on sale at d0");
 });
 
 /* ============ P1 workload default ============ */

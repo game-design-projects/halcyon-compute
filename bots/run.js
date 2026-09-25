@@ -32,6 +32,7 @@ function playOne(job) {
   if (!patched) { applyPatch(Sim, job.patch); if (job.patch && job.patch.bots) Object.assign(Bots.CFG, job.patch.bots); patched = true; }
   const t0 = Date.now();
   const r = Bots.play(job.seed, job.policy, { mech: job.mech });
+  const c = s0 => Object.assign({}, s0.contractLog, { sla: s0.losses.sla, idle: s0.losses.idle, cancelledWork: s0.losses.cancelled });
   const s = r.state;
   // idle cash: the longest stretch (days) with more than $2M in the bank, and the mean cash share of net worth in years 2-4
   let run = 0, longest = 0, prev = null;
@@ -45,7 +46,7 @@ function playOne(job) {
   return {
     variant: job.variant, seed: job.seed, policy: job.policy, worth: r.worth, score: r.score, over: r.over,
     own: s.equity.own, rep: Sim.repOf(s), idleCashDays: longest, cashShare: share.length ? share.reduce((a, x) => a + x, 0) / share.length : 0,
-    used: r.used, noted: r.noted, ms: Date.now() - t0,
+    used: r.used, noted: r.noted, ms: Date.now() - t0, chapter: s.chapter, contracts: c(s),
   };
 }
 if (!isMainThread) {
@@ -75,7 +76,9 @@ if (ablate) for (const [name, flag, ch] of GROUPS) VARIANTS.push([name, { [flag]
 if (only) { const want = new Set(only.split(",")); VARIANTS = VARIANTS.filter(v => want.has(v[0])); }
 
 const jobs = [];
-for (const [variant, mech] of VARIANTS) for (let seed = 1; seed <= N; seed++) for (const policy of ["planner", "greedy", "idle"]) jobs.push({ variant, mech, seed, policy, patch });
+// v4: the human-paced reference bots (Casual, Expert: what the player is compared with) run on the full game only
+for (const [variant, mech] of VARIANTS) for (let seed = 1; seed <= N; seed++)
+  for (const policy of variant === "full" && !args.includes("--no-human") ? ["planner", "greedy", "idle", "casual", "expert"] : ["planner", "greedy", "idle"]) jobs.push({ variant, mech, seed, policy, patch });
 
 const mean = a => a.length ? a.reduce((x, y) => x + y, 0) / a.length : 0;
 const sd = a => { const m = mean(a); return Math.sqrt(mean(a.map(x => (x - m) ** 2))); };
@@ -85,7 +88,7 @@ const fmt = v => Math.round(v).toLocaleString("en-US");
 const t0 = Date.now();
 const results = [];
 let next = 0, doneN = 0;
-console.log(`[bots] ${jobs.length} games (${VARIANTS.length} variants x ${N} seeds x 3 bots) on ${JOBS} workers`);
+console.log(`[bots] ${jobs.length} games (${VARIANTS.length} variants x ${N} seeds; 3 bots, +Casual/Expert on "full") on ${JOBS} workers`);
 const workers = [];
 function finish() {
   for (const w of workers) w.terminate();
@@ -130,7 +133,23 @@ function report() {
       // does the planner still use the ablated chapter? (should be 0 when it is switched off)
       ablatedChapterUse: chapter ? P.filter(x => (x.used[chapter] || 0) > 0).length : null,
     };
+    const cstat = (L, k) => mean(L.map(x => x.contracts[k] || 0));
+    row.contracts = {};
+    for (const [nm, L] of [["planner", P], ["greedy", G], ["idle", I]]) row.contracts[nm] = { signed: cstat(L, "signed"), fulfilled: cstat(L, "fulfilled"), failed: cstat(L, "failed"), cancelled: cstat(L, "cancelled"), sla: cstat(L, "sla"), idle: cstat(L, "idle"), chapter: mean(L.map(x => x.chapter)) };
     if (variant === "full") {
+      const CA = R("casual"), EX = R("expert");
+      if (CA.length) {
+        row.human = {
+          casual: { score: mean(CA.map(x => x.score)), min: Math.min(...CA.map(x => x.score)), max: Math.max(...CA.map(x => x.score)), bankrupt: CA.filter(x => x.over === "bankrupt").length, fired: CA.filter(x => x.over === "fired").length, ms: mean(CA.map(x => x.ms)) },
+          expert: { score: mean(EX.map(x => x.score)), min: Math.min(...EX.map(x => x.score)), max: Math.max(...EX.map(x => x.score)), bankrupt: EX.filter(x => x.over === "bankrupt").length, fired: EX.filter(x => x.over === "fired").length, ms: mean(EX.map(x => x.ms)) },
+          expertBeatsCasual: EX.filter((x, i) => x.score > CA[i].score).length,
+          casualBeatsIdle: CA.filter((x, i) => x.score > I[i].score).length,
+        };
+        for (const [nm, L] of [["casual", CA], ["expert", EX]]) row.contracts[nm] = { signed: cstat(L, "signed"), fulfilled: cstat(L, "fulfilled"), failed: cstat(L, "failed"), cancelled: cstat(L, "cancelled"), sla: cstat(L, "sla"), idle: cstat(L, "idle"), chapter: mean(L.map(x => x.chapter)) };
+        console.log(`[bots] human-paced (full game, n=${CA.length}): Casual mean ${fmt(row.human.casual.score)} (min ${fmt(row.human.casual.min)}, max ${fmt(row.human.casual.max)}, bankrupt ${row.human.casual.bankrupt}) | Expert mean ${fmt(row.human.expert.score)} (min ${fmt(row.human.expert.min)}, max ${fmt(row.human.expert.max)}, bankrupt ${row.human.expert.bankrupt}, fired ${row.human.expert.fired}) | Expert > Casual ${row.human.expertBeatsCasual}/${CA.length}, Casual > Idle ${row.human.casualBeatsIdle}/${CA.length}`);
+      }
+      row.perSeedHuman = CA.map((c, i) => ({ seed: c.seed, casual: Math.round(c.score), expert: Math.round(EX[i].score), casualOver: c.over, expertOver: EX[i].over }));
+      console.log(`[bots] contracts (mean per game): ` + Object.entries(row.contracts).map(([nm, c]) => `${nm} signed ${c.signed.toFixed(0)} ok ${c.fulfilled.toFixed(0)} short ${c.failed.toFixed(0)} (cancelled ${c.cancelled.toFixed(1)}) SLA $${fmt(c.sla)}k idle $${fmt(c.idle)}k ch ${(c.chapter + 1).toFixed(1)}`).join(" | "));
       row.coverage = {};
       // games where the chapter changed an action / where it at least produced an explicit decision (incl. declines)
       for (const k of CHAPTER_KEYS) row.coverage[k] = { games: P.filter(x => (x.used[k] || 0) > 0).length, decisions: P.filter(x => (x.used[k] || 0) + (x.noted[k] || 0) > 0).length, meanActions: +mean(P.map(x => x.used[k] || 0)).toFixed(1) };

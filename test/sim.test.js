@@ -55,7 +55,7 @@ test("technicians limit parallel installs to 3", () => {
 });
 
 test("constraints: U, rack kW, grid kW, cash, tank compatibility", () => {
-  const s = fresh();
+  const s = fresh(1, { sandbox: true });
   s.day = 110; s.cash = 1e6;
   const r = rack(s, "C1");
   for (let i = 0; i < 5; i++) assert.ok(Sim.apply(s, { type: "buy", item: "c1", rack: "C1" }).ok || i === 5);
@@ -120,7 +120,7 @@ test("throttling above 32C inlet", () => {
 });
 
 test("hot neighbours raise a rack's inlet temperature", () => {
-  const s = fresh();
+  const s = fresh(1, { sandbox: true });
   const full = u => [{ uid: u, type: "sw" }, ...[1, 2, 3, 4].map(i => ({ uid: u * 10 + i, type: "c1" }))];
   rack(s, "C2").devices = full(2);
   const alone = Sim.stats(s, { eq: true }).perRack.C2.inlet;
@@ -129,29 +129,30 @@ test("hot neighbours raise a rack's inlet temperature", () => {
   assert.ok(packed > alone + 1);
 });
 
-test("markets saturate: oversupply sells at a quarter price", () => {
+test("v4: all revenue comes from contracts; output with no contract earns nothing (no spot, no oversupply)", () => {
   const s = fresh();
   const st0 = Sim.stats(s);
-  assert.ok(st0.supply.web < st0.mk.web.demand);
+  const anchor = s.contracts.find(c => c.anchor);
+  assert.ok(anchor && anchor.units === Sim.K.ANCHOR_UNITS, "one signed web customer at the start");
+  assert.ok(Math.abs(st0.gross - Math.min(st0.supply.web, anchor.units) * anchor.price) < 1e-9, "revenue = the anchor's delivered units x its price");
   const r = rack(s, "B1");
   r.devices = [{ uid: 900, type: "sw" }];
   for (let i = 0; i < 19; i++) r.devices.push({ uid: 901 + i, type: "cpu" });
-  const r2 = rack(s, "B2");
-  r2.devices = [{ uid: 990, type: "sw" }];
-  for (let i = 0; i < 19; i++) r2.devices.push({ uid: 991 + i, type: "cpu" });
   const st = Sim.stats(s);
-  const p = st.mk.web.price, D = st.mk.web.demand, S = st.supply.web;
-  assert.ok(S > D);
-  assert.ok(Math.abs(st.revenue.web - p * (D + 0.25 * (S - D))) < 1e-9);
+  assert.ok(st.supply.web > st0.supply.web + 18, "more output");
+  assert.equal(st.gross, st0.gross, "but no more revenue: nobody bought it");
+  assert.ok(st.idle.web > 18 && st.idleLoss > 0, "it shows up as idle capacity");
+  assert.ok(st.net < st0.net, "and it still draws power");
 });
 
 test("generation launch drops compute prices and resale of older cards", () => {
-  const s = fresh(3);
+  const s = fresh(3, { sandbox: true });
   s.cash = 1e6;
   Sim.advance(s, 110);
-  Sim.apply(s, { type: "buy", item: "c1", rack: "B1" });
-  Sim.advance(s, 10);
+  assert.ok(Sim.apply(s, { type: "buy", item: "c1", rack: "B1" }).ok);
+  Sim.advance(s, 25);                          // shipping may be 18 days in an HBM shortage
   const d = rack(s, "B1").devices[0];
+  assert.ok(d, "installed");
   Sim.advance(s, 385 - s.day);
   const pBefore = Sim.marketAt(s, s.day).train.price, rBefore = Sim.resale(s, d);
   Sim.advance(s, 10);
@@ -161,7 +162,7 @@ test("generation launch drops compute prices and resale of older cards", () => {
 });
 
 test("fake exotic vendor: 60% field performance, dies at day 1500; real one keeps shipping", () => {
-  const s = fresh(5);
+  const s = fresh(5, { sandbox: true });
   s.cash = 1e6;
   Sim.advance(s, 1600);
   const fake = s.hidden.fakeExotic, real = s.hidden.realExotic;
@@ -199,16 +200,21 @@ test("PM-900: boosts bandwidth while alive, bricks the rack when Nanofab dies", 
   assert.equal(Sim.resale(s, r.devices[3]), 0);
 });
 
-test("chapters unlock over time and gate the shop", () => {
+test("chapters unlock on player milestones, not the calendar, and gate the shop", () => {
+  const idle = fresh();
+  Sim.advance(idle, 400);
+  assert.equal(idle.chapter, 0, "an idle player stays in chapter 1");
+  assert.ok(!Sim.shopItems(idle).includes("c1"), "no GPUs before the GPU chapter");
   const s = fresh();
-  assert.ok(!Sim.shopItems(s).includes("c1"));
-  Sim.advance(s, 110);
-  assert.ok(Sim.shopItems(s).includes("c1"));
-  assert.equal(s.chapter, 2);
-  Sim.advance(s, 400);
-  assert.equal(s.chapter, 7, "contracts chapter opens at d490");
-  Sim.advance(s, 1300 - s.day);
-  assert.equal(s.chapter, 16);
+  for (const o of s.offers.slice()) assert.ok(Sim.apply(s, { type: "signContract", id: o.id }).ok);
+  Sim.advance(s, 29);
+  assert.equal(s.chapter, 0, "not before its earliest day (20) and CH_GAP (30) after chapter 1");
+  Sim.advance(s, 2);
+  assert.equal(s.chapter, 1, "2 offers signed: power");
+  Sim.advance(s, 60 - s.day + 0.5);
+  assert.equal(s.chapter, 2, "cash for a GPU and a switch: GPUs");
+  assert.ok(Sim.shopItems(s).includes("c1") && Sim.shopItems(s).includes("m1"));
+  assert.ok(s.unlocked.gpu - s.unlocked.power >= Sim.K.CH_GAP, "at most one chapter per CH_GAP days");
 });
 
 test("tank conversion needs an empty rack and takes a technician", () => {

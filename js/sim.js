@@ -22,7 +22,7 @@
     GRID_KW_UP3: 1000, GRID_COST3: 1800, GRID_DAYS3: 90,             // 4th tier after the 3rd (Hall 3 needs power)
     TECHS: 3, SHIP_DAYS: 6, INSTALL_DAYS: 2, MOVE_DAYS: 1, SELL_DAYS: 1,
     TANK_COST: 90, TANK_DAYS: 8, TANK_ROOM_HEAT: 0.2,
-    T_LIMIT: 32, THERMAL_TAU: 5, OVERSUPPLY: 0.25,
+    T_LIMIT: 32, THERMAL_TAU: 5,
     POWER_PRICE: 0.065, UPKEEP: 1.5, UPKEEP_PER_DEV: 0.02,
     SWITCH_NET: 16, HISTORY_EVERY: 5, BENCH_EVERY: 30,
     // ch6 operations
@@ -33,10 +33,21 @@
     // ch7 fabric
     SPINE_COST: 160, SPINE_DAYS: 20, SPINE_KW: 3, FRONTIER_MIN_GPUS: 12, FRONTIER_PRICE: 1.6, FRONTIER_DEMAND: 30, FRONTIER_GROWTH: 1.5,
     TRANSIT_PER: 10, TRANSIT_COST: 0.4, TRANSIT_DAYS: 5, TRANSIT_FREE: 3, TRANSIT_MAX: 300,
-    // ch8 contracts
-    OFFER_EVERY: 25, OFFER_JITTER: 7, OFFER_EXPIRY: 15, QUOTE_SPREAD: 0.15, PENALTY_MULT: 1.5, CONTRACT_OK_MISS: 0.05,
+    // v4 contracts core (docs/CONTRACTS_CORE.md): all revenue comes from contracts on the order board
+    OFFER_EVERY: 4, OFFER_JITTER: 2, OFFER_EXPIRY: 20, OFFER_EXPIRY_MIN: 10, BOARD_MAX: 6,
+    OFFER_CAP_MIN: 0.3, OFFER_CAP_MAX: 1.2, OFFER_STRETCH: 0.25, OFFER_MIN_UNITS: 2,
+    LEAD_MIN: 14, LEAD_MAX: 24, QUOTE_SPREAD: 0.15, PENALTY_MULT: 1.5, CONTRACT_OK_MISS: 0.05,
+    CONTRACT_PREMIUM: 0.2,      // quotes = price index x (1 + premium) x (1 +- spread): see DECISIONS (v4 balance)
+    SLA_WEB: 0.9, SLA_INFER: 0.95, WEB_DAYS: [60, 90, 120, 180], INFER_DAYS: [90, 180, 270, 360],
+    JOB_DAYS: [30, 45, 60, 90, 120], JOB_PREMIUM: 0.15, JOB_SPEED: 2, JOB_LATE_PEN: 0.005, JOB_LATE_MAX: 20,
+    ANCHOR_UNITS: 15, START_OFFERS: 2, REP_SLA_DAY_MAX: 0.45, REP_JOB_CANCEL: 3,
+    SLA_WALK_DAYS: 20,
+    RENEW_BEFORE: 10,           // a serving customer on track (SLA met so far) offers a renewal this many days before the end          // a serving customer whose SLA is missed this many days in a row terminates the contract
+    // v4 player-triggered chapters (DECISIONS D41): one chapter per CH_GAP days at most; a stalled active player gets the
+    // next chapter after CH_STALL days
+    CH_GAP: 30, CH_STALL: 240,
     // ch8 build-to-suit: big, long, high-SLA offers that need an up-front fit-out (capex) and start after a lead time
-    BTS_EVERY: 60, BTS_JITTER: 15, BTS_FIRST: 30, BTS_EXPIRY: 20, BTS_LEAD: 45, BTS_PREMIUM: 0.2, BTS_PENALTY_MULT: 3,
+    BTS_EVERY: 40, BTS_JITTER: 10, BTS_FIRST: 30, BTS_EXPIRY: 20, BTS_LEAD: 45, BTS_PREMIUM: 0.2, BTS_PENALTY_MULT: 3,
     BTS_FIT_PER_UNIT: 6, BTS_MIN_UNITS: 20, BTS_SLA: 0.95,
     // ch9 memory
     HBM_BASE: 0.55, HBM_SLOPE: 0.45, HBM_REVERT: 0.08, HBM_VOL: 0.02, SHORT_SHIP_DAYS: 18, FORWARD_DAYS: 45,
@@ -54,9 +65,10 @@
     // ch14 investors
     ROUND_EVERY: 120, ROUND_EXPIRY: 20, BOARD_EVERY: 180, BOARD_GROWTH: 0.15, PITCH_GROWTH: 0.05, FIRED_SCORE: 0.5,
     BUYBACK_STEP: 0.01, EARN_MULT: 2, EARN_DAYS: 365,
+    UNSELL_DAYS: 10, CANCEL_FEE: 0.1, CANCEL_FREE_DAYS: 1,   // v4 forgiveness: undo a sale; cancel a queued job
     // ch15 reputation
     REP_START: 60, PR_COST: 120, PR_GAIN: 8, PR_DECAY: 90, PR_BACKFIRE: 5, SCANDAL_DAYS: 45,
-    REP_SLA_DAY: 0.15, REP_OUTAGE: 3, REP_CONTRACT_OK: 2, REP_DROUGHT_DAY: 0.1, PRESS_HIT: 6,
+    REP_SLA_DAY: 0.15, REP_OUTAGE: 3, REP_CONTRACT_OK: 0.5, REP_DROUGHT_DAY: 0.1, PRESS_HIT: 6,
     // ch16 policy
     LOBBY_COST: 200, LOBBY_SHIFT: 0.15, LOBBY_LEAK: 0.3, CARBON_TAX0: 0.1, CARBON_TAX_STEP: 0.05, CARBON_TAX_MAX: 0.4,
     MANDATE_PUE: 1.3, MANDATE_GRACE: 120, MANDATE_FINE: 3, EXPORT_QUOTA: 8,
@@ -73,7 +85,18 @@
   const LOSS_LABEL = {
     throttle: "throttling", failures: "failed hardware downtime", sla: "SLA penalties", shortage: "shortage delays",
     bricked: "bricked parts", fines: "efficiency fines", taxes: "taxes", outage: "grid outages", transit: "transit shortfall",
+    idle: "idle capacity (hardware with no contract)", cancelled: "cancelled training jobs",
   };
+  /* end-screen lesson per loss key (v4): "{x}" = the amount, "{w}" = the worst period clause */
+  const LESSON = {
+    idle: "You left {x} of capacity idle with no contract to serve{w}.",
+    cancelled: "You lost {x} of finished work to cancelled training jobs{w}.",
+    sla: "You lost {x} to SLA penalties and late fees{w}.",
+  };
+  /* v4: contracts are the core loop; `mech.contracts: false` (ablation) = a flat-rate buyer takes all output at the
+     market price index up to market demand (the v3 spot market without oversupply), so the game still runs */
+  const core = s => s.mech.contracts !== false;
+  const isJob = c => c.kind === "train" || c.kind === "frontier";
 
   /* ================= helpers ================= */
   function nextRand(s, key) {  // mulberry32; streams live in the state so runs are reproducible
@@ -112,22 +135,28 @@
     opts = opts || {};
     seed = seed >>> 0;
     const s = {
-      v: 2, seed, rng: seed ^ 0x9E3779B9, rngF: (seed ^ 0x85EBCA6B) >>> 0, day: 0, cash: K.START_CASH, sandbox: !!opts.sandbox,
+      v: 4, seed, rng: seed ^ 0x9E3779B9, rngF: (seed ^ 0x85EBCA6B) >>> 0, day: 0, cash: K.START_CASH, sandbox: !!opts.sandbox,
       roomT: 24, gridKw: K.GRID_KW, gridUp: false, gridTier: 0, nextId: 1, over: null,
       mech: Object.assign({}, MECH_DEFAULT, opts.mech || {}),
       racks: [], jobs: [], news: [], log: [], history: [], bench: { lattice: [], photon: [] },
       chapter: 0, unlocked: {}, events: [], firedEvents: 0,
       market: { mult: { web: 1, train: 1, infer: 1 }, noise: { web: 1, train: 1, infer: 1 }, dmult: { web: 1, train: 1, infer: 1 }, gpuCut: 1 },
       vendors: {}, items: {},
-      ledger: newLedger(), lastQuarter: null, totals: { revenue: 0, power: 0, capex: 0, resale: 0, opex: 0, tax: 0, flow: 0 },
+      ledger: newLedger(), lastQuarter: null, totals: { revenue: 0, power: 0, capex: 0, resale: 0, opex: 0, tax: 0, flow: 0, events: 0 },
       // v0.3: every discrete cash jump that is not the player's own action is logged, so the UI can explain it
       cashEvents: [], cashSeq: 0,
       // ch6 operations
       techs: K.TECHS, hires: [], repairAuto: true, shelf: [],
       // ch7 fabric
       spines: {}, transit: 0, transitOrders: [],
-      // ch8 contracts
-      offers: [], contracts: [], nextOffer: -1, nextBts: -1, contractLog: { signed: 0, fulfilled: 0, failed: 0 },
+      // v4 contracts core: the order board (offers), signed contracts, the offer timer; ch8 adds build-to-suit (nextBts)
+      offers: [], contracts: [], nextOffer: -1, nextBts: -1, contractLog: { signed: 0, fulfilled: 0, failed: 0, cancelled: 0, late: 0 },
+      // v4 player-triggered chapters: milestone counters (DECISIONS D41)
+      prog: { gpuOrders: 0, heatWaves: 0, outages: 0, missDays: 0, lastChapter: 0 },
+      // v4 coyote time for sales: sold devices can be bought back at the sale price for K.BUYBACK_DAYS
+      recentlySold: [],
+      // v4 automation policies (docs/UI_BACKLOG.md): auto-swap spares, keep N spares of an item, auto-renew contracts
+      policy: { autoSwap: false, keepSpares: {}, autoRenew: false },
       // ch9 memory
       hbm: { index: 1, target: 1, shortage: false, until: 0 },
       // ch10 finance
@@ -166,7 +195,6 @@
     if (!s.mech.roofline) {  // ablation: both GPU families identical (no bottleneck matching)
       for (const it of Object.values(s.items)) if (it.role === "gpu") { it.F = C.FLAT_F[it.gen]; it.B = C.FLAT_B[it.gen]; }
     }
-    if (s.sandbox) for (const k of ["c1", "m1", "cru"]) s.items[k].avail = 0;
     addHallRacks(s, 1);
     for (const id of ["A1", "A2"]) {
       const r = rackById(s, id);
@@ -176,6 +204,7 @@
     s.events = buildEvents(s);
     log(s, `new game seed=${s.seed} sandbox=${s.sandbox} real=${realExotic} nanofabDies=${nanofabDies} demandCut=${demandCut}`);
     fireEvents(s);
+    if (core(s)) startBoard(s);
     sampleHistory(s);
     return s;
   }
@@ -207,12 +236,14 @@
     const Rx = s.hidden.realExotic, Fx = s.hidden.fakeExotic, sb = s.sandbox;
     const NAME = { lattice: "Lattice", photon: "Photon" };
     const add = (day, kind, data) => { if (day <= K.END_DAY) E.push(Object.assign({ day, kind }, data)); };
-    const startOf = key => sb ? 0 : CHAPTERS[CH_IDX[key]].day;
+    // world events are dated from early on and skipped (group check at fire time) while their chapter is locked
+    const startOf = key => sb ? 0 : ({ memory: 150, energy: 0, facilities: 0, environment: 0 })[key];
+    // v4: campaign chapters unlock on player milestones (checkChapters, daily); only chapter 1 is dated. Sandbox: all at d0.
     CHAPTERS.forEach((c, i) => {
       if (c.mech && s.mech[c.mech] === false) return;
-      add(sb ? 0 : c.day, "chapter", { idx: i });
+      if (sb || i === 0) add(0, "chapter", { idx: i });
     });
-    add(0, "news", { title: "Welcome to Halcyon Compute", body: "Two racks of web servers and $400k. Grow it.", tone: "info" });
+    add(0, "news", { title: "Welcome to Halcyon Compute", body: core(s) ? "Two web racks, one customer and $400k. Sign offers on the order board to grow." : "Two racks of web servers and $400k. Grow it.", tone: "info" });
     if (s.mech.gens) {
       const RUMOR = ["", "", "Kestrel C2 and Heron M2 rumored", "Third-generation cards rumored", "Fourth-generation cards rumored", "Fifth-generation cards rumored"];
       GEN_LAUNCH.forEach((d, i) => {
@@ -282,20 +313,7 @@
         add(d, "drought", { group: "environment", until: d + dur });
       }
     }
-    // ---- ch16 policy: three proposals with hidden pass probability, indirect signals, a vote
-    {
-      const st = startOf("policy") + (sb ? 60 : 10);
-      C.POLICIES.forEach((pd, i) => {
-        const ann = st + i * 70 + Math.round(R() * 20), vote = ann + 60 + Math.round(R() * 60);
-        const id = "p" + (i + 1);
-        s.hidden.policy[id] = { p0: +(0.3 + 0.5 * R()).toFixed(2), u: R() };
-        s.policies.push({ id, kind: pd.kind, title: pd.title, body: pd.body, announced: false, announceDay: ann, vote, status: "proposed", shift: 0, lobbied: 0, signals: [] });
-        add(ann, "policyAnnounce", { group: "policy", pid: id });
-        add(Math.round(ann + (vote - ann) * 0.4), "policySignal", { group: "policy", pid: id });
-        add(Math.round(ann + (vote - ann) * 0.75), "policySignal", { group: "policy", pid: id });
-        add(vote, "policyVote", { group: "policy", pid: id });
-      });
-    }
+    // ---- ch16 policy proposals are aimed at the player: scheduled when the chapter unlocks (schedulePolicies)
     // ---- ch17 disruption (re-timed v1 chapter 6)
     if (s.mech.disrupt) {
       const D = 1290;
@@ -308,10 +326,10 @@
       add(1425 + j(), "news", { group: "disrupt", title: `${NAME[Fx]} lead architect departs`, body: "Joins a competitor.", tone: "bad", vendor: Fx, cat: "vendor" });
       add(1500, "vendorDeath", { vendor: Fx, title: `${NAME[Fx]} winds down`, body: "Installed units lose firmware support and stop working." });
       add(1590, "exoticLaunch", { model: 2 });
-      add(1330, "pitch", {});
+      add(1330, "pitch", { group: "disrupt" });
       if (s.hidden.nanofabDies) {
         add(1420 + j(), "news", { group: "disrupt", title: "Nanofab sells its only fab", body: "No successor product announced.", tone: "bad", vendor: "nanofab", cat: "vendor" });
-        add(1500, "firesale", {});
+        add(1500, "firesale", { group: "disrupt" });
         add(1560, "vendorDeath", { vendor: "nanofab", title: "Nanofab exits the memory business", body: "PM-900 firmware is withdrawn. Racks holding one run at 60 % until it is pulled." });
       } else {
         add(1420 + j(), "news", { group: "disrupt", title: "Nanofab posts a record quarter", body: "PM-900 volume up 40 %.", tone: "good", vendor: "nanofab", cat: "vendor" });
@@ -336,6 +354,29 @@
       handleEvent(s, e);
     }
   }
+  /* insert events into the unfired tail of the timeline, keeping it sorted (stable: same-day events keep their order) */
+  function addEvents(s, list) {
+    const tail = s.events.slice(s.firedEvents).concat(list).sort((a, b) => a.day - b.day);
+    s.events = s.events.slice(0, s.firedEvents).concat(tail);
+  }
+  /* ch16: three proposals with a hidden pass probability, two indirect signals each and a vote, from the unlock day */
+  function schedulePolicies(s) {
+    if (s.policies.length) return;
+    const R = () => nextRand(s), E = [], st = Math.floor(s.day) + (s.sandbox ? 60 : 10);
+    C.POLICIES.forEach((pd, i) => {
+      const ann = st + i * 70 + Math.round(R() * 20), vote = ann + 60 + Math.round(R() * 60);
+      if (ann > K.END_DAY) return;
+      const id = "p" + (i + 1);
+      s.hidden.policy[id] = { p0: +(0.3 + 0.5 * R()).toFixed(2), u: R() };
+      s.policies.push({ id, kind: pd.kind, title: pd.title, body: pd.body, announced: false, announceDay: ann, vote, status: "proposed", shift: 0, lobbied: 0, signals: [] });
+      E.push({ day: ann, kind: "policyAnnounce", group: "policy", pid: id });
+      E.push({ day: Math.round(ann + (vote - ann) * 0.4), kind: "policySignal", group: "policy", pid: id });
+      E.push({ day: Math.round(ann + (vote - ann) * 0.75), kind: "policySignal", group: "policy", pid: id });
+      E.push({ day: vote, kind: "policyVote", group: "policy", pid: id });
+    });
+    addEvents(s, E.filter(e => e.day <= K.END_DAY));
+    log(s, `policies scheduled from d${st}`);
+  }
   function pushNews(s, n) { s.news.unshift(Object.assign({ day: Math.floor(s.day), tone: "info", cat: "general" }, n)); if (s.news.length > 60) s.news.pop(); }
 
   function onChapter(s, key) {
@@ -346,7 +387,9 @@
       s.transit = Math.max(0, Math.ceil((st.supply.web + st.supply.infer) / K.TRANSIT_PER) - K.TRANSIT_FREE);
       log(s, `fabric: starter transit ${s.transit} (+${K.TRANSIT_FREE} free)`);
     }
-    if (key === "contracts") { s.nextOffer = d + 5; s.nextBts = d + K.BTS_FIRST; }
+    if (key === "contracts") s.nextBts = d + K.BTS_FIRST;       // ch8 long-term deals: build-to-suit offers
+    if (key === "policy") schedulePolicies(s);
+    s.prog.lastChapter = d;
     if (key === "investors") s.nextRound = d + 15;
     if (key === "finance") s.creditLimit = creditLimitOf(s);
   }
@@ -380,7 +423,7 @@
         }
         if (m === 1) s.market.mult[s.items[real === "lattice" ? "lat1" : "pho1"].only] *= 0.8;
         if (m === 2) s.market.mult[s.items[real === "lattice" ? "lat1" : "pho1"].only] *= 0.85;
-        if (names.length) pushNews(s, { title: `${names.join(" and ")} on sale`, body: m === 0 ? "Pilot quantities. Needs an immersion tank rack." : "Vendor claims a big jump in performance per watt.", tone: "info", icon: "rocket", cat: "vendor" });
+        if (names.length && on(s, "disrupt")) pushNews(s, { title: `${names.join(" and ")} on sale`, body: m === 0 ? "Pilot quantities. Needs an immersion tank rack." : "Vendor claims a big jump in performance per watt.", tone: "info", icon: "rocket", cat: "vendor" });
         log(s, `exotic model ${m} launch`);
         break;
       }
@@ -435,11 +478,11 @@
         pushNews(s, { title: "HBM supply normalizes", body: "GPU lead times back to normal.", tone: "good", cat: "memory" });
         log(s, "hbm shock end"); break;
       case "heatWave":
-        s.heatWave = { start: s.day, until: e.until, mult: e.mult };
+        s.heatWave = { start: s.day, until: e.until, mult: e.mult }; s.prog.heatWaves++;
         pushNews(s, { title: "Heat wave: spot power spikes", body: `Prices x${e.mult} until it breaks.`, tone: "bad", cat: "energy", icon: "temp" });
         log(s, `heat wave x${e.mult} until ${e.until}`); break;
       case "outage": {
-        s.outage = { start: s.day, until: e.until };
+        s.outage = { start: s.day, until: e.until }; s.prog.outages++;
         if (s.ups) pushNews(s, { title: "Grid outage: generator running", body: "UPS carried the load. Diesel is burning.", tone: "info", cat: "facilities", icon: "bolt" });
         else {
           pushNews(s, { title: "Grid outage: everything is down", body: "No backup power. Output stops until the grid returns.", tone: "bad", cat: "facilities", icon: "bolt" });
@@ -542,39 +585,97 @@
   }
   const activeAt = (x, day) => !!x && day < x.until && day >= (x.start != null ? x.start : -1);
 
-  /* sell a supply vector: frontier first, then contracts (fixed price), then spot */
-  function sellOutput(s, mk, supply, frontierElig, day) {
-    const revenue = { web: 0, train: 0, infer: 0, frontier: 0, contracts: 0 }, wRev = { web: 0, train: 0, infer: 0 };
-    const cDel = {}, cMiss = {}, lostCap = {};
-    let penalties = 0;
-    const left = { web: supply.web, train: supply.train, infer: supply.infer };
-    if (mk.frontier.demand > 0 && frontierElig > 0) {
-      const sold = Math.min(frontierElig, mk.frontier.demand, left.train);
-      revenue.frontier = sold * mk.frontier.price; wRev.train += revenue.frontier;
-      left.train -= sold;
+  /* ---- v4 contract engine ----
+     A contract is either SERVING (kind web | infer | bts, or the starting anchor): `units` per day for `days` from `start`,
+     paid `price` per delivered unit, `penalty` per unit below `sla` x units; or a JOB (kind train | frontier): `work`
+     unit-days by `deadline`, paid `pay` on completion, at most `maxRate` units a day, `lateFee` per day after the
+     deadline, cancelled `lateMax` days after it. Frontier jobs only take output from racks in a >= 12-GPU spine cluster. */
+  /* the rate a job needs from `day` on to finish by its deadline (as fast as it may once late) */
+  function jobNeed(c, day) {
+    const rem = Math.max(0, c.work - c.done), left = c.deadline - day;
+    return left > 1e-9 ? Math.min(c.maxRate, rem / left) : Math.min(c.maxRate, rem);
+  }
+  /* active on `day`: started, and not yet over (serving: before its end; job: work left) */
+  const activeC = (c, day) => !(c.start > day + 1e-9) && (isJob(c) ? c.done < c.work - 1e-9 : day < c.end);
+  /* allocate every rack's output to contracts, most urgent first (least slack; ties: higher penalty, then id).
+     Pass 1 gives each contract what keeps it out of trouble (serving: its SLA minimum; job: the rate that meets its
+     deadline) - penalties only start below the SLA, so a small shortfall is spread instead of sinking one customer;
+     pass 2 tops serving contracts up to all their units; pass 3 lets jobs use leftover output up to their max rate
+     (finishing early). What is left is idle.
+     Returns per-contract delivery (cDel), shortfall (cMiss), rack->contract links (alloc) and money rates. */
+  function allocate(s, day, mk, perRack, racks) {
+    const out = { revenue: { web: 0, train: 0, infer: 0, frontier: 0, contracts: 0 }, gross: 0, accrual: 0, penalties: 0,
+      cDel: {}, cMiss: {}, alloc: [], idle: { web: 0, train: 0, infer: 0 }, owed: { web: 0, train: 0, infer: 0 } };
+    const pools = { web: [], train: [], infer: [] };
+    for (const r of racks) {
+      const pr = perRack[r.id];
+      pr.to = []; pr.rev = 0;
+      for (const w of ["web", "train", "infer"]) if (pr.out[w] > 1e-9) pools[w].push({ r: r.id, left: pr.out[w], fr: !!pr.frontier });
     }
-    if (s.contracts.length) {
-      for (const w of ["web", "train", "infer"]) {
-        const cs = s.contracts.filter(c => c.w === w && !(c.start > day + 1e-9));   // build-to-suit starts after its lead time
-        if (!cs.length) continue;
-        const Cu = cs.reduce((a, c) => a + c.units, 0), del = Math.min(left[w], Cu);
-        for (const c of cs) {
-          const share = del * c.units / Cu, miss = Math.max(0, c.sla * c.units - share);
-          cDel[c.id] = share; cMiss[c.id] = miss;
-          revenue.contracts += share * c.price; wRev[w] += share * c.price;
-          penalties += miss * c.penalty;
-        }
-        left[w] -= del;
+    pools.train.sort((a, b) => (a.fr ? 1 : 0) - (b.fr ? 1 : 0));   // ordinary training uses non-cluster racks first
+    const act = [];
+    for (const c of s.contracts) {
+      if (!activeC(c, day)) continue;
+      const job = isJob(c), need = job ? jobNeed(c, day) : c.units;
+      const slack = c.phantom ? 1e9 : job ? (c.deadline - day) - Math.max(0, c.work - c.done) / c.maxRate : 0;
+      act.push({ c, job, need, slack, got: 0 });
+      if (!c.phantom) out.owed[c.w] += need;
+    }
+    act.sort((a, b) => a.slack - b.slack || b.c.penalty - a.c.penalty || (a.c.id < b.c.id ? -1 : a.c.id > b.c.id ? 1 : 0));
+    const take = (x, amt) => {
+      for (const p of pools[x.c.w]) {
+        if (amt <= 1e-12) break;
+        if (p.left <= 1e-12 || (x.c.frontier && !p.fr)) continue;
+        const u = Math.min(p.left, amt);
+        p.left -= u; amt -= u; x.got += u;
+        out.alloc.push({ rack: p.r, id: x.c.id, w: x.c.w, u });
+        perRack[p.r].to.push({ id: x.c.id, u });
+      }
+    };
+    for (const x of act) take(x, x.job ? x.need : x.c.sla * x.c.units);
+    for (const x of act) if (!x.job) take(x, x.c.units - x.got);
+    for (const x of act) if (x.job) take(x, x.c.maxRate - x.got);
+    for (const x of act) {
+      const c = x.c, del = x.got;
+      out.cDel[c.id] = del;
+      if (x.job) {
+        out.accrual += del * c.pay / c.work;
+        out.cMiss[c.id] = Math.max(0, x.need - del);
+        if (day >= c.deadline) out.penalties += c.lateFee;
+      } else {
+        const miss = Math.max(0, c.sla * c.units - del);
+        out.cMiss[c.id] = miss;
+        const v = del * c.price;
+        out.revenue[c.w] += v; out.gross += v;
+        out.penalties += miss * c.penalty;
       }
     }
-    for (const w of ["web", "train", "infer"]) {
-      const S = left[w], D = mk[w].demand, p = mk[w].price;
-      revenue[w] = p * (Math.min(S, D) + K.OVERSUPPLY * Math.max(0, S - D));
-      wRev[w] += revenue[w];
-      lostCap[w] = Math.max(0, S - D);
+    const val = {};
+    for (const x of act) val[x.c.id] = x.job ? x.c.pay / x.c.work : x.c.price;
+    for (const l of out.alloc) perRack[l.rack].rev += l.u * val[l.id];
+    for (const w of ["web", "train", "infer"]) for (const p of pools[w]) out.idle[w] += p.left;
+    return out;
+  }
+  /* ablation (mech.contracts false): a flat-rate buyer takes output at the price index up to market demand */
+  function spotSale(s, mk, perRack, racks, supply, frontierElig) {
+    const out = { revenue: { web: 0, train: 0, infer: 0, frontier: 0, contracts: 0 }, gross: 0, accrual: 0, penalties: 0,
+      cDel: {}, cMiss: {}, alloc: [], idle: { web: 0, train: 0, infer: 0 }, owed: { web: 0, train: 0, infer: 0 } };
+    const left = { web: supply.web, train: supply.train, infer: supply.infer }, wRev = { web: 0, train: 0, infer: 0 };
+    if (mk.frontier.demand > 0 && frontierElig > 0) {
+      const sold = Math.min(frontierElig, mk.frontier.demand, left.train);
+      out.revenue.frontier = sold * mk.frontier.price; wRev.train += out.revenue.frontier; left.train -= sold;
     }
-    const gross = revenue.web + revenue.train + revenue.infer + revenue.frontier + revenue.contracts;
-    return { revenue, wRev, gross, cDel, cMiss, penalties, lostCap };
+    for (const w of ["web", "train", "infer"]) {
+      const sold = Math.min(left[w], mk[w].demand);
+      out.revenue[w] = sold * mk[w].price; wRev[w] += out.revenue[w];
+      out.idle[w] = left[w] - sold;
+    }
+    out.gross = out.revenue.web + out.revenue.train + out.revenue.infer + out.revenue.frontier;
+    for (const r of racks) {
+      const pr = perRack[r.id]; pr.rev = 0; pr.to = [];
+      for (const w in supply) if (supply[w] > 0) pr.rev += wRev[w] * pr.out[w] / supply[w];
+    }
+    return out;
   }
 
   /* instantaneous economics. opts.day: evaluate at another day (market + season);
@@ -584,6 +685,7 @@
     const day = opts.day != null ? opts.day : s.day, now = day === s.day;
     const se = seasonAt(day), mk = marketAt(s, day);
     const envOn = on(s, "environment"), energyOn = on(s, "energy"), fabricOn = on(s, "fabric"), opsOn = on(s, "ops");
+    const heatOn = on(s, "heat");        // v4: seasonal cooling, hot neighbours and throttling start with their chapter
     const drought = envOn && activeAt(s.drought, day), wave = activeAt(s.heatWave, day);
     const blackout = on(s, "facilities") && activeAt(s.outage, day) && !s.ups;
     const halls = [], H = {};
@@ -610,7 +712,7 @@
     for (const key of Object.keys(s.spines)) { const hh = H[+key.split("-")[0]]; hh.it += K.SPINE_KW; hh.heat += K.SPINE_KW; kw += K.SPINE_KW; }
     for (const hh of halls) {
       const h = hallOf(s, hh.n);
-      let cap = (s.mech.heat ? se.heatCap - (wave ? K.HEATWAVE_COOL : 0) : 1e6) + hh.cool + (h.crac ? K.CRAC_KW : 0);
+      let cap = (heatOn ? se.heatCap - (wave ? K.HEATWAVE_COOL : 0) : 1e6) + hh.cool + (h.crac ? K.CRAC_KW : 0);
       if (drought && h.cooling === "evap") cap *= K.DROUGHT_COOL;
       hh.heatCap = cap;
       hh.tTarget = blackout ? 18 : 18 + 14 * hh.heat / cap;
@@ -624,8 +726,8 @@
       if (r.col < K.COLS - 1) { const o = s.racks[base + r.col + 1]; nb += perRack[o.id].kw * (o.tank ? K.TANK_ROOM_HEAT : 1); }
       const own = pr.kw * (r.tank ? K.TANK_ROOM_HEAT : 1);
       pr.load = (own + 0.3 * nb) / K.RACK_KW;
-      pr.inlet = hh.roomT + (s.mech.heat ? 5 * Math.max(0, pr.load - 0.6) : 0);
-      pr.throttle = s.mech.heat ? throttleAt(pr.inlet) : 1;
+      pr.inlet = hh.roomT + (heatOn ? 5 * Math.max(0, pr.load - 0.6) : 0);
+      pr.throttle = heatOn ? throttleAt(pr.inlet) : 1;
       let netProv = 0, netNeed = 0, boost = 1, bricked = false, gpus = 0;
       for (const d of r.devices) {
         if (d.failed) continue;
@@ -680,18 +782,15 @@
         for (const r of s.racks) { const o = perRack[r.id].out; o.web *= transitF; o.infer *= transitF; }
       }
     }
-    let sold = sellOutput(s, mk, supply, frontierElig, day), outageLoss = 0;
+    const sell = () => core(s) ? allocate(s, day, mk, perRack, s.racks) : spotSale(s, mk, perRack, s.racks, supply, frontierElig);
+    let sold = sell(), outageLoss = 0;
     if (blackout) {
-      outageLoss = sold.gross;
+      outageLoss = sold.gross + sold.accrual;
       for (const r of s.racks) { const o = perRack[r.id].out; o.web = o.train = o.infer = 0; }
-      sold = sellOutput(s, mk, { web: 0, train: 0, infer: 0 }, 0, day);
-      supply.web = supply.train = supply.infer = 0;
+      supply.web = supply.train = supply.infer = 0; frontierElig = 0;
+      sold = sell();
     }
-    const { revenue, wRev, gross, lostCap } = sold;
-    for (const r of s.racks) {  // attribute revenue back to racks, for the detail panel
-      const pr = perRack[r.id]; pr.rev = 0;
-      for (const w in supply) if (supply[w] > 0) pr.rev += wRev[w] * pr.out[w] / supply[w];
-    }
+    const { revenue, gross } = sold;
     // ---- costs
     let nDev = 0, lease = 0;
     for (const r of s.racks) {
@@ -733,14 +832,17 @@
     for (const k in costs) opex += costs[k];
     // measurable losses (for the end screen)
     const throttleLoss = s.racks.reduce((a, r) => { const pr = perRack[r.id]; return a + (pr.throttle < 1 ? pr.rev * (1 / pr.throttle - 1) : 0); }, 0);
+    // v4: output with no contract to serve, valued at the market price index (the end screen's "idle capacity")
+    const idleLoss = blackout ? 0 : sold.idle.web * mk.web.price + sold.idle.train * mk.train.price + sold.idle.infer * mk.infer.price;
     const failLoss = blackout ? 0 : failOut.web * mk.web.price + failOut.train * mk.train.price + failOut.infer * mk.infer.price;
     const brickLoss = s.racks.reduce((a, r) => { const pr = perRack[r.id]; return a + (pr.penalty < 1 ? pr.rev * (1 / pr.penalty - 1) : 0); }, 0);
     const green = facility > 0 ? Math.min(1, (solarKw + ppaKw) / facility) : 0;
     return { day, se, mk, kw, halls, heatCap: halls[0].heatCap, tTarget: halls[0].tTarget, roomT: halls[0].roomT, roomHeat: halls[0].heat,
-      perRack, supply, frontierElig, cluster, transitF, revenue, gross, lostCap, cDel: sold.cDel, cMiss: sold.cMiss,
+      perRack, supply, frontierElig, cluster, transitF, revenue, gross, cDel: sold.cDel, cMiss: sold.cMiss,
+      alloc: sold.alloc, idle: sold.idle, lostCap: sold.idle, owed: sold.owed, accrual: sold.accrual, idleLoss,
       powerCost, upkeep, costs, opex, throttleLoss, failLoss, brickLoss, outageLoss, transitLost,
       facility, spot, solarKw, ppaKw, draw, dieselKw, waterRate, carbon, green, blackout, drought, heatWave: wave,
-      net: gross - opex };
+      net: gross - opex, earn: gross + sold.accrual - opex };
   }
   const throttleAt = t => t > K.T_LIMIT ? Math.max(0.5, 1 - (t - K.T_LIMIT) * 0.1) : 1;
 
@@ -795,10 +897,18 @@
     if (!s.cashEvents) s.cashEvents = [];
     if (s.cashSeq == null) s.cashSeq = 0;
     if (s.totals.flow == null) s.totals.flow = 0;
+    if (s.totals.events == null) s.totals.events = 0;
+    // v4 fields on older saves
+    if (!s.prog) s.prog = { gpuOrders: 0, heatWaves: 0, outages: 0, missDays: 0, lastChapter: 0 };
+    if (!s.recentlySold) s.recentlySold = [];
+    if (!s.policy) s.policy = { autoSwap: false, keepSpares: {}, autoRenew: false };
+    if (s.contractLog.cancelled == null) Object.assign(s.contractLog, { cancelled: 0, late: 0 });
+    for (const k of Object.keys(LOSS_LABEL)) if (s.losses[k] == null) { s.losses[k] = 0; s.lossBy[k] = {}; }
   }
   function logCash(s, amt, kind, label) {
     ensureCashLog(s);
     s.cashEvents.push({ n: ++s.cashSeq, day: round2(s.day), amt: round2(amt), kind, label });
+    s.totals.events = (s.totals.events || 0) + amt;      // cumulative: money conservation over a whole game
     if (s.cashEvents.length > CASH_LOG_MAX) s.cashEvents.shift();
     if (DEBUG && Math.abs(amt) >= 10) console.debug(`[sim d${s.day.toFixed(2)}] cash ${amt >= 0 ? "+" : ""}${amt.toFixed(1)} ${kind}: ${label}`);
   }
@@ -815,7 +925,9 @@
   /* ================= actions ================= */
   function isAvail(s, it) {
     if (it.avail > s.day || isDead(s, it)) return false;
-    if ((it.role === "exotic" || it.key === "pm9") && !s.mech.disrupt) return false;
+    if ((it.role === "exotic" || it.key === "pm9") && !on(s, "disrupt")) return false;
+    if (it.role === "gpu" && !on(s, "gpu")) return false;           // v4: hardware goes on sale with its chapter
+    if (it.ch && !on(s, it.ch)) return false;
     if (it.role === "gpu" && it.gen > 1 && !s.mech.gens) return false;
     return true;
   }
@@ -832,7 +944,7 @@
   const hasJob = (s, uid) => s.jobs.some(j => j.uid === uid || (j.dev && j.dev.uid === uid));
 
   function fits(s, r, it, mode) {
-    const m = MODES[mode || r.mode];
+    const mm = mode || r.mode, m = MODES[mm === "off" ? "std" : mm];   // a parked rack is budgeted as if it ran Standard
     if (it.tank && !r.tank) return "Needs an immersion tank rack";
     if (r.tank && !it.tank && it.role !== "net") return "Tank racks only take exotic cards and switches";
     const free = K.RACK_U - usedU(s, r);
@@ -842,9 +954,9 @@
     return null;
   }
   function findDev(r, uid) { return r.devices.findIndex(d => d.uid === uid); }
-  const RACK_ACTIONS = new Set(["buy", "move", "sell", "mode", "workload", "tank", "store", "unstore", "lease", "returnLease"]);
+  const RACK_ACTIONS = new Set(["buy", "move", "sell", "mode", "workload", "tank", "store", "unstore", "lease", "returnLease", "reorder"]);
   const GATE = { hire: "ops", fire: "ops", repairPolicy: "ops", repair: "ops", store: "ops", unstore: "ops",
-    spine: "fabric", transit: "fabric", signContract: "contracts", declineContract: "contracts", forward: "memory",
+    spine: "fabric", transit: "fabric", forward: "memory",
     borrow: "finance", repay: "finance", lease: "finance", returnLease: "finance", buildHall: "facilities", ups: "facilities", crac: "facilities",
     ppa: "energy", solar: "energy", cooling: "environment", acceptRound: "investors", declineRound: "investors", buyback: "investors",
     pr: "reputation", lobby: "policy" };
@@ -985,13 +1097,30 @@
       }
       // ---- ch8 contracts
       case "signContract": {
+        if (!core(s)) return no("Contracts are switched off in this game");
         const o = s.offers.find(x => x.id === a.id); if (!o) return no("Offer gone");
         if (o.foreign && s.policyFx.exportCtl) return no("Customer barred by export controls");
         if (o.bts && s.cash < o.fitout) return no(`Fit-out needs $${o.fitout}k`);
         return { ok: true, msg: o.bts ? `Build-to-suit: $${o.fitout}k fit-out now, ${o.units} ${o.w} units from day ${Math.round(s.day + o.lead)} for ${o.days} days at $${round2(o.price)}k`
-          : `Sign: ${o.units} ${o.w} units for ${o.days} days at $${round2(o.price)}k` };
+          : isJob(o) ? `Sign: ${o.work} unit-days of ${o.kind === "frontier" ? "frontier " : ""}training by day ${Math.round(s.day + o.days)}, $${Math.round(o.pay)}k on completion`
+          : `Sign: ${o.units} ${o.w} units a day for ${o.days} days from day ${Math.round(s.day + (o.lead || 0))} at $${round2(o.price)}k` };
       }
       case "declineContract": return s.offers.some(x => x.id === a.id) ? { ok: true, msg: "Decline" } : no("Offer gone");
+      case "reorder": {   // cosmetic: a device's slot in the rack elevation (no rule depends on it)
+        const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack");
+        if (!Number.isFinite(+a.index)) return no("Bad position");
+        return { ok: true, msg: "Moved in the rack" };
+      }
+      case "cancelJob": return cancelJobCheck(s, a);
+      case "policy": return policyCheck(s, a);
+      case "undoSell": case "buyBack": {
+        const x = (s.recentlySold || []).find(y => y.uid === a.uid);
+        if (!x) return no("Not recently sold");
+        if (s.cash < x.value) return no(`Needs $${round2(x.value)}k`);
+        const dest = undoSellDest(s, x, a.rack);
+        if (!dest.ok) return no(dest.msg);
+        return { ok: true, msg: `Buy it back for $${round2(x.value)}k (${dest.rack ? "install in " + dest.rack : "to the shelf"})` };
+      }
       // ---- ch9 memory
       case "forward": {
         const it = s.items[a.item];
@@ -1100,11 +1229,211 @@
   function spareFor(s, d) { return s.shelf.find(x => x.type === d.type && !x.failed && !x.leased) || null; }
   const repairParts = (s, d) => K.REPAIR_PARTS_DAYS * (shipDays(s, itemOf(s, d)) > K.SHIP_DAYS ? 3 : 1);
 
+  /* sign an offer on the board: it becomes a contract (a build-to-suit pays its fit-out now) */
+  function signOffer(s, o) {
+    s.offers.splice(s.offers.indexOf(o), 1);
+    const start = s.day + (o.lead || 0);
+    if (o.bts && o.fitout > 0) spend(s, o.fitout, "capex");
+    const c = Object.assign(o, { signed: s.day, start, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 });
+    if (isJob(c)) Object.assign(c, { done: 0, deadline: s.day + o.days, end: s.day + o.days + o.lateMax });
+    else c.end = start + o.days;
+    s.contracts.push(c);
+    s.contractLog.signed++;
+    return c;
+  }
+  /* ================= v4 automation policies ================= */
+  const POLICY_KEYS = new Set(["autoSwap", "keepSpares", "autoRenew"]);
+  function policyCheck(s, a) {
+    if (!POLICY_KEYS.has(a.key)) return no("Unknown policy");
+    if (a.key !== "autoRenew" && !on(s, "ops")) return no(`Unlocks in chapter ${CH_IDX.ops + 1}`);
+    if (a.key === "autoRenew" && !core(s)) return no("Contracts are switched off in this game");
+    if (a.key === "keepSpares") {
+      const it = s.items[a.item];
+      if (!it || it.role === "exotic" || it.key === "pm9") return no("Pick a card or part");
+      const n = Math.round(+a.n);
+      if (!(n >= 0 && n <= K.SHELF)) return no(`0 to ${K.SHELF} spares`);
+      return { ok: true, msg: n ? `Keep ${n} ${it.name} on the shelf (auto-order at list price)` : `Stop keeping ${it.name} spares` };
+    }
+    return { ok: true, msg: `${a.key === "autoSwap" ? "Auto-swap spares" : "Auto-renew contracts"} ${a.on ? "on" : "off"}` };
+  }
+  function policyApply(s, a) {
+    if (a.key === "keepSpares") { const n = Math.round(+a.n); if (n > 0) s.policy.keepSpares[a.item] = n; else delete s.policy.keepSpares[a.item]; }
+    else s.policy[a.key] = !!a.on;
+  }
+  /* keepSpares: order spares at list price and normal shipping, straight to the shelf, while below the target */
+  function restock(s) {
+    for (const [k, n] of Object.entries(s.policy.keepSpares)) {
+      const it = s.items[k];
+      if (!it || !isAvail(s, it)) continue;
+      let have = s.shelf.filter(d => d.type === k && !d.failed && !d.leased).length + s.jobs.filter(j => j.kind === "restock" && j.dev.type === k).length;
+      while (have < n && shelfLoad(s) < K.SHELF && s.cash >= it.price && !exportBlocked(s, it)) {
+        const d = dev(s, k), days = shipDays(s, it), job = { id: s.nextId++, kind: "restock", rack: null, dev: d, phase: "contract", left: days, total: days, toShelf: true };
+        const dep0 = s.deprec.length;
+        spend(s, it.price, "capex");
+        Object.assign(job, { paid: it.price, day0: s.day, capex: true });
+        s.deprec[dep0].job = job.id;
+        if (s.policyFx.exportCtl && it.role === "gpu" && it.gen === currentGen(s)) s.exportUsed++;
+        if (it.role === "gpu") s.prog.gpuOrders++;
+        s.jobs.push(job); have++;
+        logCash(s, -it.price, "restock", `Auto-ordered a spare ${it.name}`);
+        log(s, `restock ${k} (${have}/${n})`);
+      }
+    }
+  }
+  /* autoSwap (without auto-repair): a failed part with a matching spare on the shelf is swapped by a technician */
+  function autoSwapSweep(s) {
+    for (const r of s.racks) for (const d of r.devices) if (d.failed && !hasJob(s, d.uid) && spareFor(s, d)) queueRepair(s, d.uid, true);
+  }
+  /* ================= v4 forgiveness: cancel a queued job, undo a sale (docs/GAME_FEEL.md "coyote time") ================= */
+  /* undo a purchase or lease while it is still on the truck: exact refund, books restored */
+  function cancelOrderJob(s, j) {
+    const uid = j.dev.uid, u = j.undo || { day: s.day, paid: j.paid || 0 }, to = rackById(s, j.to);
+    s.jobs.splice(s.jobs.indexOf(j), 1);
+    const pi = to.pending.findIndex(d => d.uid === uid); if (pi >= 0) to.pending.splice(pi, 1);
+    if (u.paid) {
+      s.cash += u.paid; s.totals.capex -= u.paid;
+      const di = s.deprec.findIndex(x => x.uid === uid);
+      if (di >= 0) {   // drop the depreciation entry and what it already accrued this quarter
+        if (Math.floor(u.day / 90) === Math.floor(s.day / 90)) s.fin.dep -= s.deprec[di].rate * (s.day - u.day);
+        s.deprec.splice(di, 1);
+      }
+    }
+    if (u.exportQ != null && u.exportQ === Math.floor(s.day / 90)) s.exportUsed = Math.max(0, s.exportUsed - 1);
+    if (u.gpu) s.prog.gpuOrders = Math.max(0, s.prog.gpuOrders - 1);
+    if (u.loss) {
+      s.losses.shortage = Math.max(0, s.losses.shortage - u.loss);
+      const p = periodOf(u.day); if (s.lossBy.shortage[p] != null) s.lossBy.shortage[p] = Math.max(0, s.lossBy.shortage[p] - u.loss);
+    }
+    log(s, `cancel order ${j.dev.type} uid=${uid} in ${j.to}, refund ${round2(u.paid)}`);
+  }
+  /* builds and forward orders refund a declining share: all of it in the first day (or before a technician starts),
+     then pro rata to the time left, minus a CANCEL_FEE share */
+  const CANCEL_BUILDS = new Set(["tank", "grid", "spine", "buildHall", "ups", "solar", "crac", "cooling", "forward", "restock"]);
+  function buildRefund(s, j) {
+    const paid = j.paid || 0;
+    if (!paid) return 0;
+    const fresh = j.phase === "wait" || s.day - (j.day0 != null ? j.day0 : s.day) < K.CANCEL_FREE_DAYS - 1e-9;
+    const left = j.total > 0 ? clamp(j.left / j.total, 0, 1) : 1;
+    return round2(fresh ? paid : paid * left * (1 - K.CANCEL_FEE));
+  }
+  /* reverse a queued job's spend in the books, then book the part that is not refunded as a fee (opex) */
+  function refundPaid(s, j, back) {
+    const paid = j.paid || 0, sameQ = Math.floor((j.day0 || 0) / 90) === Math.floor(s.day / 90);
+    if (!paid) return;
+    s.cash += paid;
+    if (j.capex) {
+      s.totals.capex -= paid;
+      const di = s.deprec.findIndex(x => x.job === j.id);
+      if (di >= 0) { if (sameQ) s.fin.dep -= s.deprec[di].rate * (s.day - j.day0); s.deprec.splice(di, 1); }
+    } else {
+      const o = j.opexPaid != null ? j.opexPaid : paid;
+      s.totals.opex -= o; s.fin.opex -= o; s.dayAcc.profit += o;
+      if (sameQ) s.ledger.other = Math.max(0, s.ledger.other - o);
+    }
+    const fee = round2(paid - back);
+    if (fee > 0) spend(s, fee, "opex", "other");
+  }
+  /* can a device that left rack r (sell/store/returnLease) or is on its way elsewhere (move) go back into r? */
+  function fitsBack(s, r, d, counted) {
+    const it = itemOf(s, d);
+    if (!r || (it.tank && !r.tank) || (r.tank && !it.tank && it.role !== "net")) return false;
+    if (K.RACK_U - usedU(s, r) < it.u) return false;
+    const m = MODES[r.mode === "off" ? "std" : r.mode];
+    if (rackKwAll(s, r) + it.kw * m.kw > K.RACK_KW + 1e-9) return false;
+    return counted || gridKwAll(s) + it.kw * m.kw <= s.gridKw + 1e-9;
+  }
+  const shelfFree = (s, d) => on(s, "ops") && !d.leased && shelfLoad(s) < K.SHELF;
+  /* where a cancelled job's device goes: its origin rack if it fits, else the spares shelf; null = nowhere */
+  function backDest(s, j) {
+    const counted = j.kind === "move";      // a moving device already counts toward the grid budget (target rack)
+    if (fitsBack(s, rackById(s, j.rack), j.dev, counted)) return "rack";
+    return shelfFree(s, j.dev) ? "shelf" : null;
+  }
+  const okMsg = msg => ({ ok: true, msg });
+  function cancelJobCheck(s, a) {
+    const j = s.jobs.find(x => x.id === a.id);
+    if (!j) return no("No such job");
+    const k = j.kind;
+    if ((k === "buy" || k === "lease") && j.phase === "ship") return okMsg(k === "buy" ? `Order cancelled: $${round2(j.paid)}k refunded` : "Lease cancelled");
+    if (k === "buy" || k === "undoSell") {
+      if (!on(s, "ops")) return no("Already delivered: sell it instead (the spares shelf opens in chapter 6)");
+      if (shelfLoad(s) >= K.SHELF) return no(`Already delivered and the shelf is full (${K.SHELF})`);
+      return okMsg("Already delivered: it goes to the spares shelf (no refund)");
+    }
+    if (k === "lease") return okMsg("Lease handed back before install");
+    if (k === "move" || k === "sell" || k === "store" || k === "returnLease") {
+      const dest = backDest(s, j);
+      if (!dest) return no("No room to put it back (rack full and no shelf space)");
+      return okMsg(k === "sell" ? `Keep it: sale cancelled, back to ${dest === "rack" ? j.rack : "the shelf"}` : `Back to ${dest === "rack" ? j.rack : "the shelf"}`);
+    }
+    if (k === "unstore") return okMsg("Back to the shelf");
+    if (k === "swap") return okMsg("Spare goes back to the shelf");
+    if (k === "repair") return okMsg(j.phase === "work" ? "Stop the repair (parts already used, no refund)" : `Cancel the repair: $${round2(j.cost || 0)}k refunded`);
+    if (CANCEL_BUILDS.has(k)) return okMsg(`Cancel: $${round2(buildRefund(s, j))}k of $${round2(j.paid || 0)}k back`);
+    return no("This job can't be cancelled");
+  }
+  function cancelJobApply(s, a) {
+    const j = s.jobs.find(x => x.id === a.id), k = j.kind;
+    if ((k === "buy" || k === "lease") && j.phase === "ship") { cancelOrderJob(s, j); return; }
+    s.jobs.splice(s.jobs.indexOf(j), 1);                 // a technician on it is free from the next substep
+    const unpend = () => { const r = rackById(s, j.to); const i = r ? r.pending.indexOf(j.dev) : -1; if (i >= 0) r.pending.splice(i, 1); };
+    let what = "";
+    if (k === "buy" || k === "undoSell") { unpend(); s.shelf.push(j.dev); what = "to shelf"; }
+    else if (k === "lease") { unpend(); what = "lease returned"; }
+    else if (k === "move" || k === "sell" || k === "store" || k === "returnLease") {
+      const dest = backDest(s, j);
+      if (k === "move") unpend();
+      if (dest === "rack") { const r = rackById(s, j.rack); r.devices.splice(j.at != null ? Math.min(j.at, r.devices.length) : r.devices.length, 0, j.dev); }
+      else s.shelf.push(j.dev);
+      what = `back to ${dest === "rack" ? j.rack : "shelf"}`;
+    } else if (k === "unstore") { unpend(); s.shelf.push(j.dev); what = "back to shelf"; }
+    else if (k === "swap") { s.shelf.push(j.dev); what = "spare back to shelf"; }
+    else if (k === "repair") {
+      if (j.phase !== "work" && j.cost) {
+        const c = j.cost, sameQ = Math.floor((j.day0 || 0) / 90) === Math.floor(s.day / 90);
+        s.cash += c; s.totals.opex -= c; s.fin.opex -= c; s.dayAcc.profit += c;
+        if (sameQ) s.ledger.repairs = Math.max(0, s.ledger.repairs - c);
+        logCash(s, c, "refund", `Repair cancelled: $${round2(c)}k refunded`);
+        what = `refund ${c}`;
+      } else what = "stopped, no refund";
+    } else if (CANCEL_BUILDS.has(k)) {
+      const back = buildRefund(s, j);
+      refundPaid(s, j, back);
+      if (j.paid) logCash(s, back, "refund", `Cancelled ${k === "buildHall" ? "Hall " + j.hall : k}: $${round2(back)}k of $${round2(j.paid)}k back`);
+      if (k === "forward" && s.policyFx.exportCtl) s.exportUsed = Math.max(0, s.exportUsed - 1);
+      what = `refund ${back} of ${j.paid}`;
+    }
+    log(s, `cancel job ${j.id} ${k} (${what})`);
+  }
+  /* undo a sale within K.UNSELL_DAYS: pay back exactly what it sold for; it returns to a rack (installed by a
+     technician) or to the spares shelf. Leased cards are returned, not sold, so they never appear here. */
+  function undoSellDest(s, x, rackId) {
+    const it = s.items[x.type];
+    const tryRack = id => { const r = id != null ? rackById(s, id) : null; return r && !fits(s, r, it) ? id : null; };
+    const rk = rackId != null ? tryRack(rackId) : tryRack(x.rack);
+    if (rk) return { ok: true, rack: rk };
+    if (on(s, "ops") && shelfLoad(s) < K.SHELF) return { ok: true, rack: null };
+    const r = rackId != null ? rackById(s, rackId) : rackById(s, x.rack);
+    return { ok: false, msg: r ? (fits(s, r, it) || "No room") + " (and no shelf space)" : "No room to put it" };
+  }
+  function undoSellApply(s, a) {
+    const i = s.recentlySold.findIndex(y => y.uid === a.uid), x = s.recentlySold[i], dest = undoSellDest(s, x, a.rack);
+    s.recentlySold.splice(i, 1);
+    s.cash -= x.value; s.totals.resale -= x.value;
+    logCash(s, -x.value, "unsell", `Bought back ${itemOf(s, x.dev).name} for $${round2(x.value)}k`);
+    if (dest.rack) {
+      rackById(s, dest.rack).pending.push(x.dev);
+      s.jobs.push({ id: s.nextId++, kind: "undoSell", rack: dest.rack, dev: x.dev, to: dest.rack, phase: "wait", left: K.INSTALL_DAYS, total: K.INSTALL_DAYS });
+    } else s.shelf.push(x.dev);
+    log(s, `undo sale ${x.type} uid=${x.uid} -> ${dest.rack || "shelf"} for ${round2(x.value)}`);
+  }
+
   function apply(s, a) {
     const res = check(s, a);
     if (!res.ok) { log(s, `reject ${a && a.type}: ${res.msg}`); return res; }
     const r = a.rack != null ? rackById(s, a.rack) : null;
     const job = { id: s.nextId++, kind: a.type, rack: a.rack != null ? a.rack : null };
+    const cash0 = s.cash, dep0 = s.deprec.length, opex0 = s.totals.opex;
     switch (a.type) {
       case "buy": case "lease": {
         const it = s.items[a.item], d = dev(s, a.item), days = shipDays(s, it);
@@ -1112,6 +1441,7 @@
         if (a.type === "buy") { spend(s, it.price, "capex"); undo.paid = it.price; s.deprec[s.deprec.length - 1].uid = d.uid; }
         else { d.leased = true; d.leaseRate = +(it.price * K.LEASE_RATE).toFixed(4); }
         if (s.policyFx.exportCtl && it.role === "gpu" && it.gen === currentGen(s)) { s.exportUsed++; undo.exportQ = Math.floor(s.day / 90); }
+        if (it.role === "gpu") { s.prog.gpuOrders++; undo.gpu = true; }
         if (days > K.SHIP_DAYS) {   // measurable shortage cost: extra days x what the card would earn
           const mk = marketAt(s, s.day), w = it.role === "gpu" ? r.workload : it.only || "web";
           const v = it.role === "gpu" ? Math.min(it.F, it.B * INTENSITY[w]) : 1;
@@ -1123,35 +1453,25 @@
         Object.assign(job, { dev: d, to: a.rack, phase: "ship", left: days, total: days, work: K.INSTALL_DAYS, paid: undo.paid, undo });
         s.jobs.push(job); break;
       }
-      case "cancelOrder": {
-        const j = orderJob(s, a.uid), u = j.undo || { day: s.day, paid: j.paid || 0 }, to = rackById(s, j.to);
-        s.jobs.splice(s.jobs.indexOf(j), 1);
-        const pi = to.pending.findIndex(d => d.uid === a.uid); if (pi >= 0) to.pending.splice(pi, 1);
-        if (u.paid) {
-          s.cash += u.paid; s.totals.capex -= u.paid;
-          const di = s.deprec.findIndex(x => x.uid === a.uid);
-          if (di >= 0) {   // drop the depreciation entry and what it already accrued this quarter
-            if (Math.floor(u.day / 90) === Math.floor(s.day / 90)) s.fin.dep -= s.deprec[di].rate * (s.day - u.day);
-            s.deprec.splice(di, 1);
-          }
-        }
-        if (u.exportQ != null && u.exportQ === Math.floor(s.day / 90)) s.exportUsed = Math.max(0, s.exportUsed - 1);
-        if (u.loss) {
-          s.losses.shortage = Math.max(0, s.losses.shortage - u.loss);
-          const p = periodOf(u.day); if (s.lossBy.shortage[p] != null) s.lossBy.shortage[p] = Math.max(0, s.lossBy.shortage[p] - u.loss);
-        }
-        log(s, `cancel order ${j.dev.type} uid=${a.uid} in ${j.to}, refund ${round2(u.paid)}`);
+      case "cancelOrder": cancelOrderJob(s, orderJob(s, a.uid)); break;
+      case "cancelJob": cancelJobApply(s, a); break;
+      case "policy": policyApply(s, a); break;
+      case "undoSell": case "buyBack": undoSellApply(s, a); break;
+      case "reorder": {
+        const i = findDev(r, a.uid), [d] = r.devices.splice(i, 1), to = clamp(Math.round(+a.index), 0, r.devices.length);
+        r.devices.splice(to, 0, d);
         break;
       }
       case "move": {
-        const [d] = r.devices.splice(findDev(r, a.uid), 1);
+        const at = findDev(r, a.uid), [d] = r.devices.splice(at, 1);
+        job.at = at;
         rackById(s, a.to).pending.push(d);
         Object.assign(job, { dev: d, to: a.to, phase: "wait", left: K.MOVE_DAYS, total: K.MOVE_DAYS });
         s.jobs.push(job); break;
       }
       case "sell": {
-        const [d] = r.devices.splice(findDev(r, a.uid), 1);
-        Object.assign(job, { dev: d, phase: "wait", left: K.SELL_DAYS, total: K.SELL_DAYS, value: resale(s, d) });
+        const at = findDev(r, a.uid), [d] = r.devices.splice(at, 1);
+        Object.assign(job, { dev: d, phase: "wait", left: K.SELL_DAYS, total: K.SELL_DAYS, value: resale(s, d), at });
         s.jobs.push(job); break;
       }
       case "mode": r.mode = a.mode; break;
@@ -1177,8 +1497,8 @@
       case "repairPolicy": s.repairAuto = !!a.on; if (s.repairAuto) autoRepairSweep(s); break;
       case "repair": queueRepair(s, a.uid, a.useSpare !== false); break;
       case "store": {
-        const [d] = r.devices.splice(findDev(r, a.uid), 1);
-        Object.assign(job, { dev: d, phase: "wait", left: K.MOVE_DAYS, total: K.MOVE_DAYS, toShelf: true });
+        const at = findDev(r, a.uid), [d] = r.devices.splice(at, 1);
+        Object.assign(job, { dev: d, phase: "wait", left: K.MOVE_DAYS, total: K.MOVE_DAYS, toShelf: true, at });
         s.jobs.push(job); break;
       }
       case "unstore": {
@@ -1192,14 +1512,7 @@
         Object.assign(job, { key: `${a.hall}-${a.row}`, phase: "contract", left: K.SPINE_DAYS, total: K.SPINE_DAYS });
         s.jobs.push(job); break;
       case "transit": s.transitOrders.push({ day: s.day + K.TRANSIT_DAYS, delta: Math.round(a.delta) }); break;
-      case "signContract": {
-        const i = s.offers.findIndex(x => x.id === a.id), [o] = s.offers.splice(i, 1);
-        const start = o.bts ? s.day + o.lead : s.day;
-        if (o.bts) spend(s, o.fitout, "capex");
-        s.contracts.push(Object.assign(o, { signed: s.day, start, end: start + o.days, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 }));
-        s.contractLog.signed++;
-        break;
-      }
+      case "signContract": signOffer(s, s.offers.find(x => x.id === a.id)); break;
       case "declineContract": s.offers = s.offers.filter(x => x.id !== a.id); break;
       case "forward": {
         const it = s.items[a.item], d = dev(s, a.item);
@@ -1211,7 +1524,8 @@
       case "borrow": { const amt = a.amount || K.LOAN_STEP; s.debt += amt; s.cash += amt; break; }
       case "repay": { const amt = Math.min(a.amount || K.LOAN_STEP, s.debt); s.debt -= amt; s.cash -= amt; break; }
       case "returnLease": {
-        const [d] = r.devices.splice(findDev(r, a.uid), 1);
+        const at = findDev(r, a.uid), [d] = r.devices.splice(at, 1);
+        job.at = at;
         Object.assign(job, { dev: d, phase: "wait", left: K.SELL_DAYS, total: K.SELL_DAYS });
         s.jobs.push(job); break;
       }
@@ -1271,6 +1585,12 @@
         break;
       }
     }
+    // a queued build/order that cost money remembers what it paid, so cancelJob can refund it (and undo its books)
+    if (s.jobs[s.jobs.length - 1] === job && job.paid == null && s.cash < cash0 - 1e-9) {
+      job.paid = round2(cash0 - s.cash); job.day0 = s.day; job.capex = s.deprec.length > dep0;
+      if (job.capex) s.deprec[dep0].job = job.id;
+      else job.opexPaid = round2(s.totals.opex - opex0);
+    }
     log(s, `${a.type} ${JSON.stringify(a)}`);
     return res;
   }
@@ -1280,6 +1600,7 @@
     const f = findAnywhere(s, uid);
     if (!f || !f.d.failed || f.where === "pending" || hasJob(s, uid)) return false;
     const spare = f.r && useSpare ? spareFor(s, f.d) : null;
+    // (a repair job records its cost so cancelJob can refund it before the technician starts)
     if (spare) {
       s.shelf.splice(s.shelf.indexOf(spare), 1);
       s.jobs.push({ id: s.nextId++, kind: "swap", rack: f.r.id, uid, dev: spare, phase: "wait", left: K.SWAP_DAYS, total: K.SWAP_DAYS, toShelf: true });
@@ -1291,7 +1612,7 @@
     spend(s, c, "opex", "repairs");
     logCash(s, -c, "repair", `Repair: ${itemOf(s, f.d).name}${f.r ? " in " + f.r.id : " on the shelf"}`);
     const parts = repairParts(s, f.d);
-    s.jobs.push({ id: s.nextId++, kind: "repair", rack: f.r ? f.r.id : null, uid, phase: "parts", left: parts, total: parts, work: K.REPAIR_DAYS });
+    s.jobs.push({ id: s.nextId++, kind: "repair", rack: f.r ? f.r.id : null, uid, phase: "parts", left: parts, total: parts, work: K.REPAIR_DAYS, cost: c, day0: s.day });
     log(s, `repair ${f.d.type} ${uid} $${c}k`);
     return true;
   }
@@ -1302,19 +1623,23 @@
 
   function finishJob(s, j) {
     const k = j.kind;
-    if (k === "buy" || k === "lease" || k === "move" || k === "unstore") {
+    if (k === "buy" || k === "lease" || k === "move" || k === "unstore" || k === "undoSell") {
       const r = rackById(s, j.to), i = r.pending.findIndex(d => d.uid === j.dev.uid);
       if (i >= 0) r.pending.splice(i, 1);
       if (k === "buy" || k === "lease") j.dev.inst = s.day;
       if (j.dev.inst == null) j.dev.inst = s.day;
       r.devices.push(j.dev);
-    } else if (k === "sell") { s.cash += j.value; s.totals.resale += j.value; logCash(s, j.value, "sale", `Sold ${itemOf(s, j.dev).name}${j.rack ? " from " + j.rack : ""}`); }
+    } else if (k === "sell") {
+      s.cash += j.value; s.totals.resale += j.value; logCash(s, j.value, "sale", `Sold ${itemOf(s, j.dev).name}${j.rack ? " from " + j.rack : ""}`);
+      // coyote time: the buyer holds it for K.UNSELL_DAYS; undoSell returns it for exactly the sale price
+      (s.recentlySold = s.recentlySold || []).push({ uid: j.dev.uid, type: j.dev.type, dev: j.dev, value: j.value, rack: j.rack, day: s.day, until: s.day + K.UNSELL_DAYS });
+    }
     else if (k === "tank") rackById(s, j.rack).tank = true;
     else if (k === "grid") {
       s.gridTier++; s.gridUp = true; s.gridKw = j.kw || K.GRID_KW_UP;
       pushNews(s, { title: "Grid upgrade live", body: `${s.gridKw} kW available.`, tone: "good", icon: "bolt", cat: "facilities" });
     }
-    else if (k === "store" || k === "forward") s.shelf.push(j.dev);
+    else if (k === "store" || k === "forward" || k === "restock") s.shelf.push(j.dev);
     else if (k === "swap") {
       const f = findAnywhere(s, j.uid);
       if (f && f.where === "devices") {
@@ -1347,6 +1672,7 @@
   }
   function rollFailures(s, st) {
     for (const r of s.racks) {
+      if (r.mode === "off") continue;               // parked hardware is powered down: it does not wear or fail
       const inlet = st.perRack[r.id].inlet;
       for (const d of r.devices) {
         if (d.failed) continue;
@@ -1358,6 +1684,7 @@
           if (it.role === "gpu" || it.role === "exotic" || it.role === "net")
             pushNews(s, { title: `${it.name} failed in ${r.id}`, body: s.repairAuto ? "Repair queued." : "Auto-repair is off.", tone: "bad", cat: "ops", icon: "wrench" });
           if (s.repairAuto) queueRepair(s, d.uid, true);
+          else if (s.policy && s.policy.autoSwap && spareFor(s, d)) queueRepair(s, d.uid, true);
         }
       }
     }
@@ -1369,40 +1696,315 @@
     if (!a.length) return 0;
     return a.reduce((x, y) => x + y, 0) * n / a.length;
   }
-  function makeOffer(s) {
-    const st = stats(s), mk = st.mk, rf = repF(s), R = () => nextRand(s);
-    const roll = R(), w = roll < 0.2 ? "web" : roll < 0.6 ? "train" : "infer";
-    const ref = Math.max(st.supply[w], 0.3 * mk[w].demand);
-    const units = Math.max(3, Math.round(ref * (0.15 + 0.25 * R())));
-    const days = [90, 120, 180, 270][Math.floor(R() * 4)];
-    const price = mk[w].price * (1 + (R() * 2 - 1) * K.QUOTE_SPREAD) * (1 + 0.2 * rf);
-    const sla = [0.85, 0.9, 0.95][Math.floor(R() * 3)];
-    let cust = C.CUSTOMERS[Math.floor(R() * C.CUSTOMERS.length)];
-    if (s.policyFx.exportCtl && cust.foreign) cust = C.CUSTOMERS[0];
-    const o = { id: "c" + s.nextId++, cust: cust.name, icon: cust.icon, foreign: cust.foreign, w, units, days,
-      price: +price.toFixed(4), spot: +mk[w].price.toFixed(4), repAdj: +(1 + 0.2 * rf).toFixed(4), sla, penalty: +(price * K.PENALTY_MULT).toFixed(4), expires: s.day + K.OFFER_EXPIRY };
-    s.offers.push(o);
-    pushNews(s, { title: `Contract offer: ${cust.name}`, body: `${units} ${w} units x ${days} days at $${round2(price)}k (SLA ${Math.round(sla * 100)} %).`, tone: "info", cat: "contracts", icon: "doc" });
-    log(s, `offer ${o.id} ${w} ${units}u ${days}d p=${o.price} spot=${o.spot}`);
+  /* ================= v4 order board ================= */
+  /* what the player can deliver per workload today: installed output (parked racks count as if on) plus hardware
+     that is on its way. Offers scale with this (designer: offers must not outrun the player). */
+  function capacity(s, st) {
+    const cap = { web: 0, train: 0, infer: 0, frontier: st.frontierElig };
+    for (const r of s.racks) {
+      const pr = st.perRack[r.id];
+      for (const w of ["web", "train", "infer"]) cap[w] += r.mode === "off" ? pr.raw[w] * pr.netF : pr.out[w];
+      for (const d of r.pending) {
+        const it = itemOf(s, d);
+        if (it.role === "cpu") cap.web += 1;
+        else if (it.role === "gpu") cap[r.workload] += Math.min(it.F, it.B * INTENSITY[r.workload]);
+      }
+    }
+    return cap;
   }
-  /* build-to-suit: a big customer wants dedicated capacity. Long term, fixed price above spot, high SLA and
-     penalty, an up-front fit-out, delivery after a lead time (time to buy the hardware). */
-  function makeBts(s) {
+  /* the cheapest capacity on sale for a workload: $ per unit a day, including a share of a switch */
+  function bestCard(s, w) {
+    if (w === "web") return { k: "cpu", u: 1, price: s.items.cpu.price, per: s.items.cpu.price + s.items.sw.price / 16 };
+    let best = null;
+    for (const k of shopItems(s)) {
+      const it = s.items[k];
+      if (it.role !== "gpu") continue;
+      const u = Math.min(it.F, it.B * INTENSITY[w]), per = (it.price + s.items.sw.price / 4) / u;
+      if (!best || per < best.per) best = { k, u, price: it.price, per };
+    }
+    return best;
+  }
+  /* how many cards of `key` would still fit on the floor for workload w (rack U and kW, the grid, one switch slot
+     per rack that has none; racks already running GPUs on another workload are skipped) */
+  function roomFor(s, key, w) {
+    const it = s.items[key];
+    if (!it) return 0;
+    let n = 0, grid = s.gridKw - gridKwAll(s);
+    for (const r of s.racks) {
+      if (!!r.tank !== !!it.tank) continue;
+      const all = r.devices.concat(r.pending);
+      if (it.role === "gpu" && r.workload !== w && all.some(d => itemOf(s, d).role === "gpu")) continue;
+      const m = MODES[r.mode === "off" ? "std" : r.mode], kw = it.kw * m.kw;
+      const sw = all.some(d => itemOf(s, d).role === "net") ? 0 : 1;
+      let k = Math.min(Math.floor((K.RACK_U - usedU(s, r) - sw) / it.u), Math.floor((K.RACK_KW - rackKwAll(s, r) - sw * 0.4) / kw));
+      k = Math.max(0, Math.min(k, Math.floor(grid / kw)));
+      grid -= k * kw; n += k;
+    }
+    return n;
+  }
+  /* units already promised per market (serving units, jobs at their nominal rate); build-to-suit is extra demand */
+  function held(s) {
+    const h = { web: 0, train: 0, infer: 0, frontier: 0 };
+    for (const c of s.contracts) {
+      if (c.bts || c.phantom) continue;
+      if (c.kind === "frontier") h.frontier += c.work / c.days;
+      else if (c.kind === "train") h.train += c.work / c.days;
+      else h[c.w] += c.units;
+    }
+    return h;
+  }
+  const pickOf = (s, a) => a[Math.floor(nextRand(s) * a.length)];
+  function customer(s) {
+    let cust = pickOf(s, C.CUSTOMERS);
+    if (s.policyFx.exportCtl && cust.foreign) cust = C.CUSTOMERS[0];
+    return cust;
+  }
+  /* units the player owes per market today (everything signed, build-to-suit included; jobs at their nominal rate) */
+  function owedNow(s) {
+    const o = { web: 0, train: 0, infer: 0, frontier: 0 };
+    for (const c of s.contracts) o[c.kind === "frontier" ? "frontier" : c.w] += isJob(c) ? c.work / c.days : c.units;
+    return o;
+  }
+  /* one offer on the board. kind: web | infer | train | frontier (uniform among the kinds the player has unlocked, can
+     plausibly serve, and whose market still has open demand). Size = 0.3-1.2x what the player can DELIVER: free capacity
+     (capacity, incl. hardware on its way, minus what is owed) plus what half the cash on hand can buy; a quarter of
+     the time a "stretch" of 1.2-1.6x that; always capped by the market's open demand */
+  function makeOffer(s, force) {
     const st = stats(s), mk = st.mk, rf = repF(s), R = () => nextRand(s);
+    const cap = capacity(s, st), H = held(s), f = fleet(s), owed = owedNow(s);
+    const kinds = [];
+    const openOf = w => Math.max(0, mk[w].demand - H[w]);   // a full market sends no offers
+    const add = (kind, w, market) => {
+      const card = bestCard(s, w === "frontier" ? "train" : w), m = w === "frontier" ? "frontier" : w;
+      const c = cap[m], free = Math.max(0, c - owed[m]);
+      const afford = card && kind !== "frontier" ? Math.min(Math.max(0, s.cash - 50) * 0.5 / card.per, roomFor(s, card.k, w) * card.u) : 0;
+      const canBuy = card && s.cash >= card.price + s.items.sw.price;
+      if (kind !== "web" && kind !== "frontier" && c < 0.5 && !canBuy) return;       // nothing to serve it with, can't afford a card
+      const open = openOf(market);
+      if (open < K.OFFER_MIN_UNITS) return;
+      kinds.push({ kind, w, market, card, cap: c, free, afford, open, weight: 1 });   // every open market gets its share of the board
+    };
+    if (force === "web") add("web", "web", "web");
+    else {
+      add("web", "web", "web");
+      if (on(s, "gpu")) { add("infer", "infer", "infer"); add("train", "train", "train"); }
+      if (on(s, "fabric") && (cap.frontier > 0 || f.rowTrainMax >= 8)) add("frontier", "train", "frontier");
+    }
+    if (!kinds.length) return null;
+    const tot = kinds.reduce((a, k) => a + k.weight, 0);
+    let x = R() * tot, pick = kinds[kinds.length - 1];
+    for (const k of kinds) { x -= k.weight; if (x <= 0) { pick = k; break; } }
+    const { kind, w, market, card } = pick;
+    // a first offer in a market the player has no hardware for is at most one card's worth (never a stretch)
+    const first = card && pick.cap < 0.5 && kind !== "web", deliver = first ? card.u : pick.free + pick.afford;
+    const stretch = !first && R() < K.OFFER_STRETCH;
+    let units = first ? card.u * (0.5 + 0.35 * R())            // slack for the 8 days of shipping and install
+      : deliver * (stretch ? 1.2 + 0.4 * R() : K.OFFER_CAP_MIN + (K.OFFER_CAP_MAX - K.OFFER_CAP_MIN) * R());
+    if (force === "web" && s.day === 0) units = 4 + Math.round(4 * R());               // the two starter offers: small
+    units = Math.max(K.OFFER_MIN_UNITS, Math.round(Math.min(units, pick.open)));
+    const cust = customer(s), spread = (1 + K.CONTRACT_PREMIUM) * (1 + (R() * 2 - 1) * K.QUOTE_SPREAD), repAdj = 1 + 0.2 * rf;
+    const P = mk[market].price, ttl = K.OFFER_EXPIRY_MIN + Math.round(R() * (K.OFFER_EXPIRY - K.OFFER_EXPIRY_MIN));
+    const o = { id: "c" + s.nextId++, kind, cust: cust.name, icon: cust.icon, foreign: cust.foreign, w, spot: +P.toFixed(4),
+      repAdj: +repAdj.toFixed(4), stretch, expires: s.day + ttl, ttl };
+    if (kind === "train" || kind === "frontier") {
+      const days = pickOf(s, K.JOB_DAYS), work = Math.max(K.OFFER_MIN_UNITS * days, Math.round(units * days));
+      const pay = work * P * (1 + K.JOB_PREMIUM) * spread * repAdj;
+      Object.assign(o, { units: +(work / days).toFixed(2), days, lead: 0, work, pay: +pay.toFixed(2), price: +(pay / work).toFixed(4),
+        maxRate: +(work / days * K.JOB_SPEED).toFixed(3), lateFee: +(pay * K.JOB_LATE_PEN).toFixed(3), lateMax: K.JOB_LATE_MAX,
+        sla: 1, frontier: kind === "frontier" });
+      o.penalty = o.lateFee;
+    } else {
+      const price = P * spread * repAdj;
+      Object.assign(o, { units, days: pickOf(s, kind === "web" ? K.WEB_DAYS : K.INFER_DAYS), lead: K.LEAD_MIN + Math.round(R() * (K.LEAD_MAX - K.LEAD_MIN)),
+        price: +price.toFixed(4), sla: kind === "web" ? K.SLA_WEB : K.SLA_INFER, penalty: +(price * K.PENALTY_MULT).toFixed(4) });
+    }
+    s.offers.push(o);
+    pushNews(s, { title: `Offer: ${cust.name}`, body: offerText(o), tone: "info", cat: "contracts", icon: "doc" });
+    log(s, `offer ${o.id} ${kind} ${o.units}u x${o.days}d p=${o.price} idx=${o.spot} cap=${pick.cap.toFixed(1)} free=${pick.free.toFixed(1)} afford=${pick.afford.toFixed(1)} stretch=${stretch}`);
+    return o;
+  }
+  function offerText(o) {
+    if (o.kind === "train" || o.kind === "frontier")
+      return `${o.kind === "frontier" ? "Frontier training" : "Training"} job: ${o.work} unit-days within ${o.days} days, $${Math.round(o.pay)}k on completion.`;
+    return `${o.units} ${o.w} units a day for ${o.days} days at $${round2(o.price)}k from day ${Math.round(o.expires - o.ttl + o.lead)} (SLA ${Math.round(o.sla * 100)} %).`;
+  }
+  /* day 0: the anchor customer (already signed, the whole game: the old starting income) + two small web offers */
+  function startBoard(s) {
+    const p = +(MARKET.web.base * 1.05).toFixed(4), a = C.ANCHOR;
+    s.contracts.push({ id: "c" + s.nextId++, kind: "web", anchor: true, cust: a.name, icon: a.icon, foreign: false, w: "web",
+      units: K.ANCHOR_UNITS, days: K.END_DAY, lead: 0, price: p, spot: MARKET.web.base, repAdj: 1, sla: K.SLA_WEB,
+      penalty: +(p * K.PENALTY_MULT).toFixed(4), signed: 0, start: 0, end: K.END_DAY + 1, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 });
+    for (let i = 0; i < K.START_OFFERS; i++) makeOffer(s, "web");
+    s.nextOffer = K.OFFER_EVERY;
+  }
+  /* the renewal of serving contract c: same customer, units and term, today's price, starting when c ends */
+  function renewalOffer(s, c) {
+    const mk = marketAt(s, s.day), rf = repF(s), P = mk[c.w].price;
+    const spread = (1 + K.CONTRACT_PREMIUM) * (1 + (nextRand(s) * 2 - 1) * K.QUOTE_SPREAD), repAdj = 1 + 0.2 * rf;
+    const price = c.bts ? P * (1 + K.BTS_PREMIUM * nextRand(s)) * repAdj : P * spread * repAdj;
+    const ttl = Math.max(1, Math.round(c.end - s.day));
+    const o = { id: "c" + s.nextId++, kind: c.kind || c.w, renewOf: c.id, cust: c.cust, icon: c.icon, foreign: c.foreign, w: c.w,
+      units: c.units, days: c.days, lead: +(c.end - s.day).toFixed(2), price: +price.toFixed(4), spot: +P.toFixed(4), repAdj: +repAdj.toFixed(4),
+      sla: c.sla, penalty: +(price * (c.bts ? K.BTS_PENALTY_MULT : K.PENALTY_MULT)).toFixed(4), expires: c.end, ttl, stretch: false };
+    if (c.bts) Object.assign(o, { bts: true, fitout: 0 });      // the fit-out is already built
+    s.offers.push(o);
+    pushNews(s, { title: `Renewal offer: ${c.cust}`, body: `Same ${o.units} ${o.w} units for another ${o.days} days at $${round2(o.price)}k (was $${round2(c.price)}k).`, tone: "info", cat: "contracts", icon: "doc" });
+    log(s, `renewal offer ${o.id} for ${c.id} p=${o.price} (was ${c.price})`);
+    return o;
+  }
+  /* build-to-suit (ch8 long-term deals): a big customer wants dedicated capacity. Long term, fixed price above the
+     index, high SLA and penalty, an up-front fit-out, delivery after a lead time (time to buy the hardware) */
+  function makeBts(s) {
+    const st = stats(s), mk = st.mk, rf = repF(s), R = () => nextRand(s), cap = capacity(s, st);
     const w = R() < 0.5 ? "train" : "infer";
-    const ref = Math.max(st.supply[w], 0.5 * mk[w].demand);
+    const ref = Math.max(cap[w], 0.25 * mk[w].demand);
     const units = Math.max(K.BTS_MIN_UNITS, Math.round(ref * (0.4 + 0.4 * R())));
     const days = [360, 450, 540][Math.floor(R() * 3)];
     const price = mk[w].price * (1 + K.BTS_PREMIUM * R()) * (1 + 0.2 * rf);
-    let cust = C.CUSTOMERS[Math.floor(R() * C.CUSTOMERS.length)];
-    if (s.policyFx.exportCtl && cust.foreign) cust = C.CUSTOMERS[0];
-    const o = { id: "c" + s.nextId++, bts: true, cust: cust.name, icon: cust.icon, foreign: cust.foreign, w, units, days, lead: K.BTS_LEAD,
+    const cust = customer(s);
+    const o = { id: "c" + s.nextId++, kind: "bts", bts: true, cust: cust.name, icon: cust.icon, foreign: cust.foreign, w, units, days, lead: K.BTS_LEAD,
       fitout: Math.round(units * K.BTS_FIT_PER_UNIT), price: +price.toFixed(4), spot: +mk[w].price.toFixed(4), repAdj: +(1 + 0.2 * rf).toFixed(4),
-      sla: K.BTS_SLA, penalty: +(price * K.BTS_PENALTY_MULT).toFixed(4), expires: s.day + K.BTS_EXPIRY };
+      sla: K.BTS_SLA, penalty: +(price * K.BTS_PENALTY_MULT).toFixed(4), expires: s.day + K.BTS_EXPIRY, ttl: K.BTS_EXPIRY };
     s.offers.push(o);
     pushNews(s, { title: `Build-to-suit request: ${cust.name}`, body: `${units} ${w} units x ${days} days at $${round2(price)}k from day ${Math.round(s.day + o.lead)}. Fit-out $${o.fitout}k up front, SLA ${Math.round(o.sla * 100)} %.`, tone: "info", cat: "contracts", icon: "building" });
     log(s, `bts offer ${o.id} ${w} ${units}u ${days}d p=${o.price} fit=${o.fitout}`);
   }
+  /* daily: contract streaks and reputation, endings, cancellations, expiring offers, new offers */
+  function dailyContracts(s, st, missed) {
+    const d = s.day;
+    let hits = 0;
+    for (const c of s.contracts) {
+      if (missed[c.id]) {
+        c.missDays++; c.streak++; hits++;
+        if (c.streak >= 5 && !c.pressed && on(s, "reputation")) { c.pressed = true; press(s, "sla", 3); }
+      } else c.streak = 0;
+    }
+    if (hits) s.prog.missDays++;
+    if (hits && on(s, "reputation")) repHit(s, Math.min(K.REP_SLA_DAY_MAX, hits * K.REP_SLA_DAY));
+    // renewals: a serving customer whose SLA has held so far offers the same deal, re-priced to today's market, to start
+    // when the current one ends; with the autoRenew policy it is signed on the spot
+    for (const c of s.contracts.slice()) {
+      if (isJob(c) || c.anchor || c.renewOffered || c.walked || c.end - d > K.RENEW_BEFORE || d >= c.end) continue;
+      const elapsed = Math.max(1, Math.min(c.days, d - c.start));
+      if (c.missed > K.CONTRACT_OK_MISS * c.units * elapsed || (c.foreign && s.policyFx.exportCtl)) continue;
+      c.renewOffered = true;
+      const o = renewalOffer(s, c);
+      if (s.policy.autoRenew) {
+        const i = s.offers.indexOf(o), res = check(s, { type: "signContract", id: o.id });
+        if (i >= 0 && res.ok) {
+          signOffer(s, o);
+          logCash(s, 0, "renew", `Auto-renewed ${c.cust}: ${o.units} ${o.w} units x ${o.days} days at $${round2(o.price)}k`);
+          log(s, `auto-renew ${c.id} -> ${o.id}`);
+        }
+      }
+    }
+    // sustained failure: the customer walks away (penalties stop, the revenue too; counts as a failed contract)
+    for (const c of s.contracts.filter(x => !isJob(x) && x.streak >= K.SLA_WALK_DAYS && d < x.end)) {
+      c.end = d; c.walked = true;
+      if (on(s, "reputation")) repHit(s, K.REP_JOB_CANCEL);
+      logCash(s, 0, "contractLost", `${c.cust} terminated: ${K.SLA_WALK_DAYS} days of missed deliveries ($${Math.round(c.penaltyPaid)}k in penalties)`);
+      pushNews(s, { title: `${c.cust} walks away`, body: `${K.SLA_WALK_DAYS} days of missed deliveries. Contract terminated; penalties paid $${Math.round(c.penaltyPaid)}k.`, tone: "bad", cat: "contracts", icon: "doc" });
+      log(s, `contract ${c.id} terminated after ${c.streak} missed days`);
+    }
+    for (const c of s.contracts.filter(x => !isJob(x) && d >= x.end)) {
+      const ok = !c.walked && c.missed <= K.CONTRACT_OK_MISS * c.units * c.days;
+      s.contractLog[ok ? "fulfilled" : "failed"]++;
+      if (ok && on(s, "reputation")) s.rep = clamp(s.rep + K.REP_CONTRACT_OK, 0, 100);
+      if (!c.walked) pushNews(s, { title: `Contract with ${c.cust} ${ok ? "fulfilled" : "ended short"}`, body: `Delivered ${Math.round(c.delivered)} units, penalties $${Math.round(c.penaltyPaid)}k.`, tone: ok ? "good" : "bad", cat: "contracts" });
+      log(s, `contract ${c.id} end ok=${ok}`);
+    }
+    for (const c of s.contracts.filter(x => isJob(x) && d >= x.deadline + x.lateMax)) {
+      const lost = c.pay * c.done / c.work;
+      s.contractLog.failed++; s.contractLog.cancelled++;
+      addLoss(s, "cancelled", lost);
+      if (on(s, "reputation")) repHit(s, K.REP_JOB_CANCEL);
+      logCash(s, 0, "contractCancel", `${c.cust} cancelled a late training job: $${Math.round(lost)}k of work unpaid, $${Math.round(c.penaltyPaid)}k in late fees`);
+      pushNews(s, { title: `${c.cust} cancels a late training job`, body: `${Math.round(c.done / c.work * 100)} % done, never paid. Late fees $${Math.round(c.penaltyPaid)}k.`, tone: "bad", cat: "contracts", icon: "doc" });
+      log(s, `job ${c.id} cancelled done=${c.done.toFixed(1)}/${c.work} lost=${lost.toFixed(1)}`);
+    }
+    s.contracts = s.contracts.filter(x => isJob(x) ? d < x.deadline + x.lateMax : d < x.end);
+    for (const o of s.offers.filter(x => d >= x.expires)) log(s, `offer ${o.id} expired`);
+    s.offers = s.offers.filter(x => d < x.expires);
+    if (s.nextOffer >= 0 && d >= s.nextOffer) {
+      const board = s.offers.filter(o => !o.bts).length;
+      if (board < K.BOARD_MAX) makeOffer(s);
+      const after = s.offers.filter(o => !o.bts).length;
+      // arrivals do not speed up when the player declines (the market's appetite is the limit); an empty board refills
+      s.nextOffer = board >= K.BOARD_MAX ? d + 2
+        : after === 0 ? d + 1 + Math.floor(nextRand(s) * 2)
+        : d + Math.max(1, Math.round(K.OFFER_EVERY * (1 - 0.2 * repF(s)) + (nextRand(s) * 2 - 1) * K.OFFER_JITTER));
+    }
+    if (on(s, "contracts") && s.nextBts != null && s.nextBts >= 0 && d >= s.nextBts) {
+      makeBts(s);
+      s.nextBts = d + Math.round(K.BTS_EVERY + (nextRand(s) * 2 - 1) * K.BTS_JITTER);
+    }
+  }
+
+  /* ================= v4 player-triggered chapters (DECISIONS D41) ================= */
+  function fleet(s) {
+    let racks = 0, devices = 0, gpus = 0, trainGpus = 0, hall1 = 0;
+    const rowTrain = {};
+    for (const r of s.racks) {
+      if (r.devices.length) { racks++; if (r.hall === 1) hall1++; }
+      for (const d of r.devices) {
+        devices++;
+        if (s.items[d.type].role !== "gpu") continue;
+        gpus++;
+        if (r.workload === "train" && !r.tank) { trainGpus++; const k = r.hall + "-" + r.row; rowTrain[k] = (rowTrain[k] || 0) + 1; }
+      }
+    }
+    let rowTrainMax = 0;
+    for (const k in rowTrain) rowTrainMax = Math.max(rowTrainMax, rowTrain[k]);
+    return { racks, devices, gpus, trainGpus, hall1, rowTrainMax };
+  }
+  const cheapestGpu = s => Math.min(s.items.c1.price, s.items.m1.price);
+  /* is chapter `key`'s milestone met? state only (deterministic). The hints in content.js say the same in words. */
+  function milestone(s, key, st, f) {
+    const d = s.day;
+    switch (key) {
+      case "power": return s.contractLog.signed >= 2 || f.racks >= 4 || gridKwAll(s) > 0.35 * s.gridKw;
+      case "gpu": return s.cash >= cheapestGpu(s) + s.items.sw.price || s.contractLog.fulfilled >= 2;
+      case "heat": return f.gpus >= 6 || (f.gpus >= 2 && (seasonAt(d).c > 0.5 || seasonAt(d + 60).c > 0.5));
+      case "gens": { const next = GEN_LAUNCH.find(g => g > d); return f.gpus >= 4 && (next == null || next - d <= 75 || d > GEN_LAUNCH[0]); }
+      case "ops": return f.devices >= 30 || f.gpus >= 8;
+      case "fabric": return f.trainGpus >= 8 || f.gpus >= 14;
+      case "contracts": return s.contractLog.fulfilled >= 5;
+      case "memory": return s.prog.gpuOrders >= 10;
+      case "finance": {
+        if (trailingRevenue(s, 90) >= 500) return true;
+        const short = ["web", "train", "infer"].some(w => st.owed[w] > st.supply[w] + 0.5);
+        return short && s.cash < cheapestGpu(s);
+      }
+      case "facilities": return f.hall1 >= 15 || gridKwAll(s) >= 0.85 * s.gridKw;
+      case "energy": return st.opex > 0 && st.costs.power >= st.opex / 3;
+      case "environment": return s.prog.heatWaves >= 1;
+      case "investors": return trailingRevenue(s, 180) >= 2000;
+      case "reputation": return s.prog.missDays >= 3 || s.prog.outages >= 1;
+      case "policy": return st.carbon >= 2;
+      case "disrupt": return d >= 1200 && (s.unlocked.gens != null || !s.mech.gens);
+    }
+    return false;
+  }
+  /* the next chapter (ablated ones are stepped over) unlocks once its milestone holds, not before its earliest day and
+     at most one per K.CH_GAP days. An active player (2+ GPUs) who is stuck gets it after K.CH_STALL days anyway. */
+  function nextChapter(s) {
+    let i = s.chapter + 1;
+    while (i < CHAPTERS.length && CHAPTERS[i].mech && s.mech[CHAPTERS[i].mech] === false) i++;
+    return i < CHAPTERS.length ? i : null;
+  }
+  function checkChapters(s, st) {
+    if (s.sandbox) return;
+    const i = nextChapter(s);
+    if (i == null) return;
+    const c = CHAPTERS[i], since = s.day - s.prog.lastChapter;
+    if (s.day < c.day || since < K.CH_GAP) return;
+    const f = fleet(s);
+    const met = milestone(s, c.key, st, f), stall = since >= K.CH_STALL && s.chapter >= 2 && f.gpus >= 2;
+    if (!met && !stall) return;
+    s.chapter = i; onChapter(s, c.key);
+    log(s, `chapter ${c.key} (${met ? "milestone" : "stall fallback"})`);
+  }
+
   function makeRound(s) {
     const R = () => nextRand(s);
     const last90 = s.revDays.slice(-90).reduce((a, x) => a + x, 0), prior90 = s.revDays.slice(-180, -90).reduce((a, x) => a + x, 0);
@@ -1450,35 +2052,9 @@
     }
     if (on(s, "energy")) s.power.noise = 1 + (nextRand(s) * 2 - 1) * K.SPOT_NOISE;
     if (on(s, "finance")) s.creditLimit = creditLimitOf(s);
-    // contracts: SLA streaks, completion, expiry, new offers
-    if (on(s, "contracts")) {
-      for (const c of s.contracts) {
-        if (missed[c.id]) {
-          c.missDays++; c.streak++;
-          if (on(s, "reputation")) repHit(s, K.REP_SLA_DAY);
-          if (c.streak >= 5 && !c.pressed && on(s, "reputation")) { c.pressed = true; press(s, "sla", 3); }
-        } else c.streak = 0;
-      }
-      for (const c of s.contracts.filter(x => d >= x.end)) {
-        const ok = c.missed <= K.CONTRACT_OK_MISS * c.units * c.days;
-        s.contractLog[ok ? "fulfilled" : "failed"]++;
-        if (ok && on(s, "reputation")) s.rep = clamp(s.rep + K.REP_CONTRACT_OK, 0, 100);
-        pushNews(s, { title: `Contract with ${c.cust} ${ok ? "fulfilled" : "ended short"}`, body: `Delivered ${Math.round(c.delivered)} units, penalties $${Math.round(c.penaltyPaid)}k.`, tone: ok ? "good" : "bad", cat: "contracts" });
-        log(s, `contract ${c.id} end ok=${ok}`);
-      }
-      s.contracts = s.contracts.filter(x => d < x.end);
-      for (const o of s.offers.filter(x => d >= x.expires)) log(s, `offer ${o.id} expired`);
-      s.offers = s.offers.filter(x => d < x.expires);
-      if (s.nextOffer >= 0 && d >= s.nextOffer) {
-        makeOffer(s);
-        const rf = repF(s);
-        s.nextOffer = d + Math.max(8, Math.round(K.OFFER_EVERY * (1 - 0.2 * rf) + (nextRand(s) * 2 - 1) * K.OFFER_JITTER));
-      }
-      if (s.nextBts != null && s.nextBts >= 0 && d >= s.nextBts) {
-        makeBts(s);
-        s.nextBts = d + Math.round(K.BTS_EVERY + (nextRand(s) * 2 - 1) * K.BTS_JITTER);
-      }
-    }
+    // v4 contracts core: SLA streaks, endings, cancelled jobs, expiring offers, new offers (every day from day 0)
+    if (core(s)) dailyContracts(s, st, missed);
+    s.recentlySold = (s.recentlySold || []).filter(x => d < x.until);
     // investors: round offers and the board
     if (on(s, "investors")) {
       if (s.roundOffer && d >= s.roundOffer.expires) { log(s, `round ${s.roundOffer.id} expired`); s.roundOffer = null; }
@@ -1532,10 +2108,13 @@
       }
     }
     if (on(s, "ops") && s.repairAuto) autoRepairSweep(s);
+    else if (on(s, "ops") && s.policy.autoSwap) autoSwapSweep(s);
+    if (on(s, "ops") && Object.keys(s.policy.keepSpares).length) restock(s);
     if (s.heatWave && d >= s.heatWave.until) s.heatWave = null;
     if (s.outage && d >= s.outage.until) { s.outage = null; pushNews(s, { title: "Grid power restored", body: "", tone: "good", cat: "facilities" }); }
     if (s.drought && d >= s.drought.until) { s.drought = null; pushNews(s, { title: "Drought over", body: "Water limits lifted.", tone: "good", cat: "environment" }); }
     if (s.ppa && d >= s.ppa.end) { log(s, "ppa ended"); pushNews(s, { title: "PPA term ended", body: "Back to spot power.", tone: "info", cat: "energy" }); s.ppa = null; }
+    checkChapters(s, st);
   }
 
   function closeQuarter(s, q0) {
@@ -1571,14 +2150,20 @@
     s.dayAcc.rev += st.gross * dt; s.dayAcc.profit += st.net * dt;
     addLoss(s, "throttle", st.throttleLoss * dt); addLoss(s, "failures", st.failLoss * dt); addLoss(s, "sla", c.penalties * dt);
     addLoss(s, "bricked", st.brickLoss * dt); addLoss(s, "fines", c.fines * dt); addLoss(s, "outage", st.outageLoss * dt);
-    addLoss(s, "transit", st.transitLost * dt); addLoss(s, "taxes", c.carbonTax * dt);
+    addLoss(s, "transit", st.transitLost * dt); addLoss(s, "taxes", c.carbonTax * dt); addLoss(s, "idle", st.idleLoss * dt);
     const E = s.env;
     E.water += st.waterRate * dt; E.carbon += st.carbon * dt; E.waterRate = st.waterRate; E.carbonRate = st.carbon; E.green = st.green;
+    let doneJobs = null;
     for (const ct of s.contracts) {
-      ct.delivered += (st.cDel[ct.id] || 0) * dt;
-      const miss = st.cMiss[ct.id] || 0;
-      if (miss > 1e-9) { ct.missed += miss * dt; ct.penaltyPaid += miss * ct.penalty * dt; s.dayAcc.missed[ct.id] = true; }
+      const del = st.cDel[ct.id] || 0, miss = st.cMiss[ct.id] || 0;
+      ct.delivered += del * dt;
+      if (isJob(ct)) {
+        ct.done = Math.min(ct.work, ct.done + del * dt);
+        if (s.day >= ct.deadline && !(ct.start > s.day + 1e-9)) { ct.penaltyPaid += ct.lateFee * dt; ct.late = true; s.dayAcc.missed[ct.id] = true; }
+        if (ct.done >= ct.work - 1e-9) (doneJobs = doneJobs || []).push(ct);
+      } else if (miss > 1e-9) { ct.missed += miss * dt; ct.penaltyPaid += miss * ct.penalty * dt; s.dayAcc.missed[ct.id] = true; }
     }
+    if (doneJobs) for (const c of doneJobs) completeJob(s, c);
     const a = 1 - Math.exp(-dt / K.THERMAL_TAU);
     for (const hh of st.halls) {
       if (hh.n === 1) s.roomT += (hh.tTarget - s.roomT) * a;
@@ -1617,6 +2202,18 @@
     const floor = on(s, "finance") ? -s.creditLimit : K.BANKRUPT;
     if (s.cash < floor) { s.over = "bankrupt"; log(s, `bankrupt cash=${s.cash.toFixed(1)} floor=${floor.toFixed(1)}`); }
     else if (s.day >= K.END_DAY) { s.over = "end"; log(s, `end networth=${netWorth(s).toFixed(1)} score=${score(s).toFixed(1)}`); }
+  }
+  /* a training job's work is done: paid in one lump (a logged cash event), the contract closes */
+  function completeJob(s, c) {
+    const pay = c.pay, key = c.kind === "frontier" ? "frontier" : "train";
+    s.cash += pay; s.totals.revenue += pay; s.fin.rev += pay; s.dayAcc.rev += pay; s.dayAcc.profit += pay; s.ledger[key] += pay;
+    logCash(s, pay, "contract", `${c.kind === "frontier" ? "Frontier training" : "Training"} job for ${c.cust} done${c.late ? " (late)" : ""}`);
+    s.contracts.splice(s.contracts.indexOf(c), 1);
+    s.contractLog.fulfilled++;
+    if (c.late) s.contractLog.late++;
+    else if (on(s, "reputation")) s.rep = clamp(s.rep + K.REP_CONTRACT_OK, 0, 100);
+    pushNews(s, { title: `${c.cust}: training job done`, body: `Paid $${Math.round(pay)}k${c.late ? `, after $${Math.round(c.penaltyPaid)}k in late fees` : ""}.`, tone: c.late ? "info" : "good", cat: "contracts", icon: "doc" });
+    log(s, `job ${c.id} done pay=${pay.toFixed(1)} late=${!!c.late}`);
   }
   function sampleHistory(s, st) {
     st = st || stats(s);
@@ -1675,14 +2272,18 @@
       for (const [per, amt] of Object.entries(s.lossBy[k])) if (!worst || amt > worst.amount) worst = { period: per, amount: amt };
       return { key: k, label: LOSS_LABEL[k], total: s.losses[k], worst };
     }).filter(x => x.total > 0.5).sort((a, b) => b.total - a.total);
-    const lessons = losses.filter(x => x.key !== "taxes").slice(0, 3).map(x =>
-      `You lost $${x.total >= 1000 ? (x.total / 1000).toFixed(1) + "M" : Math.round(x.total) + "k"} to ${x.label}` +
-      (x.worst ? `, most of it in ${x.worst.period} ($${Math.round(x.worst.amount)}k)` : "") + ".");
+    const money = v => `$${v >= 1000 ? (v / 1000).toFixed(1) + "M" : Math.round(v) + "k"}`;
+    const top = losses.filter(x => x.key !== "taxes").slice(0, 3);
+    const lessons = top.map(x => {
+      const w = x.worst ? `, most of it in ${x.worst.period} ($${Math.round(x.worst.amount)}k)` : "";
+      return LESSON[x.key] ? LESSON[x.key].replace("{x}", money(x.total)).replace("{w}", w) : `You lost ${money(x.total)} to ${x.label}${w}.`;
+    });
     return {
       score: score(s), over: s.over, own: s.equity.own, companyValue: cv, netWorth: worth, cash: s.cash, debt: s.debt,
       earnings: Math.max(0, p) * K.EARN_DAYS * K.EARN_MULT, profitPerDay: p, repFactor: repFactor(s), reputation: repOf(s),
-      raised: s.equity.raised, contracts: Object.assign({}, s.contractLog), carbon: s.env.carbon, water: s.env.water,
-      losses, lessons,
+      raised: s.equity.raised, carbon: s.env.carbon, water: s.env.water,
+      contracts: Object.assign({}, s.contractLog, { active: s.contracts.length, penalties: s.losses.sla, idle: s.losses.idle, cancelledWork: s.losses.cancelled }),
+      losses, lessons, lessonKeys: top.map(x => x.key),
       hidden: {
         realExotic: s.hidden.realExotic, fakeExotic: s.hidden.fakeExotic, nanofabDies: s.hidden.nanofabDies, demandCut: s.hidden.demandCut,
         scares: s.hidden.scares.slice().sort((a, b) => a.day - b.day),
@@ -1695,6 +2296,8 @@
   return {
     K, MODES, MARKET, INTENSITY, NET_NEED, CHAPTERS, BASE_ITEMS, SHOP_ORDER, GEN_LAUNCH, WORKLOADS, CONTENT: C, LOSS_LABEL,
     newGame, step, advance, stats, check, apply, project, shallowClone, netWorth, resale, score, summary, companyValue,
+    // v4 contracts core + player-triggered chapters
+    contractsOn: core, isJob, jobNeed, capacity, bestCard, held, roomFor, owedNow, fleet, milestone, nextChapter, makeOffer, LESSON,
     seasonAt, marketAt, rackById, rackIndex, usedU, rackKw, rackKwAll, gridKwAll, shopItems, currentGen, busyTechs, isDead, throttleAt,
     on, repOf, repFactor, hazard, naturalWorkload, logCash, ppaQuote, creditLimitOf, shelfLoad, transitTarget, trailingRevenue, hbmF, gridNext, hallCost, HALL_LETTERS,
     setDebug(v) { DEBUG = !!v; },

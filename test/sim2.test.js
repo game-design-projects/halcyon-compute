@@ -22,16 +22,21 @@ function inject(s, e) { s.events.splice(s.firedEvents, 0, Object.assign({ day: s
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps * Math.max(1, Math.abs(b));
 
 /* ============ §1 structure ============ */
-test("campaign: 1800 days, 17 chapters at the spec days", () => {
+test("campaign: 1800 days, 17 chapters that unlock in order on player milestones (v4, DECISIONS D41)", () => {
   assert.equal(K.END_DAY, 1800);
   assert.equal(Sim.CHAPTERS.length, 17);
-  assert.deepEqual(Sim.CHAPTERS.map(c => c.day), [0, 45, 100, 170, 250, 330, 420, 490, 570, 660, 750, 840, 930, 1020, 1110, 1200, 1290]);
+  assert.equal(Sim.CHAPTERS[7].key, "contracts");
+  assert.equal(Sim.CHAPTERS[7].title, "Long-term deals");
   for (const c of Sim.CHAPTERS) assert.ok(c.bullets.length >= 1 && c.bullets.length <= 4, c.key);
+  // milestones are pure functions of the state: a fleet that meets them (and the earliest days) unlocks the next chapter
   const s = camp(3);
-  for (const [i, c] of Sim.CHAPTERS.entries()) {
-    Sim.advance(s, c.day - s.day);
-    assert.equal(s.chapter, i, `chapter ${c.key} at d${c.day}`);
-  }
+  const f0 = Sim.fleet(s);
+  assert.equal(Sim.milestone(s, "power", Sim.stats(s), f0), false, "2 web racks and nothing signed: no power chapter");
+  for (const id of ["B1", "B2"]) fill(s, id, "cpu", 6);
+  assert.equal(Sim.milestone(s, "power", Sim.stats(s), Sim.fleet(s)), true, "4 racks running");
+  assert.equal(Sim.nextChapter(s), 1);
+  Sim.advance(s, 31);
+  assert.equal(s.chapter, 1, "power after its earliest day and CH_GAP");
 });
 
 test("sandbox unlocks every chapter at day 0", () => {
@@ -55,17 +60,19 @@ test("mechanics are inactive before their chapter (campaign)", () => {
   assert.match(Sim.check(s, { type: "pr" }).msg, /chapter 15/);
   // no failures before ch6 even for hot, packed racks
   for (const id of ["B1", "B2", "B3", "C1"]) fill(s, id, "c1", 4, "train");
-  Sim.advance(s, 220);
+  Sim.advance(s, 200);
+  assert.ok(!Sim.on(s, "ops"), "ops still locked");
   assert.ok(s.racks.every(r => r.devices.every(d => !d.failed)));
   assert.equal(Sim.stats(s).costs.salaries, 0);
   assert.equal(Sim.stats(s).costs.transit, 0);
-  Sim.advance(s, 20);
-  assert.ok(Sim.check(s, { type: "hire" }).ok, "ops open at d330");
+  while (!Sim.on(s, "ops") && s.day < 700) Sim.advance(s, 1);
+  assert.ok(Sim.check(s, { type: "hire" }).ok, `ops opens on its milestone (d${s.unlocked.ops})`);
+  assert.ok(s.unlocked.ops - s.unlocked.gens >= K.CH_GAP, "one chapter at a time");
 });
 
 test("ablation flags for the new groups switch their chapter off", () => {
-  const s = camp(1, { mech: { ops: false, fabric: false, investors: false } });
-  Sim.advance(s, 1100);
+  const s = sb(1, { mech: { ops: false, fabric: false, investors: false } });
+  Sim.advance(s, 200);
   assert.equal(Sim.on(s, "ops"), false);
   assert.equal(Sim.on(s, "fabric"), false);
   assert.equal(Sim.on(s, "investors"), false);
@@ -99,7 +106,8 @@ test("summary lists the biggest measurable losses and 3 lessons", () => {
   assert.ok(sum.losses.length >= 2);
   assert.ok(sum.losses[0].total >= sum.losses[1].total);
   assert.ok(sum.lessons.length >= 1 && sum.lessons.length <= 3);
-  assert.match(sum.lessons[0], /You lost \$/);
+  assert.match(sum.lessons[0], /You (lost|left) \$/);
+  assert.deepEqual(sum.lessonKeys.length, sum.lessons.length);
   assert.ok(sum.hidden.realExotic && typeof sum.hidden.demandCut === "boolean");
   assert.ok(near(sum.score, Sim.score(s)));
 });
@@ -107,7 +115,7 @@ test("summary lists the biggest measurable losses and 3 lessons", () => {
 /* ============ ch5 generations ============ */
 test("M19-M21: four launches (d390..1560), rumours ~60 days ahead, old gen discounted", () => {
   assert.deepEqual(Sim.GEN_LAUNCH, [390, 780, 1170, 1560]);
-  const s = camp(8);
+  const s = sb(8);
   const rum = [];   // collected while advancing: the feed keeps only the last 60 items
   for (let d = 0; d < 1165; d++) { Sim.advance(s, 1); for (const n of s.news) if (/rumored/.test(n.title) && !rum.includes(n.day)) rum.unshift(n.day); }
   assert.equal(rum.length, 3);
@@ -246,19 +254,39 @@ test("M26: row spine costs $160k, takes 20 days, draws 3 kW and pools the row's 
   assert.ok(Sim.stats(s).perRack.B2.netF > 0.9, "pooled via the spine");
 });
 
-test("M27: frontier market pays 1.6x, only for >=12 training GPUs on one spine", () => {
+/* a contract as the sim stores it after signing (tests inject them directly) */
+function job(s, kind, work, days, pay, extra) {
+  return Object.assign({ id: "j" + s.nextId++, kind, cust: "T", icon: "x", foreign: false, w: "train", units: work / days, days, lead: 0,
+    work, pay, price: pay / work, maxRate: work / days * K.JOB_SPEED, lateFee: pay * K.JOB_LATE_PEN, lateMax: K.JOB_LATE_MAX,
+    sla: 1, penalty: pay * K.JOB_LATE_PEN, frontier: kind === "frontier", signed: s.day, start: s.day, done: 0, deadline: s.day + days,
+    end: s.day + days + K.JOB_LATE_MAX, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 }, extra || {});
+}
+function serving(s, w, units, days, price, extra) {
+  return Object.assign({ id: "k" + s.nextId++, kind: w, cust: "T", icon: "x", foreign: false, w, units, days, lead: 0, price, sla: w === "web" ? K.SLA_WEB : K.SLA_INFER,
+    penalty: price * K.PENALTY_MULT, signed: s.day, start: s.day, end: s.day + days, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 }, extra || {});
+}
+test("M27: frontier training jobs pay 1.6x and only count output from >=12 training GPUs on one spine", () => {
   const s = sb(1);
   for (const id of ["B1", "B2"]) fill(s, id, "c1", 4, "train");
   s.spines["1-1"] = true;
+  const fj = job(s, "frontier", 2000, 100, 1000);
+  s.contracts.push(fj);
   let st = Sim.stats(s);
-  assert.equal(st.revenue.frontier, 0, "8 GPUs: no frontier");
+  assert.equal(st.cDel[fj.id] || 0, 0, "8 GPUs: not a frontier cluster, the frontier job gets nothing");
+  assert.ok(st.idle.train > 0, "their output sits idle");
   fill(s, "B3", "c1", 4, "train");
   st = Sim.stats(s);
   assert.ok(st.cluster["1-1"].frontier);
-  assert.ok(st.revenue.frontier > 0);
+  assert.ok(st.cDel[fj.id] > 0, "12 GPUs on the spine: served");
+  assert.ok(st.alloc.every(l => l.id !== fj.id || ["B1", "B2", "B3"].includes(l.rack)), "only from the cluster's racks");
+  const tj = job(s, "train", 900, 100, 300);
+  fill(s, "C1", "c1", 4, "train");
+  s.contracts.push(tj);
+  st = Sim.stats(s);
+  assert.ok(st.alloc.filter(l => l.id === tj.id).every(l => l.rack === "C1"), "ordinary training uses non-cluster racks first");
   assert.ok(near(st.mk.frontier.price, st.mk.train.price * 1.6));
   assert.ok(near(st.mk.frontier.demand, 30));
-  assert.ok(near(Sim.marketAt(s, 360).frontier.demand, 45), "grows 1.5x per year");
+  assert.ok(near(Sim.marketAt(s, 360).frontier.demand, 45), "frontier demand grows 1.5x per year");
 });
 
 test("M28: transit caps web + inference output; changes land after 5 days", () => {
@@ -280,43 +308,280 @@ test("M28: transit caps web + inference output; changes land after 5 days", () =
   assert.ok(near(st.costs.transit, 5 * K.TRANSIT_COST));
 });
 
-/* ============ ch8 contracts ============ */
-test("M29/M31: offers arrive every ~25 days, expire in 15, quoted within +-15 % of today's spot", () => {
+/* ============ v4 contracts core (docs/CONTRACTS_CORE.md) ============ */
+test("order board: offers every ~4 days, expire in 10-20, priced at the index x (1 + premium) +- spread x reputation", () => {
   const s = sb(6);
   const seen = new Map();
+  let maxBoard = 0;
   for (let d = 0; d < 300; d++) {
     Sim.advance(s, 1);
+    maxBoard = Math.max(maxBoard, s.offers.filter(o => !o.bts).length);
     for (const o of s.offers) if (!seen.has(o.id)) seen.set(o.id, Object.assign({ at: s.day }, o));
   }
-  const offers = [...seen.values()].filter(o => !o.bts);   // build-to-suit offers have their own timer and premium (M29b)
-  assert.ok(offers.length >= 8 && offers.length <= 20, `${offers.length} offers in 300 days`);
+  const offers = [...seen.values()].filter(o => !o.bts && !o.renewOf);
+  assert.ok(offers.length >= 40 && offers.length <= 110, `${offers.length} offers in 300 days`);
+  assert.ok(maxBoard <= K.BOARD_MAX, `board ${maxBoard}`);
+  const kinds = new Set(offers.map(o => o.kind));
+  for (const k of ["web", "infer", "train"]) assert.ok(kinds.has(k), `saw ${k} offers`);
   for (const o of offers) {
-    const q = o.price / o.repAdj;
-    assert.ok(q >= o.spot * 0.85 - 1e-3 && q <= o.spot * 1.15 + 1e-3, "quote vs spot (after the reputation factor)");
-    assert.ok(near(o.expires - o.at, 15, 0.1) || o.expires - o.at <= 15);
-    for (const k of ["cust", "icon", "w", "units", "days", "sla", "penalty"]) assert.ok(o[k] != null, k);
+    const job = o.kind === "train" || o.kind === "frontier";
+    const q = job ? o.pay / o.work / (1 + K.JOB_PREMIUM) / o.repAdj : o.price / o.repAdj;
+    const idx = o.spot * (1 + K.CONTRACT_PREMIUM);
+    assert.ok(q >= idx * (1 - K.QUOTE_SPREAD) - 1e-3 && q <= idx * (1 + K.QUOTE_SPREAD) + 1e-3, `${o.kind} quote ${q} vs index ${o.spot}`);
+    assert.ok(o.ttl >= K.OFFER_EXPIRY_MIN && o.ttl <= K.OFFER_EXPIRY && near(o.expires - o.at, o.ttl, 0.1) || o.expires - o.at <= o.ttl);
+    for (const k of ["cust", "icon", "w", "units", "days", "sla", "penalty", "lead", "kind"]) assert.ok(o[k] != null, k);
+    if (job) assert.ok(o.work > 0 && o.pay > 0 && o.maxRate > o.units && o.lateMax === K.JOB_LATE_MAX);
+    else assert.ok(o.lead >= K.LEAD_MIN && o.lead <= K.LEAD_MAX, "time to build before it starts");
   }
   assert.ok(s.offers.every(o => s.day < o.expires));
 });
 
-test("M30: contracts are served first at their price; shortfall below SLA pays the penalty", () => {
+test("order board: deterministic per seed, and only kinds the player has unlocked", () => {
+  const run = () => { const s = camp(9); Sim.advance(s, 200); return JSON.stringify(s.offers) + JSON.stringify(s.log.filter(l => /offer/.test(l))); };
+  assert.equal(run(), run());
+  const s = camp(9);
+  Sim.advance(s, 300);
+  assert.equal(s.chapter, 0);
+  const lines = s.log.filter(l => /^d\d+ offer c\d+ \w+ [\d.]+u/.test(l));
+  assert.ok(lines.length > 5 && lines.every(l => / offer c\d+ web /.test(l)), "an idle chapter-1 player only ever sees web hosting");
+});
+
+test("order board: offers scale with what the player can deliver (free capacity + what its cash can buy), capped by open demand", () => {
+  let n = 0;
+  for (const seed of [2, 5, 8]) {
+    const s = sb(seed);
+    fill(s, "B1", "m1", 4, "infer"); fill(s, "B2", "c1", 4, "train");
+    for (let i = 0; i < 40; i++) {
+      s.nextOffer = s.day;
+      const seq = s.log.length;
+      Sim.advance(s, 1);
+      // the sim logs what it saw when it sized each offer: cap, free (= cap - owed) and afford (half the cash, or the room)
+      for (const l of s.log.slice(Math.max(0, seq - 2))) {
+        const m = l.match(/offer c\d+ (\w+) ([\d.]+)u .* free=([\d.]+) afford=([\d.]+) stretch=(\w+)/);
+        if (!m) continue;
+        const [, kind, units, free, afford, stretch] = m, deliver = +free + +afford;
+        const cap = stretch === "true" ? 1.6 : K.OFFER_CAP_MAX;
+        const firstCard = kind === "infer" ? 6 : kind === "train" ? 25 : 1;      // a first offer may be one card's worth
+        assert.ok(+units <= Math.max(K.OFFER_MIN_UNITS, cap * Math.max(deliver, firstCard)) + 0.5, `seed ${seed}: ${kind} ${units} units vs deliverable ${deliver}`);
+        n++;
+      }
+    }
+  }
+  assert.ok(n >= 60, `${n} offers checked`);
+  const s = sb(3);
+  for (let i = 0; i < 60; i++) { s.nextOffer = s.day; Sim.advance(s, 1); }
+  const st = Sim.stats(s), H = Sim.held(s);
+  for (const o of s.offers.filter(x => !x.bts && !x.renewOf)) {
+    const m = o.kind === "frontier" ? "frontier" : o.kind === "train" ? "train" : o.w;
+    assert.ok(o.units <= st.mk[m].demand + 1e-6, "never above market demand");
+  }
+  void H;
+});
+
+test("contract types: web hosting and inference pay per delivered unit; below the SLA each missing unit pays the penalty", () => {
   const s = sb(1);
-  fill(s, "B1", "c1", 4, "train");
-  const supply = Sim.stats(s).supply.train;
-  s.offers.push({ id: "cX", cust: "Test", icon: "x", foreign: false, w: "train", units: supply * 0.5, days: 90, price: 1, spot: 0.25, sla: 0.9, penalty: 1.5, expires: 20 });
-  assert.ok(Sim.apply(s, { type: "signContract", id: "cX" }).ok);
+  fill(s, "B1", "m1", 4, "infer");
+  s.transit = 50;
+  const sup = Sim.stats(s).supply.infer;
+  const c = serving(s, "infer", sup * 0.5, 90, 1);
+  s.contracts.push(c);
   let st = Sim.stats(s);
-  assert.ok(near(st.revenue.contracts, supply * 0.5 * 1));
+  assert.ok(near(st.cDel[c.id], sup * 0.5));
+  assert.ok(near(st.revenue.infer, sup * 0.5 * 1));
   assert.equal(st.costs.penalties, 0);
-  // now promise more than we have
-  s.contracts[0].units = supply * 2;
+  c.units = sup * 2;                                   // promise more than we have
   st = Sim.stats(s);
-  assert.ok(near(st.costs.penalties, (0.9 * supply * 2 - supply) * 1.5));
-  assert.ok(near(st.revenue.train, 0), "nothing left for spot");
+  assert.ok(near(st.costs.penalties, (K.SLA_INFER * sup * 2 - sup) * c.penalty));
+  assert.ok(near(st.cMiss[c.id], K.SLA_INFER * sup * 2 - sup));
   Sim.advance(s, 3);
-  assert.ok(s.contracts[0].missed > 0);
-  assert.ok(s.losses.sla > 0);
+  assert.ok(c.missed > 0 && s.losses.sla > 0);
   assert.ok(Sim.apply(s, { type: "declineContract", id: "nope" }).ok === false);
+});
+
+test("allocation: SLA minimums first (a small shortfall is spread, not dumped on one customer), then top-ups, then job speed-ups", () => {
+  const s = sb(1);
+  const anchor = s.contracts.find(c => c.anchor);
+  const sup = Sim.stats(s).supply.web;               // 16 web units from the two starting racks
+  const extra = serving(s, "web", sup - anchor.units + 1, 60, 0.5);   // 1 unit more than we have, at a higher penalty
+  s.contracts.push(extra);
+  const st = Sim.stats(s);
+  assert.equal(st.costs.penalties, 0, "both stay at or above their 90 % SLA");
+  assert.ok(st.cDel[anchor.id] >= K.SLA_WEB * anchor.units - 1e-9 && st.cDel[extra.id] >= K.SLA_WEB * extra.units - 1e-9);
+  assert.ok(near(st.cDel[anchor.id] + st.cDel[extra.id], sup));
+  // rack -> contract links add up to what each contract gets
+  for (const c of [anchor, extra]) assert.ok(near(st.alloc.filter(l => l.id === c.id).reduce((a, l) => a + l.u, 0), st.cDel[c.id]));
+  // the most urgent job goes first; leftover speeds jobs up to their max rate
+  const t = sb(2);
+  fill(t, "B1", "c1", 4, "train");
+  const cap = Sim.stats(t).supply.train;
+  const slow = job(t, "train", 10 * 100, 100, 100), tight = job(t, "train", cap * 0.8 * 20, 20, 100);
+  t.contracts.push(slow, tight);
+  const st2 = Sim.stats(t);
+  assert.ok(near(st2.cDel[tight.id], Math.min(tight.maxRate, cap)) || st2.cDel[tight.id] >= cap * 0.8 - 1e-9, "tight deadline served first");
+  assert.ok(near(st2.cDel[slow.id] + st2.cDel[tight.id], Math.min(cap, slow.maxRate + tight.maxRate)), "everything left goes to speed-ups");
+  assert.ok(near(st2.idle.train, Math.max(0, cap - slow.maxRate - tight.maxRate)));
+});
+
+test("training job: paid in one lump on completion (a logged cash event), late fees after the deadline, cancelled after lateMax", () => {
+  // on time
+  const s = sb(3);
+  fill(s, "B1", "c1", 4, "train");
+  const cap = Sim.stats(s).supply.train;
+  const j = job(s, "train", Math.round(cap * 10), 20, 200);
+  s.contracts.push(j);
+  const cash0 = s.cash, seq0 = s.cashSeq;
+  Sim.advance(s, 11);                                 // at full speed it needs 10 days
+  assert.ok(!s.contracts.includes(j), "done and closed");
+  const ev = s.cashEvents.find(e => e.n > seq0 && e.kind === "contract");
+  assert.ok(ev && near(ev.amt, 200, 1e-2), "the payment is a cash event");
+  assert.equal(s.contractLog.fulfilled, 1);
+  assert.ok(s.ledger.train >= 200 - 1e-6 && s.totals.revenue >= 200 - 1e-6);
+  void cash0;
+  // late: fee per day after the deadline, then cancelled, never paid
+  const t = sb(3);
+  fill(t, "B1", "c1", 1, "train");                    // far too little capacity
+  const lj = job(t, "train", 5000, 10, 500);
+  t.contracts.push(lj);
+  Sim.advance(t, 10.5);
+  const late = Sim.stats(t);
+  assert.ok(late.costs.penalties >= lj.lateFee - 1e-9, "late fee accrues");
+  const pen0 = lj.penaltyPaid;
+  Sim.advance(t, K.JOB_LATE_MAX);
+  assert.ok(!t.contracts.includes(lj), "cancelled");
+  assert.ok(near(lj.penaltyPaid - pen0, lj.lateFee * (K.JOB_LATE_MAX - 0.5), 0.05), `late fees ${lj.penaltyPaid}`);
+  assert.equal(t.contractLog.cancelled, 1);
+  assert.ok(t.losses.cancelled > 0, "the unpaid work is an end-screen loss");
+  assert.ok(!t.cashEvents.some(e => e.kind === "contract"), "never paid");
+  assert.ok(t.cashEvents.some(e => e.kind === "contractCancel"), "the cancellation is logged for the UI");
+});
+
+test("serving contract: a customer whose SLA is missed K.SLA_WALK_DAYS days in a row walks away", () => {
+  const s = sb(4);
+  s.cash = 1e5;                                       // survive the penalties long enough to see the walk-out
+  const c = serving(s, "infer", 40, 300, 0.5);       // no inference capacity at all
+  s.contracts.push(c);
+  Sim.advance(s, K.SLA_WALK_DAYS - 1);
+  assert.ok(s.contracts.includes(c));
+  Sim.advance(s, 2);
+  assert.ok(!s.contracts.includes(c) && c.walked, "terminated");
+  assert.equal(s.contractLog.failed, 1);
+  assert.ok(s.news.some(n => /walks away/.test(n.title)));
+});
+
+test("rack mode Off: 0 power, 0 output, no failures; a parked rack still counts as capacity for offers", () => {
+  const s = sb(5);
+  const r = fill(s, "B1", "m1", 4, "infer");
+  const on = Sim.stats(s).perRack.B1;
+  assert.ok(on.kw > 0 && on.out.infer > 0);
+  assert.ok(Sim.apply(s, { type: "mode", rack: "B1", mode: "off" }).ok);
+  const st = Sim.stats(s);
+  assert.equal(st.perRack.B1.kw, 0);
+  assert.equal(st.perRack.B1.out.infer, 0);
+  assert.ok(Sim.capacity(s, st).infer >= on.out.infer - 1e-9);
+  for (const d of r.devices) d.born = d.inst = s.day - 600;    // worn out: would fail often if running
+  Sim.advance(s, 200);
+  assert.ok(r.devices.every(d => !d.failed), "parked hardware does not fail");
+  assert.ok(Sim.apply(s, { type: "mode", rack: "B1", mode: "std" }).ok, "switch it back on");
+  assert.ok(Sim.stats(s).perRack.B1.out.infer > 0);
+});
+
+test("start: the anchor customer (the old starting income) plus 2 small web offers deliverable with the starting cash", () => {
+  for (const seed of [1, 2, 3, 4, 5]) {
+    const s = camp(seed);
+    const a = s.contracts.find(c => c.anchor);
+    assert.ok(a && a.w === "web" && a.units === K.ANCHOR_UNITS && a.end > K.END_DAY);
+    assert.equal(s.offers.length, K.START_OFFERS);
+    assert.ok(s.offers.every(o => o.kind === "web" && o.units <= 8 && o.lead >= K.LEAD_MIN));
+    const need = s.offers.reduce((x, o) => x + o.units, 0) * s.items.cpu.price + 2 * s.items.sw.price;
+    assert.ok(need < K.START_CASH, `seed ${seed}: the first offers need $${need}k of hardware`);
+  }
+});
+
+test("early game: an idle player with only the anchor survives year 1 (and the whole game)", () => {
+  for (const seed of [1, 7, 13]) {
+    const s = camp(seed);
+    Sim.advance(s, 360);
+    assert.ok(!s.over && s.cash > 0, `seed ${seed}: cash ${s.cash}`);
+    Sim.advance(s, K.END_DAY);
+    assert.equal(s.over, "end");
+  }
+});
+
+test("early game: a naive player signs the first 3 offers, builds racks for them, and delivers without going broke", () => {
+  for (const seed of [1, 2, 3, 4, 5, 6]) {
+    const s = camp(seed);
+    let signed = 0, lastEnd = 0, cashAtEnd = null;
+    for (let d = 0; d < 360 && !s.over; d++) {
+      for (const o of s.offers.slice()) if (signed < 3 && Sim.apply(s, { type: "signContract", id: o.id }).ok) {
+        signed++;
+        const c = s.contracts[s.contracts.length - 1];
+        lastEnd = Math.max(lastEnd, Sim.isJob(c) ? c.deadline : c.end);
+      }
+      if (signed === 3 && cashAtEnd == null && s.day >= lastEnd) cashAtEnd = s.cash;
+      // naive build: web servers into the first rack with room (a switch first)
+      // naive build: for each market it owes more than it can deliver, the cheapest card per unit into the first rack
+      // that takes it (an empty rack gets a switch and that workload)
+      for (const w of ["web", "train", "infer"]) for (let k = 0; k < 12 && Sim.owedNow(s)[w] > Sim.capacity(s, Sim.stats(s))[w] + 1e-9; k++) {
+        const card = Sim.bestCard(s, w);
+        if (!card) break;
+        const a = r => ({ type: "buy", item: card.k, rack: r.id });
+        let r = s.racks.find(x => !x.tank && x.devices.length + x.pending.length > 0 && (w === "web" ? !x.devices.concat(x.pending).some(d => s.items[d.type].role === "gpu") : x.workload === w) && Sim.check(s, a(x)).ok);
+        if (!r) {
+          r = s.racks.find(y => !y.tank && !y.devices.length && !y.pending.length);
+          if (!r) break;
+          if (w !== "web") Sim.apply(s, { type: "workload", rack: r.id, workload: w });
+          Sim.apply(s, { type: "buy", item: "sw", rack: r.id });
+        }
+        if (!Sim.apply(s, a(r)).ok) break;
+      }
+      Sim.advance(s, 1);
+    }
+    assert.equal(signed, 3, `seed ${seed}`);
+    assert.ok(!s.over, `seed ${seed}: survives year 1 (${s.over})`);
+    assert.ok(cashAtEnd != null && cashAtEnd >= 0, `seed ${seed}: cash ${cashAtEnd} when the last of the three ends (d${lastEnd})`);
+    assert.ok(s.contractLog.failed === 0, `seed ${seed}: ${s.contractLog.failed} contracts ended short`);
+    assert.ok(s.losses.sla < 20, `seed ${seed}: SLA penalties $${s.losses.sla.toFixed(1)}k`);
+  }
+});
+
+test("money conservation over a full planner campaign: cash = start + continuous flow + logged events + own actions", () => {
+  const Bots = require("../bots/bots.js");
+  const s = Sim.newGame(4), mem = {};
+  const orig = Sim.apply;
+  let actions = 0;
+  Sim.apply = (st, a) => {                            // measure the player's own cash moves (minus what apply itself logs)
+    const c0 = st.cash, e0 = st.totals.events || 0, r = orig(st, a);
+    actions += (st.cash - c0) - ((st.totals.events || 0) - e0);
+    return r;
+  };
+  try { while (!s.over) { Bots.POLICIES.planner(s, mem); Sim.advance(s, 1); } } finally { Sim.apply = orig; }
+  assert.equal(s.over, "end");
+  const gap = s.cash - (K.START_CASH + s.totals.flow + s.totals.events + actions);
+  assert.ok(Math.abs(gap) < 0.05, `unexplained $${gap.toFixed(3)}k`);
+  assert.ok(s.cashEvents.some(e => e.kind === "contract"), "training payments were logged");
+});
+
+test("save/load mid-contract: a JSON round-trip keeps a running job, a serving contract and the board identical", () => {
+  const s = sb(7);
+  fill(s, "B1", "c1", 4, "train"); fill(s, "B2", "m1", 4, "infer");
+  s.transit = 40;
+  s.contracts.push(job(s, "train", 1500, 60, 400), serving(s, "infer", 10, 120, 0.6));
+  Sim.advance(s, 17.25);
+  const t = JSON.parse(JSON.stringify(s));
+  Sim.advance(s, 80); Sim.advance(t, 80);
+  assert.equal(JSON.stringify(t), JSON.stringify(s));
+  assert.ok(s.cashEvents.some(e => e.kind === "contract"), "the job completed after the reload");
+});
+
+test("contracts ablation: a flat-rate buyer takes output at the price index up to demand (no board, no anchor)", () => {
+  const s = sb(1, { mech: { contracts: false } });
+  assert.equal(s.offers.length, 0);
+  assert.equal(s.contracts.length, 0);
+  assert.equal(Sim.check(s, { type: "signContract", id: "x" }).ok, false);
+  const st = Sim.stats(s);
+  assert.ok(near(st.gross, Math.min(st.supply.web, st.mk.web.demand) * st.mk.web.price));
+  Sim.advance(s, 100);
+  assert.equal(s.offers.length, 0);
 });
 
 /* ============ ch9 memory ============ */
@@ -347,7 +612,7 @@ test("M33: shortages triple GPU shipping; about 1/3 of scare stories are false",
   const share = fake / (real + fake);
   assert.ok(share > 0.2 && share < 0.45, `false share ${share}`);
   // a real shock raises the index and sets the shortage flag
-  const c = camp(3);
+  const c = sb(3);
   const shock = c.events.find(e => e.kind === "hbmShock");
   Sim.advance(c, shock.day + 25 - c.day);
   assert.ok(c.hbm.shortage && c.hbm.index > 1.2);
@@ -445,11 +710,12 @@ test("M39/M40: an outage stops output unless a UPS + generator (diesel, carbon) 
   st = Sim.stats(s);
   assert.ok(near(st.gross, base));
   assert.ok(st.costs.diesel > 0 && st.dieselKw > 0 && st.draw === 0 && st.carbon > 0);
-  // outages are scheduled ~2 per year from ch11
+  // outages are world events (~2 per year); they only hit players who have reached ch11 (v4: chapters are milestones)
   const c = camp(4);
   const outs = c.events.filter(e => e.kind === "outage");
-  assert.ok(outs.every(e => e.day >= 750));
-  assert.ok(outs.length >= 2 && outs.length <= 16, `${outs.length} outages`);
+  assert.ok(outs.length >= 4 && outs.length <= 24, `${outs.length} outages`);
+  Sim.advance(c, 1800);
+  assert.equal(c.prog.outages, 0, "an idle player (chapter 1) never sees one");
   const s2 = sb(2); s2.cash = 1000;
   assert.ok(Sim.apply(s2, { type: "ups" }).ok);
   Sim.advance(s2, K.UPS_DAYS + 0.25);
@@ -615,7 +881,9 @@ test("M52: reputation falls with SLA misses and rises with fulfilled contracts",
     start: 0, end: 5, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 });
   Sim.advance(s2, 6);
   assert.equal(s2.contractLog.fulfilled, 1);
-  assert.ok(s2.rep > 60.5);
+  const s3 = sb(1);
+  Sim.advance(s3, 6);
+  assert.ok(s2.rep > s3.rep + K.REP_CONTRACT_OK * 0.8, `fulfilled: ${s2.rep} vs ${s3.rep}`);
 });
 
 test("M53: reputation moves demand share (+-10 %), contract prices and the score factor (+-20 %)", () => {
@@ -718,7 +986,8 @@ test("M59: export controls quota the newest generation and end foreign contracts
   s.contracts.push({ id: "f1", cust: "Kanto AI", foreign: true, w: "web", units: 1, days: 90, price: 0.3, sla: 0.9, penalty: 0.1,
     start: 0, end: 90, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 });
   forcePolicy(s, "export");
-  assert.equal(s.contracts.length, 0);
+  assert.ok(!s.contracts.some(c => c.foreign), "foreign customers are gone");
+  assert.ok(s.contracts.some(c => c.anchor), "domestic contracts stay");
   s.exportUsed = K.EXPORT_QUOTA;
   assert.match(Sim.check(s, { type: "buy", item: "c1", rack: "B1" }).msg, /Export quota/);
   s.exportUsed = 0;
@@ -750,7 +1019,7 @@ test("M61/M64: exotics ship at d1290/1440/1590, PM-900 pitch at d1330", () => {
   assert.equal(Sim.BASE_ITEMS.lat1.avail, 1290);
   assert.equal(Sim.BASE_ITEMS.pho2.avail, 1440);
   assert.equal(Sim.BASE_ITEMS.lat3.avail, 1590);
-  const s = camp(2);
+  const s = sb(2);
   Sim.advance(s, 1285);
   assert.ok(!Sim.shopItems(s).some(k => s.items[k].role === "exotic"));
   Sim.advance(s, 50);
@@ -767,7 +1036,7 @@ test("M62: immersion tanks keep most of their heat out of the room", () => {
 });
 
 test("M63: a pilot reveals measured field performance after 10 days in a rack", () => {
-  const s = camp(4);
+  const s = sb(4);
   s.cash = 1e5;
   Sim.advance(s, 1291);
   Sim.apply(s, { type: "tank", rack: "C6" });
@@ -785,7 +1054,7 @@ test("M63: a pilot reveals measured field performance after 10 days in a rack", 
 test("M65: the demand disruption is real in about half the seeds and cuts inference demand 35 %", () => {
   let real = 0;
   for (let seed = 1; seed <= 20; seed++) {
-    const s = camp(seed);
+    const s = sb(seed);
     if (s.hidden.demandCut) real++;
     if (seed > 4) continue;
     Sim.advance(s, 1450);
@@ -797,7 +1066,7 @@ test("M65: the demand disruption is real in about half the seeds and cuts infere
 });
 
 test("M66: after the real startup's second model the incumbents cut prices 25 %", () => {
-  const s = camp(1);
+  const s = sb(1);
   Sim.advance(s, 1445);
   const p = s.items.c4.base;
   Sim.advance(s, 10);
@@ -941,11 +1210,11 @@ test("M29b/M65: a real demand cut sends inference build-to-suit customers away (
 });
 
 test("full 1800-day campaign with a random-action driver is deterministic", () => {
-  const a = playRandom(21).s, b = playRandom(21).s;   // seed 21 (v0.3 timeline; was 22): takes an equity round and reaches d1800 (re-check the seed when RNG draws change)
+  const a = playRandom(26).s, b = playRandom(26).s;   // seed 26 (v4; was 21): reaches Hall 2 through milestones, takes an equity round and reaches d1800 (re-check the seed when RNG draws change)
   assert.equal(JSON.stringify(a), JSON.stringify(b));
   assert.equal(a.over, "end", `game lasted ${a.day} days (${a.over})`);
   assert.ok(a.equity.rounds >= 1 && a.contractLog.signed >= 1 && a.racks.length >= 36, "the driver touched the late chapters (Hall 2+)");
-  const c = playRandom(26).s;
+  const c = playRandom(32).s;
   assert.notEqual(JSON.stringify(a.hidden), JSON.stringify(c.hidden));
 });
 

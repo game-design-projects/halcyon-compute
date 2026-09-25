@@ -16,6 +16,7 @@
     eco:   { kw: 0.65, out: 0.8,  label: "Eco" },
     std:   { kw: 1,    out: 1,    label: "Standard" },
     boost: { kw: 1.35, out: 1.12, label: "Boost" },
+    off:   { kw: 0,    out: 0,    label: "Off" },      // v4: park hardware with no contract (0 power, 0 output, no failures)
   };
   const MARKET = {
     web:   { base: 0.18, demand: 30, growth: 1.0,  drift: 1.0 },
@@ -31,9 +32,9 @@
   const BASE_ITEMS = {
     sw:  { name: "Ferro 48P switch", role: "net",  u: 1, kw: 0.4, price: 25, net: 16, avail: 0, vendor: "ferro", icon: "switch" },
     cpu: { name: "Tern web server",  role: "cpu",  u: 1, kw: 0.8, price: 12, avail: 0, vendor: "tern", icon: "cpu" },
-    cru: { name: "Brisa CRU cooler", role: "cool", u: 2, kw: 0.6, price: 45, cool: 12, avail: 170, vendor: "brisa", icon: "snow" },
-    c1:  { name: "Kestrel C1", role: "gpu", fam: "C", gen: 1, u: 4, kw: 6.0, price: 288, F: 10, B: 4,  avail: 100,   vendor: "kestrel", icon: "chip" },
-    m1:  { name: "Heron M1",   role: "gpu", fam: "M", gen: 1, u: 4, kw: 5.0, price: 320, F: 6,  B: 8,  avail: 100,   vendor: "heron", icon: "chip" },
+    cru: { name: "Brisa CRU cooler", role: "cool", u: 2, kw: 0.6, price: 45, cool: 12, avail: 0, ch: "heat", vendor: "brisa", icon: "snow" },
+    c1:  { name: "Kestrel C1", role: "gpu", fam: "C", gen: 1, u: 4, kw: 6.0, price: 288, F: 10, B: 4,  avail: 0, ch: "gpu", vendor: "kestrel", icon: "chip" },
+    m1:  { name: "Heron M1",   role: "gpu", fam: "M", gen: 1, u: 4, kw: 5.0, price: 320, F: 6,  B: 8,  avail: 0, ch: "gpu", vendor: "heron", icon: "chip" },
     c2:  { name: "Kestrel C2", role: "gpu", fam: "C", gen: 2, u: 4, kw: 6.5, price: 368, F: 16, B: 6,  avail: 390,  vendor: "kestrel", icon: "chip" },
     m2:  { name: "Heron M2",   role: "gpu", fam: "M", gen: 2, u: 4, kw: 5.5, price: 400, F: 9,  B: 13, avail: 390,  vendor: "heron", icon: "chip" },
     c3:  { name: "Kestrel C3", role: "gpu", fam: "C", gen: 3, u: 4, kw: 7.0, price: 448, F: 25, B: 9,  avail: 780,  vendor: "kestrel", icon: "chip" },
@@ -57,43 +58,62 @@
   /* roofline ablation: both families identical per generation */
   const FLAT_F = [0, 8, 12.5, 19.5, 30, 47], FLAT_B = [0, 6, 9.5, 15, 23, 36];
 
-  /* chapters. mech = ablation flag that disables the chapter (null = always on). */
-  /* v0.3 pacing: the first four systems no longer land inside 120 days (playtest round 1, DECISIONS D40). Bullets are plain
-     language; jargon is named once with its meaning. GPUs and CRU coolers go on sale with their chapters (BASE_ITEMS avail). */
+  /* chapters. mech = ablation flag that disables the chapter (null = always on).
+     v4 (DECISIONS D41): chapters unlock in order on player MILESTONES (js/sim.js `milestone`), not on calendar days.
+     `day` = the earliest day the chapter may unlock; `hint` = the trigger in plain words (for the UI's "next chapter" tip).
+     At most one chapter per K.CH_GAP days. Sandbox still unlocks everything on day 0.
+     v4 core loop (docs/CONTRACTS_CORE.md): all money comes from contracts; ch8 now teaches long-term deals. */
   const CHAPTERS = [
-    { day: 0,    key: "racks",       mech: null,          title: "Racks and cash",
-      bullets: ["18 racks, each with 20U of space and 30 kW of power", "Every rack needs a switch, or it earns nothing", "Web servers sell to a steady market", "Orders ship in 6 days, then a technician installs them in 2"] },
-    { day: 45,   key: "power",       mech: null,          title: "Power",
+    { day: 0,    key: "racks",       mech: null,          title: "Racks and contracts",
+      hint: "",
+      bullets: ["All money comes from contracts: sign offers on the order board, then deliver", "Build the capacity before a contract starts: orders ship in 6 days, a technician installs them in 2", "Every rack needs a switch, or it delivers nothing", "Hardware with no contract earns nothing: switch it Off"] },
+    { day: 20,   key: "power",       mech: null,          title: "Power",
+      hint: "Sign 2 offers, run 4 racks, or draw more than a third of your grid",
       bullets: ["Your grid feed is 250 kW; you can upgrade it to 400 kW", "Power costs more in summer", "Each rack runs Eco, Standard or Boost: less or more output for less or more power"] },
-    { day: 100,  key: "gpu",         mech: null,          title: "GPUs: match the card to the job",
-      bullets: ["Kestrel C cards are fast at math; Heron M cards are fast at moving data (memory bandwidth)", "Training does a lot of math per byte; inference moves a lot of data for little math", "A card earns by its weaker side on the job: C cards on training, M cards on inference", "Training and inference are separate markets with their own prices"] },
-    { day: 170,  key: "heat",        mech: "heat",        title: "Summer is coming",
-      bullets: ["Your cooling handles less heat in summer", "Rooms warm up slowly, over days", "Hot racks warm their neighbours; above 32 °C they slow down", "CRU coolers add cooling inside a rack"] },
-    { day: 250,  key: "gens",        mech: "gens",        title: "Hardware generations",
-      bullets: ["New GPU generations arrive on days 390, 780, 1170 and 1560", "Rumours arrive about 60 days early", "Each launch cuts compute prices and what older cards resell for", "The previous generation goes on sale"] },
-    { day: 330,  key: "ops",         mech: "ops",         title: "Operations",
-      bullets: ["Hardware breaks: brand-new, old and hot parts break most", "A repair needs parts and a technician", "Hire or fire technicians", "Spare parts on the shelf swap in within a day"] },
-    { day: 420,  key: "fabric",      mech: "fabric",      title: "Network fabric",
-      bullets: ["A row spine joins the racks of one row into one cluster", "12+ training GPUs in one spined row sell \"frontier training\" at 1.6x", "Web and inference traffic needs internet transit"] },
-    { day: 490,  key: "contracts",   mech: "contracts",   title: "Customers and contracts",
-      bullets: ["Customers offer contracts: sign or decline", "A contract fixes your price for its whole term and is served first", "Promise only what you can deliver: missed units pay a penalty", "Signing before a known launch locks today's higher price"] },
-    { day: 570,  key: "memory",      mech: "memory",      title: "Memory market",
+    { day: 60,   key: "gpu",         mech: null,          title: "GPUs: match the card to the job",
+      hint: "Afford a GPU and a switch, or complete 2 contracts",
+      bullets: ["Kestrel C cards are fast at math; Heron M cards are fast at moving data (memory bandwidth)", "Training does a lot of math per byte; inference moves a lot of data for little math", "Inference contracts pay per unit served; training jobs pay once the work is done, by a deadline", "A card delivers by its weaker side on the job: C cards on training, M cards on inference"] },
+    { day: 100,  key: "heat",        mech: "heat",        title: "Summer is coming",
+      hint: "Own 2 GPUs and head into a summer that would run your hall hot",
+      bullets: ["Your cooling handles less heat in summer", "Rooms warm up slowly, over days", "Hot racks warm their neighbours; above 32 °C they slow down and miss deliveries", "CRU coolers add cooling inside a rack"] },
+    { day: 150,  key: "gens",        mech: "gens",        title: "Hardware generations",
+      hint: "Own 4 GPUs when a new generation is rumoured",
+      bullets: ["New GPU generations arrive on days 390, 780, 1170 and 1560", "Rumours arrive about 60 days early", "Each launch cuts the price of new offers and what older cards resell for", "Signed contracts keep their price: lock long deals before a launch"] },
+    { day: 200,  key: "ops",         mech: "ops",         title: "Operations",
+      hint: "Run 30 devices or 8 GPUs",
+      bullets: ["Hardware breaks: brand-new, old and hot parts break most", "A repair needs parts and a technician", "Hire or fire technicians", "Spare parts on the shelf swap in within a day: keep a buffer"] },
+    { day: 250,  key: "fabric",      mech: "fabric",      title: "Network fabric",
+      hint: "Run 8 training GPUs (or 14 GPUs)",
+      bullets: ["A row spine joins the racks of one row into one cluster", "Frontier training jobs pay 1.6x, but only 12+ training GPUs on one spined row count", "Web and inference traffic needs internet transit"] },
+    { day: 300,  key: "contracts",   mech: "contracts",   title: "Long-term deals",
+      hint: "Complete 5 contracts",
+      bullets: ["Build-to-suit: a big customer pays for dedicated capacity for a year or more", "You pay the fit-out up front; delivery starts 45 days after signing", "Missed units cost 3x the price: keep a buffer", "A long deal fixes today's price: sign before a known launch, not after"] },
+    { day: 350,  key: "memory",      mech: "memory",      title: "Memory market",
+      hint: "Order 10 GPUs",
       bullets: ["GPU prices follow the memory-chip (HBM) price index", "Shortages triple GPU shipping time", "Scare stories: about 1 in 3 is false", "Forward orders lock today's price"] },
-    { day: 660,  key: "finance",     mech: "finance",     title: "Finance",
+    { day: 400,  key: "finance",     mech: "finance",     title: "Finance",
+      hint: "Owe more capacity than you can pay for, or earn $500k in a quarter",
       bullets: ["Borrow up to 40 % of your net worth at 9 % a year", "Lease GPUs: nothing up front, pay per day", "21 % tax on each quarter's profit"] },
-    { day: 750,  key: "facilities",  mech: "facilities",  title: "Facilities and resilience",
-      bullets: ["Build Hall 2, then Hall 3 (18 racks each)", "Grid outages stop everything", "Backup power (UPS + generator) rides through outages", "Room-cooling upgrade (CRAC): +45 kW per hall"] },
-    { day: 840,  key: "energy",      mech: "energy",      title: "Energy sourcing",
+    { day: 450,  key: "facilities",  mech: "facilities",  title: "Facilities and resilience",
+      hint: "Fill 80 % of Hall 1, or use 85 % of your grid",
+      bullets: ["Build Hall 2, then Hall 3 (18 racks each)", "Grid outages stop everything, and every contract misses", "Backup power (UPS + generator) rides through outages", "Room-cooling upgrade (CRAC): +45 kW per hall"] },
+    { day: 500,  key: "energy",      mech: "energy",      title: "Energy sourcing",
+      hint: "Let power reach a third of your costs",
       bullets: ["Market (spot) power prices swing; heat waves spike them", "A power purchase agreement (PPA) fixes the price of green power for 540 days", "Solar + battery shaves the spikes"] },
-    { day: 930,  key: "environment", mech: "environment", title: "Environment",
+    { day: 550,  key: "environment", mech: "environment", title: "Environment",
+      hint: "Live through a heat wave",
       bullets: ["Evaporative cooling: 15 % power overhead, but uses water", "Chillers: no water, but 45 % power overhead", "Droughts cut evaporative cooling by 40 %", "Your carbon is tracked"] },
-    { day: 1020, key: "investors",   mech: "investors",   title: "Investors",
+    { day: 600,  key: "investors",   mech: "investors",   title: "Investors",
+      hint: "Earn $2M over half a year",
       bullets: ["Venture capital (VC) firms offer cash for a share of your company", "The board then sets revenue targets", "Miss two in a row and you are fired", "Your score = your share of the company's value"] },
-    { day: 1110, key: "reputation",  mech: "reputation",  title: "Reputation and PR",
-      bullets: ["Reputation moves contracts, demand and valuation", "Missed deliveries, outages and water use in droughts hurt it", "PR campaigns help, unless a scandal is live"] },
-    { day: 1200, key: "policy",      mech: "policy",      title: "Policy",
+    { day: 650,  key: "reputation",  mech: "reputation",  title: "Reputation and PR",
+      hint: "Miss a delivery, or suffer an outage",
+      bullets: ["Reputation moves how often offers come and what they pay, and your valuation", "Missed deliveries, outages and water use in droughts hurt it", "PR campaigns help, unless a scandal is live"] },
+    { day: 700,  key: "policy",      mech: "policy",      title: "Policy",
+      hint: "Emit 2 tonnes of carbon a day",
       bullets: ["Proposed laws come with a vote date", "Read the news signals: will it pass?", "Carbon tax, efficiency mandate, chip export controls", "Lobbying shifts the odds, if the press doesn't find out"] },
-    { day: 1290, key: "disrupt",     mech: "disrupt",     title: "Something new",
+    { day: 1200, key: "disrupt",     mech: "disrupt",     title: "Something new",
+      hint: "Know the generations chapter when startups start demoing (from day 1200)",
       bullets: ["Two startups, one is real", "A pilot card shows real field performance", "Vendor pitches are biased", "Demand itself may shift"] },
   ];
 
@@ -109,6 +129,7 @@
     { name: "Aurora Games", icon: "game", foreign: false },
     { name: "Volga Data", icon: "globe", foreign: true },
   ];
+  const ANCHOR = { name: "Wren Hosting", icon: "cart" };     // v4: the customer you start with (signed for the whole game)
   const VCS = ["Sequoia-ish Partners", "Andromeda Ventures", "Lightbeam Capital", "Greylock-ish Growth", "Index Point"];
 
   const SCARES = [
@@ -142,6 +163,6 @@
 
   return {
     WORKLOADS, INTENSITY, NET_NEED, MODES, MARKET, GEN_LAUNCH, GEN_DROP, BASE_ITEMS, SHOP_ORDER, VENDORS, FLAT_F, FLAT_B,
-    CHAPTERS, CUSTOMERS, VCS, SCARES, SCARE_FOLLOW, POLICIES, POLICY_SIGNALS, PRESS,
+    CHAPTERS, CUSTOMERS, ANCHOR, VCS, SCARES, SCARE_FOLLOW, POLICIES, POLICY_SIGNALS, PRESS,
   };
 });
