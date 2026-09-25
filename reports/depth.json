@@ -1,0 +1,65 @@
+{
+  "generated": "2026-09-24T23:59:56.588Z",
+  "rows": [
+    {
+      "variant": "full",
+      "n": 12,
+      "idle": 587,
+      "greedy": 16083,
+      "planner": 21912,
+      "gap": 5829,
+      "gapSd": 1389,
+      "plannerWins": 12
+    },
+    {
+      "variant": "no heat/seasons",
+      "n": 12,
+      "idle": 587,
+      "greedy": 16852,
+      "planner": 21812,
+      "gap": 4960,
+      "gapSd": 1204,
+      "plannerWins": 12
+    },
+    {
+      "variant": "no generations",
+      "n": 12,
+      "idle": 587,
+      "greedy": 28332,
+      "planner": 38834,
+      "gap": 10502,
+      "gapSd": 3292,
+      "plannerWins": 12
+    },
+    {
+      "variant": "no disruption",
+      "n": 12,
+      "idle": 587,
+      "greedy": 19936,
+      "planner": 23798,
+      "gap": 3862,
+      "gapSd": 1803,
+      "plannerWins": 12
+    },
+    {
+      "variant": "no network",
+      "n": 12,
+      "idle": 587,
+      "greedy": 15661,
+      "planner": 21925,
+      "gap": 6264,
+      "gapSd": 1182,
+      "plannerWins": 12
+    },
+    {
+      "variant": "no roofline",
+      "n": 12,
+      "idle": 587,
+      "greedy": 9547,
+      "planner": 17525,
+      "gap": 7978,
+      "gapSd": 1609,
+      "plannerWins": 12
+    }
+  ]
+}

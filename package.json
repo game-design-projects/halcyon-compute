@@ -1,0 +1,10 @@
+{
+  "name": "halcyon-compute",
+  "private": true,
+  "description": "Datacenter tycoon prototype, Game Design week 3",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "bots": "node bots/run.js",
+    "serve": "python3 -m http.server 8765"
+  }
+}
