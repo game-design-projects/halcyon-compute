@@ -666,3 +666,82 @@ dialog[open].chap, dialog[open].overdlg { animation: fx-pop .38s cubic-bezier(.3
 .scorelabel { display: flex; align-items: center; justify-content: flex-start; gap: 6px; font: 700 13px/1 var(--sans); letter-spacing: .14em; color: var(--sel); }
 .scorelabel svg.i { width: 15px; height: 15px; }
 .scorelabel small { letter-spacing: .02em; font-weight: 500; color: var(--ink-2); }
+
+/* ================= v0.3 post-playtest fix round ================= */
+/* P0-1 offers on the main screen */
+.offerstrip { display: grid; grid-template-columns: auto repeat(3, minmax(0, 1fr)); gap: 8px; align-items: stretch; }
+.offerstrip[hidden] { display: none; }
+.oshead { display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 6px 10px; background: var(--c-contract); color: var(--white); border-radius: 6px; min-width: 116px; }
+.oshead svg.i { width: 20px; height: 20px; }
+.oshead b { font: 600 17px var(--display); }
+.oshead small { font-size: 11px; opacity: .9; max-width: 130px; }
+.btn.slim { padding: 3px 8px; font-size: 12px; background: rgba(255,255,255,.18); color: inherit; border-color: rgba(255,255,255,.35); }
+.ocard { background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--wc, var(--c-contract)); border-radius: 6px; padding: 6px 8px; display: grid; gap: 5px; font-size: 12px; animation: ocard-in .35s ease-out; }
+.ocard.bts { border-left-width: 6px; }
+@keyframes ocard-in { from { transform: translateY(-6px); opacity: 0; } to { transform: none; opacity: 1; } }
+.ocard .ot { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.ocard .av { width: 26px; height: 26px; border-radius: 5px; display: flex; align-items: center; justify-content: center; color: var(--white); flex: none; }
+.ocard .on { display: grid; min-width: 0; }
+.ocard .on b { font: 600 14px var(--display); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ocard .on small { color: var(--ink-2); }
+.ocard .op { margin-left: auto; text-align: right; display: grid; white-space: nowrap; }
+.ocard .op b { font: 600 16px var(--display); }
+.ocard .op small { color: var(--ink-2); font-size: 10.5px; }
+.ocard .op small.up { color: var(--ok-c); } .ocard .op small.down { color: var(--bad-c); }
+.ocard .of { display: flex; flex-wrap: wrap; gap: 3px 10px; color: var(--ink-2); }
+.ocard .of span { display: inline-flex; align-items: center; gap: 3px; }
+.ocard .of svg.i { width: 12px; height: 12px; }
+.ocard .of .okc { color: var(--ok-c); } .ocard .of .badc { color: var(--bad-c); font-weight: 600; }
+.ocard .oa { display: flex; align-items: center; gap: 6px; }
+.ocard .oa .btn { padding: 5px 12px; font-size: 13px; }
+.ocard .oa .exp { flex: 1; height: 4px; background: var(--tile); border-radius: 2px; overflow: hidden; min-width: 20px; }
+.ocard .oa .exp i { display: block; height: 100%; background: var(--c-warn); }
+.ocard .oa small { color: var(--ink-2); }
+.iconbtn.labeled { gap: 6px; align-items: center; padding: 7px 10px; font: 600 13px var(--sans); color: var(--hud-ink); }
+.iconbtn.labeled .lbl { line-height: 1; }
+.iconbtn.hot { background: var(--c-contract); color: var(--white); animation: hotpulse 1.6s ease-in-out infinite; }
+.iconbtn.hot .dot { transform: scale(1.25); }
+@keyframes hotpulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(47,143,160,.0); } 50% { box-shadow: 0 0 0 5px rgba(47,143,160,.45); } }
+
+/* P0-2 missing switch */
+.rack .noswitch { position: absolute; left: 4px; right: 4px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; gap: 3px; background: var(--bad-c); color: var(--white); font: 700 10.5px/16px var(--sans); letter-spacing: .03em; border-radius: 3px; box-shadow: 0 1px 3px rgba(0,0,0,.45); pointer-events: none; z-index: 2; animation: nosw 1.4s ease-in-out infinite; }
+.rack .noswitch svg.i { width: 12px; height: 12px; }
+.rack .noswitch b { background: rgba(0,0,0,.28); border-radius: 2px; padding: 0 3px; margin-left: 2px; }
+@keyframes nosw { 0%, 100% { opacity: 1; } 50% { opacity: .72; } }
+.nosw-status { color: var(--bad-c); font-weight: 600; display: inline; }
+.nosw-status svg.i { width: 14px; height: 14px; vertical-align: -2px; }
+.addsw { display: flex; align-items: center; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+.addsw .sub { font-size: 11.5px; }
+
+/* P1 frontier cluster meter */
+.cmeter { display: block; width: 80%; height: 4px; background: var(--hud-2); border-radius: 2px; overflow: hidden; }
+.cmeter i { display: block; height: 100%; background: var(--c-frontier); }
+.cmeter.full i { background: var(--c-good); }
+.spine .cnum { font: 600 12px var(--display); }
+.spine:not(.built) .cmeter { background: var(--tile-line); }
+.clusterline { display: grid; grid-template-columns: 18px 1fr; gap: 2px 6px; align-items: center; font-size: 12.5px; margin-top: 8px; }
+.clusterline svg.i { width: 16px; height: 16px; }
+.clusterline small { color: var(--ink-2); }
+.cmeter.wide { grid-column: 2; width: 100%; height: 6px; background: var(--tile); }
+
+/* P0-3 pace chip */
+.chip.pace .big { font-size: 14px; }
+.chip.pace small.pr { display: block; white-space: nowrap; }
+.chip.pace .lag { color: var(--hud-ink-2); font-size: 10px; }
+.pacebars { display: grid; gap: 2px; width: 110px; margin-top: 3px; }
+.pacebars i { display: block; height: 3px; border-radius: 2px; transition: width .4s; }
+
+/* one-time cards (warnings, first offer, first scare/proposal/VC round) */
+.cardlg .body { display: grid; gap: 10px; }
+.cardlg .kv.big { font-size: 14px; color: var(--ink); align-items: baseline; }
+.cardlg ul.plain { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.cardlg ul.plain li { display: grid; grid-template-columns: 22px 1fr; gap: 8px; align-items: start; font-size: 13.5px; }
+.cardlg ul.plain svg.i { width: 18px; height: 18px; }
+.cardlg footer { flex-wrap: wrap; }
+.cardlg q { display: block; font-style: italic; color: var(--ink-2); }
+
+/* ch3 chapter picture */
+.chroof .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.chroof .roof { margin: 0; }
+.cardlg .biased { font: 700 10px/15px var(--sans); padding: 0 6px; border-radius: 8px; background: var(--c-pitch); color: var(--white); justify-self: start; }
+@media (prefers-reduced-motion: reduce) { .ocard, .iconbtn.hot, .rack .noswitch { animation: none !important; } }

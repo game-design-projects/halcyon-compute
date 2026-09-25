@@ -5,6 +5,7 @@
  * GET  /text             -> visible text of HUD, goal banner, news and any open dialog
  * POST /click  {selector} | {x,y}
  * POST /drag   {from:{selector}|{x,y}, to:{selector}|{x,y}}   (real pointer moves, like a human)
+ * POST /pointer {op:"down"|"move"|"up", selector|x,y}   low-level pointer, e.g. to screenshot mid-drag
  * POST /key    {key}      e.g. " " (pause), "1" "2" "3" "4" (speed)
  * POST /wait   {ms}       let real time pass (the game runs while you wait)
  * POST /read   {js}       READ-ONLY evaluation (expression string); use for inspecting, never to change state
@@ -47,6 +48,12 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
       for (let i = 1; i <= 12; i++) await page.mouse.move(a.x + (z.x - a.x) * i / 12, a.y + (z.y - a.y) * i / 12);
       await page.waitForTimeout(80); await page.mouse.up();
       return { ok: true, from: a, to: z };
+    },
+    "POST /pointer": async b => {
+      const p = b.op === "up" && !b.selector && b.x == null ? null : await point(b);
+      if (p) await page.mouse.move(p.x, p.y, { steps: b.op === "move" ? 8 : 1 });
+      if (b.op === "down") await page.mouse.down(); else if (b.op === "up") await page.mouse.up();
+      return { ok: true, at: p };
     },
     "POST /key": async b => { await page.keyboard.press(b.key === " " ? "Space" : b.key); return { ok: true }; },
     "POST /wait": async b => { await page.waitForTimeout(Math.min(60000, b.ms || 1000)); return { ok: true }; },

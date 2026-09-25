@@ -23,7 +23,10 @@
     // game feel (display only): previous-state snapshot for the event diff, rolling counters, gauge ghosts
     fxPrev: null, cashOff: 0, scoreOff: 0, cashT: null, scoreT: null, cashPeak: 0, ghostFrac: 1, ghostHold: 0,
     fillPrev: {}, earnAcc: {}, earnLast: {}, earnT: 0, steamT: 0, finalQ: false, lastCount: -1, tilt: 0,
+    // v0.3: pace ghost rows, one-time cards (first offer / scare / proposal / VC round), warnings, seen offers + cash events
+    ghost: null, pace: null, firsts: {}, cardQueue: [], warned: {}, offersSeen: new Set(), cashSeen: 0, flowPrev: null,
   };
+  const PACE_ON = params.get("pace") !== "0";      // ?pace=0 turns the ghost off (A/B frame-time measurement)
   const FXON = () => !!window.FX, SND = (name, arg, gap) => { if (window.SFX) SFX.play(name, arg, gap); };
 
   /* ================= palette: read from CSS tokens (single source of truth) ================= */
@@ -72,20 +75,20 @@
   };
   /* per-chapter icons (one per content.js bullet) and where the new UI lives */
   const CH_META = {
-    racks: { icons: ["plus", "switch", "globe", "wrench"], col: "web", where: "Drag cards from the catalog onto a rack, or tap a card and then a rack. Space pauses, 1-4 set speed." },
+    racks: { icons: ["plus", "switch", "globe", "wrench"], col: "web", where: "Catalog under the floor: drag a card onto a rack (or tap the card, then the rack). A rack without a switch shows a red NO SWITCH badge. Space pauses, 1-4 set speed." },
     power: { icons: ["bolt", "coin", "gauge"], col: "pow", where: "Click the power chip in the top bar to upgrade the grid. Power mode is in the rack panel." },
-    gpu: { icons: ["chip", "brain", "gauge"], col: "train", where: "Workload toggle and roofline chart in the rack panel; market chart below the floor." },
+    gpu: { icons: ["chip", "brain", "gauge", "trend"], col: "train", where: "Rack panel (right): Training / Inference toggle and this chart for the rack's cards. The first GPU in a rack sets the workload it suits. Market chart below the floor." },
     heat: { icons: ["sun", "temp", "flame", "snow"], col: "hot", where: "Heat map mode shows every rack's inlet temperature." },
     gens: { icons: ["clock", "news", "trend", "tag"], col: "warn", where: "Generation map mode; OLD GEN badges in the catalog." },
     ops: { icons: ["cross", "wrench", "person", "box"], col: "fail", where: "Wrench chip: hire / fire and auto-repair. Spares shelf under the floor. Failures map mode." },
-    fabric: { icons: ["switch", "rocket", "globe"], col: "frontier", where: "Spine slots at the end of each row; transit chip in the top bar; Cluster map mode." },
-    contracts: { icons: ["doc", "hand", "warn", "trend"], col: "contract", where: "Contracts drawer (handshake icon, top right). Drag offers onto Sign or Decline." },
+    fabric: { icons: ["switch", "rocket", "globe"], col: "frontier", where: "Spine slot at the right end of each row, with an N/12 cluster meter; transit chip in the top bar; Cluster map mode." },
+    contracts: { icons: ["doc", "hand", "warn", "trend"], col: "contract", where: "New offers pop up above the floor with Sign / Decline buttons. Details and active contracts: the Contracts button (top right)." },
     memory: { icons: ["layers", "truck", "news", "lock"], col: "mem", where: "HBM index in the catalog header. Drag a GPU onto the shelf to order it forward." },
     finance: { icons: ["bank", "tag", "coin"], col: "debt", where: "Finance drawer (chart icon). Buy / Lease switch on the catalog." },
     facilities: { icons: ["building", "bolt", "battery", "snow"], col: "info", where: "Hall 2 / Hall 3 tabs above the floor; Energy drawer (bolt icon) for UPS, CRAC and the grid." },
     energy: { icons: ["trend", "leaf", "sun"], col: "carbon", where: "Energy drawer: PPA stepper, solar, spot-price chart." },
-    environment: { icons: ["drop", "warn", "leaf"], col: "water", where: "Energy drawer: cooling mode per hall, water and carbon gauges." },
-    investors: { icons: ["coin", "flag", "warn", "pie"], col: "vc", where: "Finance drawer: VC offers, board target, buyback. The score chip now shows your equity value." },
+    environment: { icons: ["drop", "snow", "warn", "leaf"], col: "water", where: "Energy drawer: cooling mode per hall, water and carbon gauges." },
+    investors: { icons: ["coin", "flag", "warn", "pie"], col: "vc", where: "Finance drawer (chart icon): VC offers, board target, buyback. The score chip now shows your equity value." },
     reputation: { icons: ["star", "warn", "news"], col: "rep", where: "Star chip in the top bar; Public drawer (flag icon) for PR." },
     policy: { icons: ["flag", "trend", "bank", "bubble"], col: "bad", where: "Public drawer: proposals, vote countdowns, signals, lobbying." },
     disrupt: { icons: ["rocket", "gauge", "tag", "brain"], col: "tank", where: "Benchmarks chart; convert an empty rack to an immersion tank in the rack panel." },
@@ -121,6 +124,14 @@
     if (all.some(i => i.role === "cool")) return "cool";
     return "net";
   }
+  /* P0-2: a rack whose parts need network but that has no switch (installed or on its way) earns nothing,
+     unless a row spine pools a neighbour's switches for it */
+  const NEEDS_NET = it => it.role === "cpu" || it.role === "gpu" || it.role === "exotic";
+  function switchless(r, pr) {
+    if (r.devices.concat(r.pending).some(d => item(d.type).role === "net")) return false;
+    return !(pr && pr.spine && pr.netF >= 1);
+  }
+  const noSwitch = (r, pr) => switchless(r, pr) && r.devices.concat(r.pending).some(d => NEEDS_NET(item(d.type)));
   const genBehind = r => {
     const g = r.devices.map(d => item(d.type)).filter(i => i.role === "gpu").map(i => i.gen);
     return g.length ? Sim.currentGen(S) - Math.min(...g) : null;
@@ -198,7 +209,32 @@
     document.body.classList.remove("blackout", "finalq");
     V.newsKey = newsKey();
     V.saveBucket = Math.floor(S.day / 30) * 1000 + Math.floor(S.day / 90);
+    // one-time cards: a continued game has already seen whatever exists by now
+    V.cardQueue = []; V.warned = {}; V.overRows = null;
+    V.offersSeen = new Set(S.offers.map(o => o.id));
+    V.cashSeen = S.cashSeq || 0; V.flowPrev = null;
+    const past = key => S.unlocked && S.unlocked[key] != null && S.day - S.unlocked[key] > 20;
+    V.firsts = { offer: past("contracts") || S.contractLog.signed > 0, scare: past("memory"), policy: S.policies.some(p => p.announced) && past("policy"),
+      round: S.equity.rounds > 0 || past("investors") };
     closeDrawer(); closePop();
+    startGhost();
+  }
+  /* pace ghost: greedy + planner replay this seed in a worker, never past the player's day (js/pace.js) */
+  function startGhost() {
+    if (V.ghost) { V.ghost.stop(); V.ghost = null; }
+    V.pace = null;
+    if (!PACE_ON || !window.Pace || !window.Bots) { renderPace(); return; }
+    const s0 = S;
+    V.ghost = Pace.start({ seed: S.seed, sandbox: !!S.sandbox, day: S.day,
+      onRows: m => {
+        if (S !== s0) return;
+        const first = !V.pace;
+        V.pace = m;
+        if (first || (DEBUG && m.rows.planner && m.rows.planner.day % 60 === 0)) dlog("[pace]", JSON.stringify(m.rows), m.fallback ? "(main thread)" : "");
+        renderPace();
+        if (V.overRows) V.overRows(m);
+      },
+      log: (...a) => dlog("[pace]", ...a) });
   }
   function start(newSeed, opts) {
     opts = opts || {};
@@ -231,18 +267,35 @@
     try { const url = new URL(location.href); url.searchParams.set("seed", seed); url.searchParams.delete("play"); history.replaceState(null, "", url); } catch (e) { /* file:// may refuse */ }
   }
 
+  /* the first GPU into a GPU-less rack sets the rack to the workload that card earns more on (Sim.naturalWorkload);
+     issued as a normal workload action before the order so the drag preview, the sim and the bots all agree */
+  function wlDefault(a) {
+    if (!["buy", "lease", "move", "unstore"].includes(a.type)) return null;
+    const rid = a.type === "move" ? a.to : a.rack;
+    const f = a.item ? null : findDev(a.uid), key = a.item || (f && f.d.type);
+    const w = key && Sim.naturalWorkload(S, rid, key);
+    return w && rack(rid) && rack(rid).workload !== w ? { type: "workload", rack: rid, workload: w } : null;
+  }
   function act(a) {
     const res = Sim.check(S, a);
     if (!res.ok) { toast(res.msg); dlog("rejected", a, res.msg); SND("nope", null, 150); return false; }
     const cash0 = S.cash;
+    const wl = wlDefault(a);
+    if (wl) { Sim.apply(S, wl); dlog("workload default", wl); }
     Sim.apply(S, a);
+    V.cashSeen = S.cashSeq || 0;      // the player's own action explains its cash change and any event it caused (its toast says so)
+    V.flowPrev = { cash: S.cash, flow: S.totals.flow || 0 };
     const d = S.cash - cash0;
     if (Math.abs(d) > 0.5) flashCash(d);
     if (a.to) V.selected = a.to; else if (a.rack && !["sell", "store", "returnLease"].includes(a.type)) V.selected = a.rack;
     if (["sell", "store", "returnLease"].includes(a.type) || (a.type === "repair" && false)) V.selDev = null;
     V.confirm = null;
     dlog("action", a, res.msg);
-    if (!["transit", "hire", "fire", "borrow", "repay", "repairPolicy", "mode", "workload"].includes(a.type)) toast(res.msg);
+    if ((a.type === "buy" || a.type === "lease") && a.item) {
+      const it = item(a.item);
+      toast(`${it.name} ${a.type === "lease" ? "leased" : "ordered"} for ${a.rack}: ${res.msg}${wl ? ` · rack set to ${R[wl.workload].name} (suits this card)` : ""}`);
+      if (a.type === "buy" && FXON()) fxAtRack(a.rack, c => FX.floatText(c.x, c.top, `−${money(it.price)}`, "#FF8466", 15));
+    } else if (!["transit", "hire", "fire", "borrow", "repay", "repairPolicy", "mode", "workload"].includes(a.type)) toast(res.msg + (wl ? ` · ${a.to || a.rack} set to ${R[wl.workload].name}` : ""));
     renderAll();
     fxAct(a);
     return true;
@@ -308,6 +361,8 @@
       }
       fxFrame(st || Sim.stats(S), dtSec, now);
       undoTick(now);
+      if (V.ghost && !S.over) V.ghost.to(S.day);          // posts to the worker only when the day changes
+      if (dragging && anyModal()) cancelDrag("a card opened");
       autosave();
     }
     if (FXON()) FX.tick(now);
@@ -331,9 +386,12 @@
       const fresh = [];
       for (const n of S.news) { if (`${S.news.length}|${n.day}|${n.title}` === oldTop || fresh.length >= 4) break; if (n.day >= Math.floor(S.day) - 2) fresh.push(n); }
       const hot = fresh.filter(n => n.tone === "bad" || n.tone === "pitch" || n.tone === "good");
-      if (hot.length) toast(hot[0].title);
+      if (hot.length) toast(hot[0].title, true);
     }
     maybeChapter();
+    if (!S.over) { checkOffers(); checkFirsts(); checkRunway(); }
+    checkCash();
+    maybeCard();
     if (S.over && !V.overShown) {
       V.overShown = true; store.del(SAVE_KEY); store.del(META_KEY);
       if (S.over === "end") { showOver(); return; }
@@ -454,7 +512,7 @@
     for (const [m, label] of MILESTONES) if (P.score < m && N.score >= m) {
       dlog("fx: milestone", label);
       SND("fanfare");
-      toast(`Score passed ${label}`);
+      toast(`Score passed ${label}`, true);
       if (fx) { const r = $("h-score").getBoundingClientRect(); FX.confetti(r.left + r.width / 2, r.bottom, 90, 0.8); }
     }
   }
@@ -555,7 +613,7 @@
     const profit = rev - cost, q = L.q;
     el.innerHTML = `<div class="qh">${icon("trend")}Q${q % 4 + 1} Y${Math.floor(q / 4) + 1} closed</div>
       <div class="qr"><span>Revenue</span><b style="color:var(--hud-good)">+${money(rev)}</b></div><div class="qr"><span>Costs</span><b style="color:var(--hud-bad)">−${money(cost)}</b></div>
-      <div class="qr qp"><span>Profit</span><b id="qcard-p">$0k</b></div>`;
+      ${L.tax > 0.5 ? `<div class="qr"><span>incl. tax</span><b style="color:var(--hud-bad)">−${money(L.tax)}</b></div>` : ""}<div class="qr qp"><span>Profit</span><b id="qcard-p">$0k</b></div>`;
     el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
     const pEl = $("qcard-p");
     pEl.style.color = profit >= 0 ? "var(--hud-good)" : "var(--hud-bad)";
@@ -580,7 +638,7 @@
     if (!rack(V.selected) || rack(V.selected).hall !== V.hall) { const hr = hallRacks(V.hall); V.selected = hr.length ? hr[0].id : null; }
     const st = Sim.stats(S);
     V.sig = signature(); V.lastFull = performance.now();
-    renderHUD(st); renderDrawerBtns(); renderBanners(st); renderGoal(st); renderHallTabs(); renderModes(); renderFloor(st); renderShelf();
+    renderHUD(st); renderDrawerBtns(); renderBanners(st); renderGoal(st); renderOffers(st); renderHallTabs(); renderModes(); renderFloor(st); renderShelf();
     renderDetail(st); renderTray(); renderMarket(); renderBench(); renderNews();
     if (V.drawer) renderDrawer(st);
     if (V.pop) renderPop(st);
@@ -622,8 +680,10 @@
   function renderHUD(st, proj) {
     $("h-cash").textContent = money(S.cash - V.cashOff);   // cashOff: the rolling (display-only) remainder of a discrete jump
     const rate = $("h-rate");
-    rate.textContent = perDay(st.net) + (proj ? `  →  ${perDay(proj.net)}` : "");
+    const rw = !proj && S && !S.over ? runwayDays(st) : null;
+    rate.textContent = perDay(st.net) + (proj ? `  →  ${perDay(proj.net)}` : "") + (rw && rw.days < 180 ? ` · ~${Math.round(rw.days)} d to bankrupt` : "");
     rate.style.color = (proj || st).net >= 0 ? COL.hudGood : COL.hudBad;
+    rate.title = rw ? `At the current rate (${perDay(rw.net)}) cash hits the bankruptcy line (${money(bankruptFloor())}) in about ${Math.round(rw.days)} days.` : "";
     // technicians
     const busy = Sim.busyTechs(S), waiting = S.jobs.filter(j => j.phase === "wait").length, ops = on("ops");
     const nT = ops ? S.techs : K.TECHS;
@@ -692,6 +752,7 @@
     // score
     const sc = Sim.score(S);
     $("h-score").innerHTML = `${icon("flag", "color:var(--sel)")}<div><span class="big">${money(sc - V.scoreOff)}</span><small style="display:block">score · worth ${money(Sim.netWorth(S))}</small></div>`;
+    renderPace(sc);
     $("h-score").title = on("investors") ? "Score = your equity % × company value (net worth + 2 years of earnings) × reputation factor."
       : "Score = net worth (cash + resale − debt) + 2 years of current earnings.";
     document.querySelectorAll(".speed button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.speed === V.speed));
@@ -708,6 +769,7 @@
       b.setAttribute("aria-pressed", V.drawer === k);
       const dot = b.querySelector(".dot");
       if (dots[k]) { dot.hidden = false; dot.textContent = dots[k]; } else dot.hidden = true;
+      b.classList.toggle("hot", k === "contracts" && dots[k] > 0);
     }
   }
 
@@ -736,7 +798,7 @@
       case "gens": tip = "New generations cut prices. Sell old cards before launches if you plan to replace them."; break;
       case "ops": { const f = S.racks.reduce((a, r) => a + r.devices.filter(d => d.failed).length, 0); tip = f ? `${f} failed part${f > 1 ? "s" : ""} on the floor. Spares swap in 1 day; repairs wait for parts.` : "Hot and brand-new parts fail most. Keep a spare or two on the shelf."; break; }
       case "fabric": tip = "Put 12+ training GPUs in one row with a spine to sell frontier training at 1.6x. Keep transit ahead of traffic."; break;
-      case "contracts": tip = S.offers.length ? `${S.offers.length} offer${S.offers.length > 1 ? "s" : ""} waiting in the Contracts drawer. Don't promise more than you can deliver.` : "Contracts lock today's price: a hedge before a known launch."; break;
+      case "contracts": tip = S.offers.length ? `${S.offers.length} offer${S.offers.length > 1 ? "s" : ""} waiting above the floor: Sign or Decline. Don't promise more than you can deliver.` : "Contracts lock today's price: a hedge before a known launch. New offers pop up above the floor."; break;
       case "memory": tip = S.hbm.shortage ? "Shortage: GPUs ship in 18 days. Forward orders and spares beat the queue." : "Scare stories come before shortages, but not every scare is real. Watch the follow-up news."; break;
       case "finance": tip = "Debt costs 9 %/yr. Leasing suits the generation you will replace soon."; break;
       case "facilities": { const nb = builtHalls().length; tip = nb >= 3 ? "Three halls on one grid: the 1000 kW tier keeps them all powered." : nb === 2 ? `Two halls share one grid. Consider the next grid tier${S.gridTier < 2 ? " (700 kW)" : ""}; Hall 3 adds 18 more racks.` : "Hall 2 doubles your floor. Outages hit harder without a UPS."; break; }
@@ -837,16 +899,17 @@
       : g && on("power") ? actBtn({ type: "grid" }, `${g.kw} kW · ${money(g.cost)}`, { confirm: true, cls: "primary", icon: "bolt" }) : `<span>${S.gridTier ? "Upgraded" : ""}</span>`;
     h += `<div class="hall" title="Utility feed and hall climate">${icon("bolt", "width:26px;height:26px;color:var(--pow-c)")}<span class="big">Grid</span><span>${st.kw.toFixed(0)} / ${S.gridKw} kW</span>${gridBody}
       ${hs ? `<span style="margin-top:6px">${icon("temp")} ${hs.roomT.toFixed(1)} °C</span><span>${hs.cooling === "evap" ? "Evaporative" : "Chiller"}${on("environment") ? ` · PUE ${hs.pue}` : ""}</span>` : ""}</div>`;
-    // spine slots at row ends
+    // spine slots at row ends, each with the row's frontier-cluster meter (P1: "6/12 and nothing happens" was invisible)
     for (let row = 0; row < 3; row++) {
       const key = `${V.hall}-${row}`, pos = `grid-row:${[2, 4, 6][row]}`;
       if (!on("fabric")) { h += `<div class="spine locked" style="${pos}"></div>`; continue; }
       const job = S.jobs.find(j => j.kind === "spine" && j.key === key), cl = st.cluster[key];
-      if (S.spines[key]) h += `<div class="spine built${cl && cl.frontier ? " frontier" : ""}" style="${pos}" data-spine="${key}" title="Row ${L[row]} spine: ${cl ? cl.gpus : 0} training GPUs pooled${cl && cl.frontier ? ", sells frontier training" : `, needs ${K.FRONTIER_MIN_GPUS} for frontier`}">${icon(cl && cl.frontier ? "star" : "switch", cl && cl.frontier ? `color:${COL.frontier}` : "")}<span class="big">${cl ? cl.gpus : 0}</span><span>GPU</span></div>`;
-      else if (job) h += `<div class="spine" style="${pos}" title="Spine under construction">${icon("wrench")}<span>${Math.ceil(job.left)}d</span><span class="prog"><i style="width:${Math.round((1 - jobFrac(job)) * 100)}%"></i></span></div>`;
+      const cm = clusterMeter(V.hall, row, st), meter = `<span class="cmeter${cm.n >= K.FRONTIER_MIN_GPUS ? " full" : ""}"><i style="width:${Math.round(cm.f * 100)}%"></i></span><span class="cnum">${cm.n}/${K.FRONTIER_MIN_GPUS}</span>`;
+      if (S.spines[key]) h += `<div class="spine built${cl && cl.frontier ? " frontier" : ""}" style="${pos}" data-spine="${key}" title="${esc(cm.tip)}">${icon(cl && cl.frontier ? "star" : "switch", cl && cl.frontier ? `color:${COL.frontier}` : "")}${meter}<span>${cl && cl.frontier ? `×${K.FRONTIER_PRICE}` : "GPU"}</span></div>`;
+      else if (job) h += `<div class="spine" style="${pos}" title="Spine under construction. ${esc(cm.tip)}">${icon("wrench")}<span>${Math.ceil(job.left)}d</span><span class="prog"><i style="width:${Math.round((1 - jobFrac(job)) * 100)}%"></i></span>${meter}</div>`;
       else {
         const k2 = JSON.stringify({ type: "spine", hall: V.hall, row }), armed = V.confirm === k2 && performance.now() - V.confirmT < CONFIRM_MS;
-        h += `<button class="spine${V.armed && V.armed.kind === "spine" ? " armed-target" : ""}" style="${pos}" data-spine="${key}" data-act='${esc(k2)}' data-confirm title="Row spine: pools the row's GPUs into one cluster. ${money(K.SPINE_COST)}, ${K.SPINE_DAYS} days, ${K.SPINE_KW} kW. Click twice or drag the spine card here.">${icon(armed ? "check" : "plus")}<span>${armed ? "confirm" : "spine"}</span><span>${armed ? money(K.SPINE_COST) : ""}</span></button>`;
+        h += `<button class="spine${V.armed && V.armed.kind === "spine" ? " armed-target" : ""}" style="${pos}" data-spine="${key}" data-act='${esc(k2)}' data-confirm title="Row spine: pools the row's GPUs into one cluster. ${money(K.SPINE_COST)}, ${K.SPINE_DAYS} days, ${K.SPINE_KW} kW. Click twice or drag the spine card here. ${esc(cm.tip)}">${icon(armed ? "check" : "plus")}<span>${armed ? "confirm" : "spine"}</span>${armed ? `<span>${money(K.SPINE_COST)}</span>` : cm.n ? meter : ""}</button>`;
       }
     }
     for (const r of hallRacks(V.hall)) {
@@ -866,7 +929,8 @@
       const gb = genBehind(r); if (gb != null && gb >= 2) flags.push("clock");
       if (pr.frontier && pr.trainGpus) flags.push("star");
       const nFail = r.devices.filter(d => d.failed).length, nLease = r.devices.concat(r.pending).filter(d => d.leased).length;
-      const tip = `${r.id}: ${R[role].name}. ${perDay(pr.rev)}, ${pr.kw.toFixed(1)} kW, inlet ${pr.inlet.toFixed(1)} °C, ${free}U free${pr.netF < 1 ? `, network short (${Math.round(pr.netF * 100)} %)` : ""}${pr.throttle < 1 ? `, throttled to ${Math.round(pr.throttle * 100)} %` : ""}${nFail ? `, ${nFail} failed` : ""}${nLease ? `, ${nLease} leased` : ""}`;
+      const nosw = noSwitch(r, pr);
+      const tip = `${nosw ? "NO SWITCH: this rack earns nothing until a switch is installed. " : ""}${r.id}: ${R[role].name}. ${perDay(pr.rev)}, ${pr.kw.toFixed(1)} kW, inlet ${pr.inlet.toFixed(1)} °C, ${free}U free${pr.netF < 1 ? `, network short (${Math.round(pr.netF * 100)} %)` : ""}${pr.throttle < 1 ? `, throttled to ${Math.round(pr.throttle * 100)} %` : ""}${nFail ? `, ${nFail} failed` : ""}${nLease ? `, ${nLease} leased` : ""}`;
       // idle life (display only): fan speed follows the rack's kW, LED blink rate follows how much of it is delivered.
       // Negative animation-delay keeps the phase continuous across the floor's re-renders.
       const load = clamp01(pr.kw / K.RACK_KW), util = pr.rev > 0.01 ? clamp01(pr.throttle * Math.min(1, pr.netF == null ? 1 : pr.netF)) : 0;
@@ -880,10 +944,20 @@
         <span class="fill" style="${fillStyle}"></span>${fan}<span class="front${util > 0 ? " blink" : ""}${nFail ? " bad" : ""}"${led}></span>
         ${pr.rev > 0.05 ? `<span class="earn">$${pr.rev.toFixed(1)}k</span>` : ""}${nLease ? `<span class="leasetag">LEASE</span>` : ""}
         <span class="flags">${flags.map(f => icon(f, f === "star" ? `color:${COL.frontier}` : "")).join("")}</span><span class="id">${r.id}</span>${free ? `<span class="free">${free}U</span>` : ""}
-        ${nFail ? `<span class="xmark" title="${nFail} failed">${icon("cross")}</span>` : ""}${prog}</button>`;
+        ${nFail ? `<span class="xmark" title="${nFail} failed">${icon("cross")}</span>` : ""}${nosw ? `<span class="noswitch">${icon("switch")}NO SWITCH<b>$0</b></span>` : ""}${prog}</button>`;
     }
     F.innerHTML = h;
     floorLife(F, nowMs);
+  }
+  /* frontier cluster progress for one row: installed training GPUs (non-tank racks), toward FRONTIER_MIN_GPUS */
+  function clusterMeter(hall, row, st) {
+    const rs = S.racks.filter(r => r.hall === hall && r.row === row && !r.tank);
+    const n = rs.reduce((a, r) => a + ((st.perRack[r.id] || {}).trainGpus || 0), 0);
+    const coming = rs.reduce((a, r) => a + (r.workload === "train" ? r.pending.filter(d => item(d.type).role === "gpu").length : 0), 0);
+    const hasSpine = !!S.spines[`${hall}-${row}`], L = hallLetters(hall)[row], need = K.FRONTIER_MIN_GPUS;
+    const tip = `Row ${L} cluster: ${n}/${need} training GPUs${coming ? ` (+${coming} on the way)` : ""} → frontier training ×${K.FRONTIER_PRICE} at ${need}` +
+      (n >= need ? (hasSpine ? ". Frontier price active." : ". Build the row spine to unlock it.") : `. ${need - n} more${hasSpine ? "" : ", plus a row spine"}. Partial clusters earn the normal training price.`);
+    return { n, coming, f: Math.min(1, n / need), tip, hasSpine, L };
   }
   /* post-render juice for the floor: colour cross-fades, cold-air drift phase, calendar tint, rack animations */
   function floorLife(F, nowMs) {
@@ -973,7 +1047,7 @@
     }).join("");
   }
 
-  function rooflineSVG(r, extraKey) {
+  function rooflineSVG(r, extraKey, title) {
     const keys = [...new Set(r.devices.concat(r.pending).map(d => d.type).filter(k => item(k).role === "gpu").concat(extraKey && item(extraKey) && item(extraKey).role === "gpu" ? [extraKey] : []))];
     if (!keys.length) return "";
     const W = 280, H = 118, x0 = 26, y0 = 100, xs = I => x0 + (Math.log2(I) + 2) / 5 * (W - x0 - 8), maxY = Math.max(...keys.map(k => item(k).F)) * 1.25, ys = v => y0 - v / maxY * 88;
@@ -993,7 +1067,7 @@
     h += `<text x="${x0}" y="${H - 2}">math per byte →</text><text x="2" y="12">out</text>`;
     const it0 = item(keys[0]), I0 = Sim.INTENSITY[r.workload];
     const bound = it0.B * boost * I0 < it0.F ? "memory-bound" : "compute-bound";
-    return `<div class="roof"><div class="sub">${icon("gauge", "width:14px;height:14px;vertical-align:-2px")} Roofline: ${it0.name} is <b>${bound}</b> on ${R[r.workload].name.toLowerCase()}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Roofline chart">${h}</svg></div>`;
+    return `<div class="roof"><div class="sub">${title || `${icon("gauge", "width:14px;height:14px;vertical-align:-2px")} Roofline: ${it0.name} is <b>${bound}</b> on ${R[r.workload].name.toLowerCase()}`}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Roofline chart">${h}</svg></div>`;
   }
 
   function devInfoHTML(r, pr) {
@@ -1033,7 +1107,9 @@
     const g = (ic, col, v, label) => `<div class="g">${icon(ic, `color:${col}`)}<div class="track"><i style="width:${Math.round(clamp01(v) * 100)}%;background:${col}"></i></div><small>${label}</small></div>`;
     const hasGpu = r.devices.concat(r.pending).some(d => item(d.type).role === "gpu");
     const nFail = r.devices.filter(d => d.failed).length;
+    const nosw = noSwitch(r, pr);
     const status = role === "empty" ? (r.tank ? "Empty tank. Takes Lattice/Photon cards and a switch." : "Drag hardware here to start using this rack")
+      : nosw ? `<span class="nosw-status">${icon("switch")} No switch: this rack earns <b>$0</b> until one is installed</span>`
       : nFail ? `${icon("cross", `color:${COL.fail}`)} ${nFail} failed part${nFail > 1 ? "s" : ""}: click it to repair, or drop a spare on it`
       : pr.penalty < 1 ? `${icon("warn")} Unsupported part is crashing this rack (60 %)`
       : pr.throttle < 1 ? `${icon("flame")} Too hot: running at ${Math.round(pr.throttle * 100)} %`
@@ -1050,12 +1126,18 @@
       else if (S.measured[it.vendor] != null) meas.push(`<div class="meas ${S.measured[it.vendor] < 0.95 ? "bad" : "good"}">${icon("gauge")} ${it.name} measured: <b>${Math.round(S.measured[it.vendor] * 100)} %</b> of its spec sheet</div>`);
       else meas.push(`<div class="meas">${icon("clock")} ${it.name}: measuring field performance (${K.PILOT_DAYS} days in a rack)…</div>`);
     }
+    const swBtn = nosw ? `<div class="addsw">${actBtn({ type: "buy", item: "sw", rack: r.id }, `Add switch · ${money(item("sw").price)}`, { cls: "primary", icon: "switch" })}<span class="sub">Every rack needs one (${K.SWITCH_NET} network, ${K.SHIP_DAYS + K.INSTALL_DAYS} days).</span></div>` : "";
     const tankBtn = on("disrupt") && !r.tank && !r.devices.length && !r.pending.length && !jobFor(r.id)
       ? `<div style="margin-top:10px">${actBtn({ type: "tank", rack: r.id }, `Convert to immersion tank · ${money(K.TANK_COST)}`, { confirm: true, icon: "drop" })}</div>` : "";
     const armedItem = V.armed && V.armed.kind === "new" ? V.armed.item : null;
+    let clusterLine = "";
+    if (on("fabric") && !r.tank && (hasGpu || S.spines[`${r.hall}-${r.row}`])) {
+      const cm = clusterMeter(r.hall, r.row, st);
+      clusterLine = `<div class="clusterline" title="${esc(cm.tip)}">${icon(cm.n >= K.FRONTIER_MIN_GPUS && cm.hasSpine ? "star" : "net", `color:${COL.frontier}`)}<span>Row ${cm.L} cluster <b>${cm.n}/${K.FRONTIER_MIN_GPUS}</b> training GPUs → frontier ×${K.FRONTIER_PRICE}${cm.hasSpine ? "" : " <small>(needs a spine)</small>"}</span><span class="cmeter wide${cm.n >= K.FRONTIER_MIN_GPUS ? " full" : ""}"><i style="width:${Math.round(cm.f * 100)}%"></i></span></div>`;
+    }
     $("detail").innerHTML = `
       <h2><span style="width:14px;height:14px;border-radius:3px;background:${role === "empty" ? "var(--line)" : R[role].color};display:inline-block"></span>${r.id}<span class="sub" style="font-family:var(--sans);font-weight:400">${R[role].name}${builtHalls().length > 1 ? ` · Hall ${r.hall}` : ""}</span></h2>
-      <div class="sub" style="display:flex;align-items:center;gap:6px;margin-top:4px">${status}</div>
+      <div class="sub" style="display:flex;align-items:center;gap:6px;margin-top:4px">${status}</div>${swBtn}
       <div class="rack-detail">
         <div class="elev" data-drop-rack="${r.id}" title="Front view, 20U">${elev}</div>
         <div class="gauges">
@@ -1066,6 +1148,7 @@
           ${wl}${modes}
         </div>
       </div>
+      ${clusterLine}
       ${devInfoHTML(r, pr)}
       ${on("gpu") ? rooflineSVG(r, armedItem) : ""}
       ${meas.join("")}
@@ -1403,6 +1486,191 @@
     return out || `<div class="sub">Unlocks with chapter 15.</div>`;
   }
 
+  /* ================= v0.3: offers on the main screen (P0-1) ================= */
+  const OFFER_STRIP_MAX = 3;
+  function offerFacts(o, st) {
+    const spot = st.mk[o.w].price, diff = (o.price / spot - 1) * 100, committed = S.contracts.filter(c => c.w === o.w).reduce((a, c) => a + c.units, 0);
+    const spare = st.supply[o.w] - committed;
+    return { diff, spare, fits: spare >= o.units, left: Math.max(0, o.expires - S.day) };
+  }
+  function renderOffers(st) {
+    const el = $("offerstrip");
+    const vis = on("contracts") && S.offers.length > 0;
+    show(el, vis);
+    if (!vis) { el.innerHTML = ""; return; }
+    const list = S.offers.slice().sort((a, b) => a.expires - b.expires).slice(0, OFFER_STRIP_MAX);
+    el.innerHTML = `<div class="oshead">${icon("hand")}<b>${S.offers.length} offer${S.offers.length > 1 ? "s" : ""}</b><small>Contracts lock your price for their term.</small>${S.offers.length > OFFER_STRIP_MAX ? `<button class="btn slim" data-drawer="contracts">+${S.offers.length - OFFER_STRIP_MAX} more</button>` : `<button class="btn slim" data-drawer="contracts">Details</button>`}</div>` +
+      list.map(o => {
+        const f = offerFacts(o, st), up = f.diff >= 0;
+        return `<div class="ocard${o.bts ? " bts" : ""}" style="--wc:${R[o.w].color}" data-offer="${o.id}">
+          <div class="ot"><span class="av" style="background:${R[o.w].color}">${icon(CUST_ICON[o.icon] || "globe")}</span><span class="on"><b>${esc(o.cust)}</b>${o.bts ? `<span class="bts-badge sm">BUILD-TO-SUIT</span>` : ""}<small>${o.units} ${R[o.w].name.toLowerCase()} units × ${o.days} days${o.bts ? ` · from day ${Math.round(S.day + o.lead)}` : ""}</small></span>
+            <span class="op"><b>$${(o.price * 1000).toFixed(0)}</b><small>/u·d</small><small class="${up ? "up" : "down"}">${up ? "▲" : "▼"}${Math.abs(f.diff).toFixed(0)} % vs spot</small></span></div>
+          <div class="of"><span title="Delivery promise: share of the units you must deliver every day">${icon("check")}SLA ${pct(o.sla)}</span><span title="Paid per missed unit-day">${icon("warn")}penalty $${(o.penalty * 1000).toFixed(0)}</span>${o.bts ? `<span>${icon("coin")}fit-out ${money(o.fitout)}</span>` : `<span>${icon("coin")}${money(o.units * o.days * o.price)}</span>`}
+            <span class="${f.fits ? "okc" : "badc"}" title="Your ${R[o.w].name.toLowerCase()} output not yet promised to other contracts">${icon(f.fits ? "check" : "warn")}spare ${Math.max(0, f.spare).toFixed(0)}/${o.units}</span></div>
+          <div class="oa">${actBtn({ type: "signContract", id: o.id }, o.bts ? `Sign · ${money(o.fitout)}` : "Sign", { cls: "good", icon: "hand", confirm: !!o.bts })}${actBtn({ type: "declineContract", id: o.id }, "Decline", { icon: "cross" })}<span class="exp" title="Expires in ${Math.ceil(f.left)} days"><i style="width:${Math.min(100, f.left / (o.bts ? K.BTS_EXPIRY : K.OFFER_EXPIRY) * 100)}%"></i></span><small>${Math.ceil(f.left)} d</small></div></div>`;
+      }).join("");
+  }
+  /* new offers: a toast (+ sound) every time, and the very first one pauses the game with a short explainer */
+  function checkOffers() {
+    if (!on("contracts")) return;
+    const st = Sim.stats(S);
+    for (const o of S.offers) {
+      if (V.offersSeen.has(o.id)) continue;
+      V.offersSeen.add(o.id);
+      const f = offerFacts(o, st);
+      toast(`New ${o.bts ? "build-to-suit request" : "contract offer"}: ${o.cust}, ${o.units} ${R[o.w].name.toLowerCase()} units × ${o.days} d, ${f.diff >= 0 ? "+" : "−"}${Math.abs(f.diff).toFixed(0)} % vs spot`, "keep");
+      SND("chime", null, 400);
+      if (FXON()) { const b = $("db-contracts").getBoundingClientRect(); if (b.width) FX.sparks(b.left + b.width / 2, b.top + b.height / 2, COL.contract, 14, 160); }
+      dlog("[offer] new", o.id, o.cust, o.w, o.units, o.days, o.price, o.bts ? "bts" : "");
+      if (!V.firsts.offer) { V.firsts.offer = true; queueCard(firstOfferCard(o, f)); }
+    }
+  }
+  function firstOfferCard(o, f) {
+    const launches = Sim.GEN_LAUNCH.filter(d => d > S.day);
+    return { key: "offer", sound: "chime", title: "Your first contract offer", sub: `${dateOf(S.day)} · game paused`,
+      body: `<div class="kv big"><span>${icon(CUST_ICON[o.icon] || "globe")} <b>${esc(o.cust)}</b> wants ${o.units} ${R[o.w].name.toLowerCase()} units × ${o.days} days</span><b>$${(o.price * 1000).toFixed(0)}/u·d (${f.diff >= 0 ? "+" : "−"}${Math.abs(f.diff).toFixed(0)} % vs spot)</b></div>
+        <ul class="plain"><li>${icon("lock")}<span><b>A contract locks your price</b> for its whole term. The market price falls at every generation launch${launches.length ? ` (next: day ${launches[0]})` : ""}, so signing before one is a hedge.</span></li>
+        <li>${icon("check")}<span>Contracts are served first. Deliver at least <b>${pct(o.sla)}</b> of the units every day, or pay <b>$${(o.penalty * 1000).toFixed(0)}</b> per missed unit-day.</span></li>
+        <li>${icon(f.fits ? "check" : "warn", `color:${f.fits ? COL.good : COL.bad}`)}<span>You have <b>${Math.max(0, f.spare).toFixed(0)}</b> spare ${R[o.w].name.toLowerCase()} units right now: ${f.fits ? "enough" : "not enough yet; build capacity first or decline"}.</span></li>
+        <li>${icon("help")}<span>New offers appear above the floor with <b>Sign</b> / <b>Decline</b>. The <b>Contracts</b> button (top right) has details.</span></li></ul>`,
+      foot: `${actBtn({ type: "signContract", id: o.id }, "Sign", { cls: "good", icon: "hand" })}${actBtn({ type: "declineContract", id: o.id }, "Decline", { icon: "cross" })}<button class="end" data-close>Decide later</button>` };
+  }
+
+  /* ================= v0.3: one-time cards (pause + explain; first event of a system is a decision) ================= */
+  function queueCard(c) { if (!V.cardQueue.some(x => x.key === c.key)) { V.cardQueue.push(c); dlog("card queued", c.key); } }
+  function maybeCard() {
+    if (!S || !V.cardQueue.length || anyDialogOpen() || V.menu || V.down || (drag && drag.started) || S.over) return;
+    showCard(V.cardQueue.shift());
+  }
+  function showCard(c) {
+    $("kt").textContent = c.title; $("ksub").textContent = c.sub || "";
+    $("kbody").innerHTML = c.body; $("kfoot").innerHTML = c.foot || `<button class="end" data-close>Got it</button>`;
+    $("card").dataset.key = c.key;
+    if (c.pause && V.speed) { V.speedBeforeCard = V.speed; setSpeed(0); }
+    openDialog($("card"));
+    SND(c.sound || "warn");
+    dlog("card", c.key);
+  }
+  const SCARE_TITLES = new Set(C.SCARES.map(x => x.title));
+  function bestForwardCard() {   // the current-generation card of the family the player runs most (C by default)
+    const cg = Sim.currentGen(S);
+    let c = 0, m = 0;
+    for (const r of S.racks) for (const d of r.devices) { const it = item(d.type); if (it.role === "gpu") it.fam === "C" ? c++ : m++; }
+    const fam = m > c ? "m" : "c";
+    return S.items[fam + cg] && Sim.shopItems(S).includes(fam + cg) ? fam + cg : Sim.shopItems(S).find(k => item(k).role === "gpu" && item(k).fam === fam.toUpperCase()) || null;
+  }
+  function checkFirsts() {
+    if (on("memory") && !V.firsts.scare) {
+      const n = S.news.find(x => x.cat === "memory" && SCARE_TITLES.has(x.title) && x.day >= (S.unlocked.memory || 0));
+      if (n) {
+        V.firsts.scare = true;
+        const k = bestForwardCard(), it = k && item(k);
+        queueCard({ key: "scare", title: "Memory scare: forward-order now?", sub: `${dateOf(S.day)} · game paused`,
+          body: `<div class="kv big"><span>${icon("layers", `color:${COL.mem}`)} <b>${esc(n.title)}</b></span></div><div class="sub">${esc(n.body)}</div>
+            <ul class="plain"><li>${icon("news")}<span>If it is real, memory (HBM) prices climb and GPUs ship in <b>${K.SHORT_SHIP_DAYS}</b> days instead of ${K.SHIP_DAYS}. About 1 in 3 scare stories is false: a follow-up story ~10 days later tells which.</span></li>
+            <li>${icon("lock")}<span>A <b>forward order</b> buys a GPU at today's price; it lands on your spares shelf in ${K.FORWARD_DAYS} days, ready to install.</span></li>
+            <li>${icon("help")}<span>Later: drag a GPU from the catalog onto the spares shelf. The HBM index sits in the catalog header.</span></li></ul>`,
+          foot: `${k ? actBtn({ type: "forward", item: k }, `Forward-order ${it.name} · ${money(it.price)}`, { cls: "primary", icon: "truck" }) : ""}<button class="end" data-close>Wait and see</button>` });
+      }
+    }
+    if (on("policy") && !V.firsts.policy) {
+      const p = S.policies.find(x => x.announced && x.status === "proposed");
+      if (p) {
+        V.firsts.policy = true;
+        queueCard({ key: "policy", title: `Proposed law: ${p.title}`, sub: `vote on ${dateOf(p.vote)} · game paused`,
+          body: `<div class="sub">${esc(p.body)}</div><ul class="plain"><li>${icon("trend")}<span>Two news signals before the vote hint whether it will pass.</span></li>
+            <li>${icon("bank")}<span><b>Lobbying</b> costs ${money(K.LOBBY_COST)} and shifts the odds by ${K.LOBBY_SHIFT * 100} %; there is a ${K.LOBBY_LEAK * 100} % chance the press finds out (reputation hit).</span></li>
+            <li>${icon("help")}<span>Later: the Reputation &amp; policy drawer (flag icon, top right).</span></li></ul>`,
+          foot: `${actBtn({ type: "lobby", policy: p.id, dir: -1 }, "Lobby against", { icon: "warn" })}${actBtn({ type: "lobby", policy: p.id, dir: 1 }, "Lobby for", { icon: "trend" })}<button class="end" data-close>Ignore</button>` });
+      }
+    }
+    if (on("investors") && !V.firsts.round && S.roundOffer) {
+      V.firsts.round = true;
+      const o = S.roundOffer;
+      queueCard({ key: "round", title: `${o.vc}: ${money(o.amount)} for ${pct(o.pct)}`, sub: `expires in ${Math.ceil(o.expires - S.day)} days · game paused`,
+        body: `<span class="biased">VC PITCH</span><q>${esc(o.pitch.replace(/^"|"$/g, ""))}</q><ul class="plain">
+          <li>${icon("coin")}<span>Cash now to grow faster. Your score becomes your share (${pct(S.equity.own)} → ${pct(S.equity.own * (1 - o.pct))}) of the company's value.</span></li>
+          <li>${icon("flag")}<span>Taking money brings a board with revenue targets every ${K.BOARD_EVERY} days. Miss two in a row and you are fired. Pitches are biased.</span></li>
+          <li>${icon("help")}<span>Later: the Finance drawer (chart icon, top right).</span></li></ul>`,
+        foot: `${actBtn({ type: "acceptRound", id: o.id }, "Accept", { cls: "good", icon: "check" })}${actBtn({ type: "declineRound", id: o.id }, "Decline", { icon: "cross" })}<button class="end" data-close>Decide later</button>` });
+    }
+  }
+
+  /* ================= v0.3: bankruptcy warning (P1) ================= */
+  const bankruptFloor = () => on("finance") ? -S.creditLimit : K.BANKRUPT;
+  /* days until bankrupt at the current net rate (the worse of today's rate and the last week's average), or null */
+  function runwayDays(st) {
+    const pd = S.profitDays.slice(-7), avg = pd.length >= 3 ? pd.reduce((a, x) => a + x, 0) / pd.length : st.net;
+    const net = Math.min(st.net, avg);
+    if (net >= -0.01) return null;
+    return { days: Math.max(0, (S.cash - bankruptFloor()) / -net), net };
+  }
+  function checkRunway() {
+    if (S.over) return;
+    const st = Sim.stats(S), R0 = runwayDays(st), rw = R0 && R0.days, floor = bankruptFloor();
+    const body = why => `<div class="kv big"><span>${icon("coin")} Cash <b>${Math.abs(S.cash) < 1 ? "$" + S.cash.toFixed(1) + "k" : money(S.cash)}</b></span><b style="color:${COL.bad}">bankrupt below ${money(floor)}</b></div>
+      <div class="sub">${why}</div><ul class="plain">
+      <li>${icon("coin")}<span>Sell idle or losing hardware: drag a part from the rack panel to the bin.</span></li>
+      <li>${icon("leaf")}<span>Put racks on Eco to cut the power bill; stop buying until income is positive.</span></li>
+      ${on("finance") ? `<li>${icon("bank")}<span>Borrow or return leases in the Finance drawer.</span></li>` : ""}
+      ${on("ops") ? `<li>${icon("person")}<span>Idle technicians cost $${K.SALARY}k/day each: fire the ones you don't need.</span></li>` : ""}</ul>`;
+    if (S.cash < 0 && !V.warned.neg) {
+      V.warned.neg = true;
+      queueCard({ key: "neg", pause: true, sound: "alarm", title: "Cash is below zero", sub: `${dateOf(S.day)} · game paused`,
+        body: body(R0 ? `At your current rate (${perDay(R0.net)}) you are about <b>${Math.round(rw)} days</b> from bankruptcy.` : "Income is positive right now, but there is little room left.") });
+    }
+    if (rw != null && rw < 30 && !V.warned.rw) {
+      V.warned.rw = true;
+      queueCard({ key: "runway", pause: true, sound: "alarm", title: `About ${Math.max(1, Math.round(rw))} days of cash left`, sub: `${dateOf(S.day)} · game paused`,
+        body: body(`You are losing ${perDay(R0.net).replace("−", "")}. At this rate you go bankrupt around <b>${dateOf(S.day + rw)}</b>.`) });
+      dlog("[warn] runway", rw.toFixed(1), "cash", S.cash.toFixed(1), "floor", floor.toFixed(1));
+    }
+    if (V.warned.rw && (rw == null || rw > 90)) V.warned.rw = false;      // re-arm once the danger passed
+  }
+
+  /* ================= v0.3: every discrete cash jump is explained (P2) ================= */
+  function checkCash() {
+    const seq = S.cashSeq || 0, flow = S.totals.flow || 0;
+    let logged = 0;
+    const news = (S.cashEvents || []).filter(e => e.n > V.cashSeen);
+    for (const e of news) logged += e.amt;
+    const big = news.filter(e => Math.abs(e.amt) >= 10);
+    if (big.length) {
+      toast(big.slice(0, 3).map(e => `${e.amt >= 0 ? "+" : "−"}${money(Math.abs(e.amt))}: ${e.label}`).join(" · "), "keep");
+      if (FXON()) { const r = $("h-cashchip").getBoundingClientRect(); const tot = big.reduce((a, e) => a + e.amt, 0); if (r.width) FX.floatText(r.left + r.width / 2, r.bottom + 6, `${tot >= 0 ? "+" : "−"}${money(Math.abs(tot))}`, tot >= 0 ? "#7FE0A8" : "#FF8466", 15); }
+      dlog("[cash] events", big.map(e => `${e.kind} ${e.amt}`).join(", "));
+    }
+    V.cashSeen = seq;
+    const P = V.flowPrev;
+    if (P) {   // anything left over is a jump nobody logged: say so, never stay silent (and flag it in debug)
+      const gap = (S.cash - P.cash) - (flow - P.flow) - logged;
+      if (Math.abs(gap) >= 10) { toast(`Cash ${gap >= 0 ? "+" : "−"}${money(Math.abs(gap))}: one-off (see the Finance drawer)`, "keep"); console.warn("[ui] unexplained cash jump", gap.toFixed(1), "day", S.day); }
+    }
+    V.flowPrev = { cash: S.cash, flow };
+  }
+
+  /* ================= v0.3: pace chip (P0-3) ================= */
+  function renderPace(sc) {
+    const el = $("h-pace"); if (!el) return;
+    const vis = !!S && PACE_ON && !!window.Pace;
+    show(el, vis);
+    if (!vis) return;
+    const you = sc != null ? sc : Sim.score(S), P = (V.pace && V.pace.rows) || {}, g = P.greedy, p = P.planner, today = Math.floor(S.day);
+    const lag = x => x && !x.over && x.day < today - 2;
+    const vals = [you, g ? g.score : 0, p ? p.score : 0], max = Math.max(1, ...vals.map(v => Math.abs(v)));
+    const verdict = !g ? "…" : you >= g.score ? "ahead of Greedy" : "behind Greedy";
+    const col = !g ? COL.hudGood : you >= g.score ? COL.hudGood : COL.hudBad;
+    const bar = (v, c, t) => `<i title="${esc(t)}" style="width:${Math.max(2, Math.abs(v) / max * 100).toFixed(1)}%;background:${c}"></i>`;
+    const key = [Math.round(you), g && Math.round(g.score), g && g.day, p && Math.round(p.score), p && p.day, today].join("|");
+    if (el._k === key) return;
+    el._k = key;
+    const fmt = x => x ? money(x.score) + (lag(x) ? `<span class="lag"> d${x.day}</span>` : "") : "…";
+    el.innerHTML = `${icon("trend", `color:${col}`)}<div><span class="big" style="color:${col}">${verdict}</span>
+      <small class="pr">G ${fmt(g)} · P ${p ? fmt(p) : V.ghost && V.ghost.mode === "main" ? "n/a" : "…"}</small>
+      <div class="pacebars">${bar(vals[0], COL.sel, `You ${money(you)}`)}${bar(vals[1], COL.net, `Greedy ${g ? money(g.score) : "…"}`)}${bar(vals[2], COL.train, `Planner ${p ? money(p.score) : "…"}`)}</div></div>`;
+    el.title = `Pace: two bots play your seed (${S.sandbox ? "sandbox" : "campaign"}) alongside you, up to today and never ahead.\nYou ${money(you)} · Greedy ${g ? money(g.score) + ` (day ${g.day})` : "…"} · Planner ${p ? money(p.score) + ` (day ${p.day})` : "…"}\nGreedy buys whatever pays best today. Planner looks ahead: seasons, launches, contracts, vendor news.`;
+  }
+
   /* ================= dialogs: chapter cards ================= */
   function maybeChapter() {
     if (!S) return;
@@ -1418,7 +1686,8 @@
     $("ct").textContent = c.title;
     $("csub").textContent = `Chapter ${i + 1} of ${CH.length} · ${dateOf(S.day)} · game paused`;
     $("cbody").innerHTML = `<ul>${c.bullets.map((b, k) => `<li style="--i:${k}"><span class="av" style="background:${col}">${icon(m.icons[k] || "flag")}</span><span>${esc(b)}</span></li>`).join("")}</ul>
-      ${m.where ? `<div class="where">${icon("help", "width:16px;height:16px")}<span>${esc(m.where)}</span></div>` : ""}`;
+      ${c.key === "gpu" ? chapterRoofline() : ""}
+      ${m.where ? `<div class="where">${icon("help", "width:16px;height:16px")}<span><b>Where to find it:</b> ${esc(m.where)}</span></div>` : ""}`;
     openDialog($("chapter"));
     dlog("chapter card", i, c.key);
     if (fresh && i > 0) {   // a newly unlocked chapter is a small celebration: confetti over the card + a soft chord
@@ -1426,6 +1695,13 @@
       if (FXON()) { const r = $("chapter").getBoundingClientRect(); FX.confetti(r.left + r.width / 2, r.top + 8, 80, 0.9); }
     }
     renderAll();
+  }
+  /* ch3 picture: the same roofline chart as the rack panel, for one card of each family (plain-language caption) */
+  function chapterRoofline() {
+    const v = (k, w) => +Math.min(item(k).F, item(k).B * Sim.INTENSITY[w]).toFixed(1);
+    const demo = (w, t) => rooflineSVG({ devices: [{ type: "c1" }, { type: "m1" }], pending: [], workload: w }, null, t);
+    return `<div class="chroof"><div class="pair">${demo("train", `<b style="color:${R.train.color}">On training</b>: Kestrel C1 makes ${v("c1", "train")}, Heron M1 ${v("m1", "train")}`)}${demo("infer", `<b style="color:${R.infer.color}">On inference</b>: Heron M1 makes ${v("m1", "infer")}, Kestrel C1 ${v("c1", "infer")}`)}</div>
+      <div class="sub">Each line is one card. Left chart: training (lots of math per byte), where Kestrel C1 earns more. Right chart: inference (little math per byte), where Heron M1 earns more. A card's output is the lower of its two limits.</div></div>`;
   }
   function showSandboxCard() {
     $("ct").textContent = "Sandbox";
@@ -1435,9 +1711,10 @@
     openDialog($("chapter"));
   }
   function openDialog(d) { if (!d.open) d.showModal(); if (FXON()) FX.hostCanvas(d); }   // the one fx canvas follows the modal into the top layer
-  for (const id of ["chapter", "over"]) $(id).addEventListener("close", () => { if (FXON()) FX.hostCanvas(document.querySelector("dialog[open]")); });
+  for (const id of ["chapter", "over", "card"]) $(id).addEventListener("close", () => { if (FXON()) FX.hostCanvas(document.querySelector("dialog[open]")); });
+  $("card").addEventListener("close", () => { if (!S) return; dlog("card closed", $("card").dataset.key); renderAll(); setTimeout(() => { maybeChapter(); maybeCard(); }, 0); });
   document.querySelectorAll("dialog [data-close]").forEach(b => b.addEventListener("click", () => b.closest("dialog").close()));
-  $("chapter").addEventListener("close", () => { renderAll(); setTimeout(maybeChapter, 0); });
+  $("chapter").addEventListener("close", () => { renderAll(); setTimeout(() => { maybeChapter(); maybeCard(); }, 0); });
   $("helpbtn").addEventListener("click", () => showChapter(S.chapter));
 
   /* ================= end screen ================= */
@@ -1477,7 +1754,19 @@
     drawBots();
     openDialog($("over"));
     runTally(sm);
-    runBots(rows, drawBots);
+    // v0.3: the pace ghost already played the bots up to today; the worker finishes them (instant at day 1800)
+    if (V.ghost && V.ghost.mode === "worker") {
+      const t0 = performance.now();
+      const upd = m => {
+        if (!m || !m.rows) return;
+        for (const p of ["greedy", "planner"]) { const x = m.rows[p]; if (x) rows[p] = x.over ? { score: x.score, day: x.day, done: true } : { score: null, day: x.day }; }
+        drawBots();
+        if (rows.greedy.done && rows.planner.done) { dlog("[pace] end screen bots done in", (performance.now() - t0).toFixed(0) + "ms"); V.overRows = null; }
+      };
+      V.overRows = upd;
+      upd(V.pace);
+      V.ghost.finish();
+    } else runBots(rows, drawBots);
   }
   /* last bullet: the score tallies up step by step (net worth + earnings, × reputation, × ownership), Balatro-style.
    * Each step's number is the exact value from Sim.summary; the big number rolls between them. */
@@ -1644,12 +1933,26 @@
 
   document.addEventListener("pointerdown", e => {
     V.down = true;
+    // pressing on a card's backdrop does nothing: say why instead of silently eating the drag
+    const dlg = document.querySelector("dialog[open]");
+    if (dlg && e.target === dlg) {
+      toast(`Close the card first (${dlg.querySelector("footer button") ? dlg.querySelector("footer button:last-child").textContent.trim() : "Got it"})`);
+      try { dlg.animate([0, -8, 7, -4, 0].map(x => ({ translate: `${x}px 0` })), { duration: 260 }); } catch (err) { /* no WAAPI */ }
+      return;
+    }
+    const fr = e.target.closest("#floor [data-rack]");
+    V.rackPress = fr && !e.target.closest("[data-drag]") ? { x: e.clientX, y: e.clientY } : null;
     const src = e.target.closest("[data-drag]");
     if (!src || e.button !== 0 || !S || S.over || V.menu) return;
     const p = payload(src); if (!p) return;
     drag = { src, x: e.clientX, y: e.clientY, started: false, p };
   });
   document.addEventListener("pointermove", e => {
+    if (!drag && V.rackPress && Math.hypot(e.clientX - V.rackPress.x, e.clientY - V.rackPress.y) > 30) {
+      V.rackPress = null;   // floor tiles are not draggable: point at the rack panel, where parts are
+      toast("To move or sell hardware, drag a part from the rack panel (right) onto another rack or the bin");
+      dlog("hint: floor rack drag");
+    }
     if (!drag) return;
     if (!drag.started) {
       if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
@@ -1691,11 +1994,17 @@
     target.classList.add(ev.res.ok ? "drop-ok" : "drop-bad");
     let level = ev.res.ok ? "ok" : "bad", text = ev.res.msg, proj = null;
     if (ev.res.ok && PROJECTABLE.has(ev.op.type)) {
-      proj = Sim.stats(Sim.project(S, ev.op), { eq: true });
+      const wl = wlDefault(ev.op);
+      proj = Sim.stats(Sim.project(wl ? Sim.project(S, wl) : S, ev.op), { eq: true });
       const eqNow = Sim.stats(S, { eq: true }), dNet = proj.net - eqNow.net;
       text += ` · ${dNet >= 0 ? "+" : "−"}$${Math.abs(dNet).toFixed(2)}k/d`;
-      const pr = proj.perRack[ev.op.to || ev.op.rack];
-      if (pr && pr.throttle < 1) { level = "warn"; text += ` · rack throttles to ${Math.round(pr.throttle * 100)} %`; }
+      if (wl) text += ` · rack → ${R[wl.workload].name}`;
+      const rid = ev.op.to || ev.op.rack, pr = proj.perRack[rid], dest = rack(rid);
+      const newIt = ev.op.item ? item(ev.op.item) : null;
+      if (dest && newIt && newIt.role !== "net" && newIt.role !== "cool" && switchless(dest, proj.perRack[rid])) {
+        level = "warn"; text += " · NO SWITCH: earns nothing until a switch is installed";
+      }
+      else if (pr && pr.throttle < 1) { level = "warn"; text += ` · rack throttles to ${Math.round(pr.throttle * 100)} %`; }
       else if (pr && pr.netF < 1 && pr.netNeed > 0) { level = "warn"; text += " · network short"; }
     }
     msg.style.display = ""; msg.className = "msg " + level; msg.textContent = text;
@@ -1756,7 +2065,19 @@
     }
     drag = null;
   }
-  document.addEventListener("pointerup", () => endDrag(true));
+  /* a card or menu opened mid-drag: drop nothing, say so (the veteran lost two orders silently) */
+  function cancelDrag(why) {
+    if (!drag) return;
+    const g = drag;
+    drag = null; V.down = false;
+    document.body.classList.remove("dragging"); clearMarks();
+    if (g.src) g.src.classList.remove("lifting");
+    if (g.ghost) ghostExit(g, g.src, "home");
+    toast(`Drag cancelled: ${why}. Nothing was ordered.`);
+    SND("nope");
+    dlog("drag cancelled", why, g.p);
+  }
+  document.addEventListener("pointerup", () => { V.rackPress = null; endDrag(true); });
   document.addEventListener("pointercancel", () => endDrag(false));
 
   /* ================= clicks and keys ================= */
@@ -1783,11 +2104,13 @@
         if (!res.ok) { toast(res.msg); return; }
         if (!(V.confirm === key && performance.now() - V.confirmT < CONFIRM_MS)) { V.confirm = key; V.confirmT = performance.now(); toast(`${res.msg} · tap again to confirm`); renderAll(); return; }
       }
-      act(a);
+      const ok = act(a);
+      if (ok && ab.closest("#card")) $("card").close();
       return;
     }
+    if (t.closest("dialog [data-close]")) { const d = t.closest("dialog"); if (d.open) d.close(); return; }
     const dr = t.closest("[data-drawer]");
-    if (dr) { if (dr.closest("#h-debt, #h-rep, #h-carbon, #h-equity") || dr.classList.contains("iconbtn")) openDrawer(dr.dataset.drawer); return; }
+    if (dr) { if (dr.closest("#h-debt, #h-rep, #h-carbon, #h-equity, #offerstrip") || dr.classList.contains("iconbtn")) openDrawer(dr.dataset.drawer); return; }
     if (t.closest("#drawer-close")) { closeDrawer(); return; }
     if (t.closest("#h-techs")) { if (on("ops")) openPop("techs", $("h-techs")); return; }
     if (t.closest("#h-transit")) { openPop("transit", $("h-transit")); return; }
@@ -1845,8 +2168,28 @@
   document.addEventListener("pointerup", () => { V.down = false; }, true);
 
   /* ================= feedback ================= */
-  let toastT;
-  function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("show"), 2600); }
+  /* toasts: the player's own feedback shows at once; system messages (offers, cash events, news) queue for at least
+     1.4 s each so one never wipes out the other (max 3 waiting, oldest dropped) */
+  let toastT, toastQT = null, sysAt = 0;
+  const toastQ = [], SYS_MIN_MS = 1200;
+  function showToast(t) { const el = $("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("show"), 2600); }
+  function nextToast() {
+    toastQT = null;
+    if (!toastQ.length) return;
+    // at 8x events outpace one toast per 1.4 s: show up to three waiting messages at once
+    let t = toastQ.shift().t;
+    while (toastQ.length && t.length + toastQ[0].t.length < 190) t += "  ·  " + toastQ.shift().t;
+    sysAt = performance.now(); showToast(t);
+    if (toastQ.length) toastQT = setTimeout(nextToast, SYS_MIN_MS);
+  }
+  /* sys: true = news (may be dropped when 3+ wait), "keep" = money or an offer (never dropped) */
+  function toast(t, sys) {
+    if (!sys) { showToast(t); return; }
+    const keep = sys === "keep", at = keep ? toastQ.findIndex(x => !x.keep) : -1;   // money and offers go before any news
+    if (at >= 0) toastQ.splice(at, 0, { t, keep }); else toastQ.push({ t, keep });
+    if (toastQ.length > 3) { const i = toastQ.findIndex(x => !x.keep); if (i >= 0) toastQ.splice(i, 1); }
+    if (!toastQT) { const wait = Math.max(0, SYS_MIN_MS - (performance.now() - sysAt)); if (wait) toastQT = setTimeout(nextToast, wait); else nextToast(); }
+  }
   function renderMute() {
     const b = $("mutebtn"); if (!b || !window.SFX) return;
     b.innerHTML = icon(SFX.muted ? "mute" : "sound");
