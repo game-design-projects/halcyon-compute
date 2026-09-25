@@ -13,14 +13,16 @@ Open `index.html` in a browser. It is plain HTML/CSS/JS and also works from `fil
 ```bash
 python3 -m http.server 8765   # then http://localhost:8765/
 ```
-- Space pauses; 1/2/3 set the speed; M cycles map modes; Esc cancels a tapped card.
+- Space pauses; 1-4 set 1x/2x/4x/8x; V cycles map modes; M mutes; Esc cancels a tapped card.
 - Drag a catalog card onto a rack to buy it. Drag hardware in the rack panel to another rack to move
   it, or onto the bin to sell it. On touch screens, tap a card and then a rack.
-- `?seed=123` replays a specific game; `?debug=1` logs sim and UI events to the console.
+- `?seed=123` replays a specific game; `?debug=1` logs sim and UI events to the console; `?pace=0` turns off the
+  pace ghost (two bots replaying your seed in a Web Worker).
+- Changes by version: [CHANGELOG.md](./CHANGELOG.md).
 
 ## Develop
 ```bash
-node --test test/*.test.js           # 24 tests: sim rules, determinism, bots
+node --test test/*.test.js           # 99 tests: sim rules, determinism, bots, pace ghost
 node bots/run.js --seeds 12 --ablate # depth report -> reports/depth.json
 ```
 
