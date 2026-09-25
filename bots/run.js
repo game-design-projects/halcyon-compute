@@ -29,7 +29,7 @@ let patched = false;
 function playOne(job) {
   const Bots = require("./bots.js");
   const Sim = require("../js/sim.js");
-  if (!patched) { applyPatch(Sim, job.patch); patched = true; }
+  if (!patched) { applyPatch(Sim, job.patch); if (job.patch && job.patch.bots) Object.assign(Bots.CFG, job.patch.bots); patched = true; }
   const t0 = Date.now();
   const r = Bots.play(job.seed, job.policy, { mech: job.mech });
   const s = r.state;
@@ -125,6 +125,7 @@ function report() {
       relGapMedianPct: median(rel) * 100, relGapMinPct: Math.min(...rel) * 100,
       plannerWins: gaps.filter(g => g > 0).length, winsAt25: rel.filter(r => r >= 0.25).length,
       worthGap: mean(wgaps), worthGapPct: mean(wgaps) / Math.max(1, mean(G.map(x => x.worth))) * 100, plannerWinsWorth: wgaps.filter(g => g > 0).length,
+      cashShare: { planner: mean(P.map(x => x.cashShare)), greedy: mean(G.map(x => x.cashShare)) },
       idleShareOfPlannerPct: mean(I.map(x => x.score)) / Math.max(1, mean(P.map(x => x.score))) * 100,
       // does the planner still use the ablated chapter? (should be 0 when it is switched off)
       ablatedChapterUse: chapter ? P.filter(x => (x.used[chapter] || 0) > 0).length : null,
@@ -136,7 +137,7 @@ function report() {
       row.perSeed = P.map((p, i) => ({ seed: p.seed, planner: Math.round(p.score), greedy: Math.round(G[i].score), idle: Math.round(I[i].score), plannerWorth: Math.round(p.worth), greedyWorth: Math.round(G[i].worth), over: p.over, greedyOver: G[i].over, own: +p.own.toFixed(2), idleCashDays: p.idleCashDays, used: p.used }));
     }
     rows.push(row);
-    console.log(`[bots] ${variant.padEnd(18)} n=${row.n} score: idle=${fmt(row.idle.score)} greedy=${fmt(row.greedy.score)} planner=${fmt(row.planner.score)} gap=${fmt(row.scoreGap)}±${fmt(row.scoreGapSd)} (${row.scoreGapPct.toFixed(0)}%, median ${row.relGapMedianPct.toFixed(0)}%, min ${row.relGapMinPct.toFixed(0)}%) wins ${row.plannerWins}/${row.n} (>=25%: ${row.winsAt25}) | worth: greedy=${fmt(row.greedy.worth)} planner=${fmt(row.planner.worth)} (${row.worthGapPct.toFixed(0)}%, wins ${row.plannerWinsWorth}) | fired ${row.planner.fired} bankrupt g${row.greedy.bankrupt}/p${row.planner.bankrupt}/i${row.idle.bankrupt} | idle/planner ${row.idleShareOfPlannerPct.toFixed(1)}% | cash>2M: planner ${row.planner.idleCashDays.toFixed(0)}d (max ${row.planner.idleCashDaysMax}) greedy ${row.greedy.idleCashDays.toFixed(0)}d${row.ablatedChapterUse != null ? ` | ablated ch used in ${row.ablatedChapterUse} games` : ""}`);
+    console.log(`[bots] ${variant.padEnd(18)} n=${row.n} score: idle=${fmt(row.idle.score)} greedy=${fmt(row.greedy.score)} planner=${fmt(row.planner.score)} gap=${fmt(row.scoreGap)}±${fmt(row.scoreGapSd)} (${row.scoreGapPct.toFixed(0)}%, median ${row.relGapMedianPct.toFixed(0)}%, min ${row.relGapMinPct.toFixed(0)}%) wins ${row.plannerWins}/${row.n} (>=25%: ${row.winsAt25}) | worth: greedy=${fmt(row.greedy.worth)} planner=${fmt(row.planner.worth)} (${row.worthGapPct.toFixed(0)}%, wins ${row.plannerWinsWorth}) | fired ${row.planner.fired} bankrupt g${row.greedy.bankrupt}/p${row.planner.bankrupt}/i${row.idle.bankrupt} | idle/planner ${row.idleShareOfPlannerPct.toFixed(1)}% | cash share Y2-4: planner ${(row.cashShare.planner * 100).toFixed(0)}% greedy ${(row.cashShare.greedy * 100).toFixed(0)}% | cash>2M: planner ${row.planner.idleCashDays.toFixed(0)}d (max ${row.planner.idleCashDaysMax}) greedy ${row.greedy.idleCashDays.toFixed(0)}d${row.ablatedChapterUse != null ? ` | ablated ch used in ${row.ablatedChapterUse} games` : ""}`);
     if (row.coverage) console.log(`[bots] planner chapter coverage (games using it / ${row.n}, mean actions): ` + CHAPTER_KEYS.map(k => `${k} ${row.coverage[k].games}${row.coverage[k].decisions > row.coverage[k].games ? "/" + row.coverage[k].decisions + "d" : ""} (${row.coverage[k].meanActions})`).join(", "));
   }
   const timing = { plannerSecPerGame: mean(results.filter(x => x.policy === "planner").map(x => x.ms)) / 1000, greedySecPerGame: mean(results.filter(x => x.policy === "greedy").map(x => x.ms)) / 1000, workers: JOBS };

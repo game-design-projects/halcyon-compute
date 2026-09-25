@@ -26,21 +26,22 @@
   const GEN_DROP = { train: 0.72, infer: 0.75 };
 
   /* catalog. F = compute, B = memory bandwidth (roofline). avail = first day on sale.
-     Per generation: ~1.55x F and B, ~+8 % kW, ~+20 % price. */
+     Per generation: ~1.55x F and B, ~+8 % kW, ~+20 % price.
+     v3 balance: GPU list prices x1.6 (mid-game paybacks ~200-300 days, so reinvestment absorbs profit; DECISIONS D35). */
   const BASE_ITEMS = {
     sw:  { name: "Ferro 48P switch", role: "net",  u: 1, kw: 0.4, price: 25, net: 16, avail: 0, vendor: "ferro", icon: "switch" },
     cpu: { name: "Tern web server",  role: "cpu",  u: 1, kw: 0.8, price: 12, avail: 0, vendor: "tern", icon: "cpu" },
     cru: { name: "Brisa CRU cooler", role: "cool", u: 2, kw: 0.6, price: 45, cool: 12, avail: 120, vendor: "brisa", icon: "snow" },
-    c1:  { name: "Kestrel C1", role: "gpu", fam: "C", gen: 1, u: 4, kw: 6.0, price: 180, F: 10, B: 4,  avail: 60,   vendor: "kestrel", icon: "chip" },
-    m1:  { name: "Heron M1",   role: "gpu", fam: "M", gen: 1, u: 4, kw: 5.0, price: 200, F: 6,  B: 8,  avail: 60,   vendor: "heron", icon: "chip" },
-    c2:  { name: "Kestrel C2", role: "gpu", fam: "C", gen: 2, u: 4, kw: 6.5, price: 230, F: 16, B: 6,  avail: 390,  vendor: "kestrel", icon: "chip" },
-    m2:  { name: "Heron M2",   role: "gpu", fam: "M", gen: 2, u: 4, kw: 5.5, price: 250, F: 9,  B: 13, avail: 390,  vendor: "heron", icon: "chip" },
-    c3:  { name: "Kestrel C3", role: "gpu", fam: "C", gen: 3, u: 4, kw: 7.0, price: 280, F: 25, B: 9,  avail: 780,  vendor: "kestrel", icon: "chip" },
-    m3:  { name: "Heron M3",   role: "gpu", fam: "M", gen: 3, u: 4, kw: 6.0, price: 300, F: 14, B: 21, avail: 780,  vendor: "heron", icon: "chip" },
-    c4:  { name: "Kestrel C4", role: "gpu", fam: "C", gen: 4, u: 4, kw: 7.5, price: 335, F: 39, B: 14, avail: 1170, vendor: "kestrel", icon: "chip" },
-    m4:  { name: "Heron M4",   role: "gpu", fam: "M", gen: 4, u: 4, kw: 6.5, price: 360, F: 22, B: 33, avail: 1170, vendor: "heron", icon: "chip" },
-    c5:  { name: "Kestrel C5", role: "gpu", fam: "C", gen: 5, u: 4, kw: 8.1, price: 400, F: 60, B: 22, avail: 1560, vendor: "kestrel", icon: "chip" },
-    m5:  { name: "Heron M5",   role: "gpu", fam: "M", gen: 5, u: 4, kw: 7.0, price: 430, F: 34, B: 51, avail: 1560, vendor: "heron", icon: "chip" },
+    c1:  { name: "Kestrel C1", role: "gpu", fam: "C", gen: 1, u: 4, kw: 6.0, price: 288, F: 10, B: 4,  avail: 60,   vendor: "kestrel", icon: "chip" },
+    m1:  { name: "Heron M1",   role: "gpu", fam: "M", gen: 1, u: 4, kw: 5.0, price: 320, F: 6,  B: 8,  avail: 60,   vendor: "heron", icon: "chip" },
+    c2:  { name: "Kestrel C2", role: "gpu", fam: "C", gen: 2, u: 4, kw: 6.5, price: 368, F: 16, B: 6,  avail: 390,  vendor: "kestrel", icon: "chip" },
+    m2:  { name: "Heron M2",   role: "gpu", fam: "M", gen: 2, u: 4, kw: 5.5, price: 400, F: 9,  B: 13, avail: 390,  vendor: "heron", icon: "chip" },
+    c3:  { name: "Kestrel C3", role: "gpu", fam: "C", gen: 3, u: 4, kw: 7.0, price: 448, F: 25, B: 9,  avail: 780,  vendor: "kestrel", icon: "chip" },
+    m3:  { name: "Heron M3",   role: "gpu", fam: "M", gen: 3, u: 4, kw: 6.0, price: 480, F: 14, B: 21, avail: 780,  vendor: "heron", icon: "chip" },
+    c4:  { name: "Kestrel C4", role: "gpu", fam: "C", gen: 4, u: 4, kw: 7.5, price: 536, F: 39, B: 14, avail: 1170, vendor: "kestrel", icon: "chip" },
+    m4:  { name: "Heron M4",   role: "gpu", fam: "M", gen: 4, u: 4, kw: 6.5, price: 576, F: 22, B: 33, avail: 1170, vendor: "heron", icon: "chip" },
+    c5:  { name: "Kestrel C5", role: "gpu", fam: "C", gen: 5, u: 4, kw: 8.1, price: 640, F: 60, B: 22, avail: 1560, vendor: "kestrel", icon: "chip" },
+    m5:  { name: "Heron M5",   role: "gpu", fam: "M", gen: 5, u: 4, kw: 7.0, price: 688, F: 34, B: 51, avail: 1560, vendor: "heron", icon: "chip" },
     pm9: { name: "Nanofab PM-900", role: "mem", u: 2, kw: 0.8, price: 150, boost: 1.25, avail: 1330, vendor: "nanofab", icon: "layers" },
     // exotic accelerators: fixed workload, need an immersion tank rack. Which vendor is real is seeded.
     lat1: { name: "Lattice L1", role: "exotic", only: "infer", u: 2, kw: 1.2, price: 55, F: 2, B: 3,  avail: 1290, vendor: "lattice", icon: "drop", tank: true, model: 0 },

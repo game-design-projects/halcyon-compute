@@ -33,7 +33,7 @@ original list, it wins.
 M01 18-rack Hall 1 floor, 20U / 30 kW per rack. M02 switch per rack (rack-local network, 16 per switch). M03 web servers + web market (demand ≈30, flat). M04 oversupply sells at 25 %. M05 technicians install (3), 6-day shipping + 2-day install. M06 move/sell via drag.
 
 ### Ch2 Power (d30) — exists
-M07 grid cap 250 kW, upgrade to 400 kW. M08 seasonal power price. M09 Eco/Std/Boost per rack.
+M07 grid cap 250 kW, upgrade to 400 kW. (Later tiers: 700 kW from ch11, **M07b** 1000 kW after that — $1.8M, 90 days.) M08 seasonal power price. M09 Eco/Std/Boost per rack.
 
 ### Ch3 GPUs and the roofline (d60) — exists
 M10 Kestrel C (compute) and Heron M (bandwidth) families. M11 training vs inference markets with separate demand/price. M12 roofline throughput = min(F, B × intensity). M13 per-rack workload toggle. M14 network need per workload.
@@ -43,7 +43,7 @@ M15 seasonal cooling capacity. M16 room thermal inertia. M17 per-rack inlet + ne
 
 ### Ch5 Hardware generations (d240; launches d390, d780, d1170, d1560)
 M19 generation launches cut market price and resale. M20 rumours ~60 days ahead. M21 older-gen cards on sale at a discount ("OLD GEN").
-Extend to gen 4 and gen 5 (C4/M4 at d1170, C5/M5 at d1560); keep the per-gen scaling (~1.55× F and B, ~+8 % kW, ~+20 % price).
+Extend to gen 4 and gen 5 (C4/M4 at d1170, C5/M5 at d1560); keep the per-gen scaling (~1.55× F and B, ~+8 % kW, ~+20 % price). **v3 balance:** all GPU list prices are 1.6× the v2 catalogue (C1 $288k … M5 $688k) so mid-game paybacks are ~200–300 days and reinvestment absorbs profit.
 
 ### Ch6 Operations (d300)
 M22 **Hardware failures**: each device has a daily failure hazard = base(role) × age factor (bathtub: higher first 20 days and after 500 days) × heat factor (×2 per 5 °C above 30 °C inlet). Seeded. A failed device produces nothing and shows a red cross.
@@ -60,6 +60,7 @@ Decision: cluster training racks in a row (network wins) vs spread them out (hea
 
 ### Ch8 Customers and contracts (d480)
 M29 **Contract offers** arrive every ~25 days (seeded) as cards: customer (icon + name), workload, units, days, price/unit·day, SLA (min delivered fraction), penalty per missed unit·day, expiry (15 days).
+**M29b Build-to-suit** (v3): about every 60 days (±15, first 30 days after ch8) a big customer asks for dedicated capacity: units 40–80 % of today's output on that workload (≥20), 360–540 days, price = spot × (1.0–1.2) × reputation adjustment, SLA 95 %, penalty 3× the price, an up-front **fit-out** of $6k per unit (capex, paid at signing), and delivery starting **45 days** after signing (time to buy the hardware). Signing commits cash and capacity: a hedge before launches, a trap before a real demand shock (see M65).
 M30 Accepted contracts are served first from your supply at their fixed price; the rest goes to spot. A shortfall below the SLA costs the penalty and −reputation (from ch15).
 M31 Contract prices are quoted against **today's** spot price (±15 %), so locking in before a known generation launch is a hedge, and signing just after one is a trap.
 Decision: hedge price risk vs keep flexibility; don't oversell capacity.
@@ -78,6 +79,7 @@ Decision: leverage to grow before a price drop vs stay safe; lease the gen you w
 
 ### Ch11 Facilities and resilience (d750)
 M38 **Hall 2**: build a second 18-rack hall ($1.4M, 75 days). Shares the grid. UI: floor tabs "Hall 1 / Hall 2".
+**M38b Hall 3** (v3): after Hall 2 stands, a third 18-rack hall (racks G1..J6) for $2.4M and 120 days, on the same grid (needs the 1000 kW tier to fill). Halls are generic (`s.halls[n-1]`, `buildHall` with an optional `hall`, default = next unbuilt). A long, early commitment: demand may not follow, and ch17 may strand it.
 M39 **Grid outages**: seeded random outages (1–3 days, ~2 per year, more in summer heat waves). Without backup, all output stops and SLAs miss.
 M40 **UPS + generator**: facility purchase ($380k). Covers outages but the generator burns diesel (cost and carbon per outage day).
 M41 **CRAC upgrade**: +45 kW cooling per hall ($260k, 30 days).
@@ -121,7 +123,7 @@ M61 Two exotic accelerator startups (Lattice inference ASIC, Photon optical trai
 M62 **Immersion tanks** (rack conversion; tank heat mostly bypasses the room).
 M63 **Pilots**: measured field performance revealed after 10 days in a rack.
 M64 **Vendor pitch** (Optane-style PM-900 memory tier, d1330): real benefit, vendor may exit (75 %) at d1560, fire sale at d1500, bricks the part and cripples the rack until it is pulled.
-M65 **Demand disruption** (seeded, 50 %): an "algorithmic efficiency breakthrough" at ~d1400 cuts inference compute demand by 35 % overnight (real), OR a hyped paper that changes nothing (false). Signals: preprint news 30 days before; real = "reproduced by independent labs", false = "results fail to replicate".
+M65 **Demand disruption** (seeded, 50 %): an "algorithmic efficiency breakthrough" at ~d1400 cuts inference compute demand by 35 % overnight (real), OR a hyped paper that changes nothing (false). Signals: preprint news 30 days before; real = "reproduced by independent labs", false = "results fail to replicate". If it is real, inference build-to-suit customers cancel (no penalty; the fit-out is sunk).
 M66 **Incumbent response**: after the real exotic's 2nd model, Kestrel/Heron cut prices by 25 % (the incumbents' counter-move, i.e. the Nokia problem seen from the other side).
 
 ## 3. UI surfaces (game-like, no forms)
@@ -138,6 +140,7 @@ M66 **Incumbent response**: after the real exotic's 2nd model, Kestrel/Heron cut
 - All new numbers entered by steppers or drag. No `<select>`, no `<input type=text>` except the seed field in the menu.
 
 ## 4. Bots
+- v3: the greedy baseline may sell any part that loses money *today* (a gut player pulls a rack in the red) and lets an idle technician go; otherwise it stays myopic (payback ≤ 300 days, never hedges or pilots).
 - Greedy and planner must handle all new actions sensibly: planner uses contracts as hedges before rumoured launches, hires technicians when repair queues grow, keeps 2 spares, reads memory-scare signals, uses debt when ROI > interest, declines dilution unless growth ROI is high, buys backup before summer from ch11, signs PPA when spot is volatile, prepares for policies whose signals point to passing.
 - Depth report extended with ablations per chapter group. Target: planner > greedy on ≥90 % of seeds; relative gap ≥25 %.
 
@@ -150,4 +153,4 @@ M66 **Incumbent response**: after the real exotic's 2nd model, Kestrel/Heron cut
 - Idle player survives but ends < 5 % of the planner score.
 - Greedy is never bankrupt; the planner is never fired.
 - Each chapter's mechanic changes the planner's actions at least once per game (log it).
-- Mid-game cash should not pile up idle for more than ~1 year: Hall 2, contracts, investors and policy must create sinks and choices.
+- Mid-game cash should not pile up idle for more than ~1 year: Hall 2, contracts, investors and policy must create sinks and choices. Measured (v3) as the planner's longest stretch with more than $2M in the bank, mean over seeds < ~365 days.

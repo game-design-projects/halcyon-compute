@@ -19,6 +19,7 @@
     RACK_U: 20, RACK_KW: 30, ROWS: 3, COLS: 6, HALL_RACKS: 18,
     GRID_KW: 250, GRID_KW_UP: 400, GRID_COST: 450, GRID_DAYS: 30,
     GRID_KW_UP2: 700, GRID_COST2: 900, GRID_DAYS2: 45,               // 3rd tier, from ch11 (Hall 2 needs power)
+    GRID_KW_UP3: 1000, GRID_COST3: 1800, GRID_DAYS3: 90,             // 4th tier after the 3rd (Hall 3 needs power)
     TECHS: 3, SHIP_DAYS: 6, INSTALL_DAYS: 2, MOVE_DAYS: 1, SELL_DAYS: 1,
     TANK_COST: 90, TANK_DAYS: 8, TANK_ROOM_HEAT: 0.2,
     T_LIMIT: 32, THERMAL_TAU: 5, OVERSUPPLY: 0.25,
@@ -34,12 +35,15 @@
     TRANSIT_PER: 10, TRANSIT_COST: 0.4, TRANSIT_DAYS: 5, TRANSIT_FREE: 3, TRANSIT_MAX: 300,
     // ch8 contracts
     OFFER_EVERY: 25, OFFER_JITTER: 7, OFFER_EXPIRY: 15, QUOTE_SPREAD: 0.15, PENALTY_MULT: 1.5, CONTRACT_OK_MISS: 0.05,
+    // ch8 build-to-suit: big, long, high-SLA offers that need an up-front fit-out (capex) and start after a lead time
+    BTS_EVERY: 60, BTS_JITTER: 15, BTS_FIRST: 30, BTS_EXPIRY: 20, BTS_LEAD: 45, BTS_PREMIUM: 0.2, BTS_PENALTY_MULT: 3,
+    BTS_FIT_PER_UNIT: 6, BTS_MIN_UNITS: 20, BTS_SLA: 0.95,
     // ch9 memory
     HBM_BASE: 0.55, HBM_SLOPE: 0.45, HBM_REVERT: 0.08, HBM_VOL: 0.02, SHORT_SHIP_DAYS: 18, FORWARD_DAYS: 45,
     // ch10 finance
     LOAN_STEP: 100, LOAN_LTV: 0.4, INTEREST: 0.09, LEASE_RATE: 0.0045, TAX: 0.21, DEPR_DAYS: 1080,
     // ch11 facilities
-    HALL_COST: 1400, HALL_DAYS: 75, UPS_COST: 380, UPS_DAYS: 20, CRAC_COST: 260, CRAC_DAYS: 30, CRAC_KW: 45,
+    HALL_COST: 1400, HALL_DAYS: 75, HALL3_COST: 2400, HALL3_DAYS: 120, HALLS_MAX: 3, UPS_COST: 380, UPS_DAYS: 20, CRAC_COST: 260, CRAC_DAYS: 30, CRAC_KW: 45,
     OUTAGES_PER_YEAR: 2, DIESEL: 0.13, DIESEL_CO2: 0.8,             // $k per kW-day of generator power; t/MWh
     // ch12 energy
     SPOT_NOISE: 0.15, PPA_DAYS: 540, PPA_STEP: 25, PPA_MAX: 600, PPA_DISCOUNT: 0.95, SOLAR_COST: 600, SOLAR_DAYS: 30, SOLAR_KW: 60,
@@ -121,13 +125,13 @@
       // ch7 fabric
       spines: {}, transit: 0, transitOrders: [],
       // ch8 contracts
-      offers: [], contracts: [], nextOffer: -1, contractLog: { signed: 0, fulfilled: 0, failed: 0 },
+      offers: [], contracts: [], nextOffer: -1, nextBts: -1, contractLog: { signed: 0, fulfilled: 0, failed: 0 },
       // ch9 memory
       hbm: { index: 1, target: 1, shortage: false, until: 0 },
       // ch10 finance
       debt: 0, creditLimit: -K.BANKRUPT, fin: { rev: 0, opex: 0, dep: 0 }, deprec: [],
       // ch11 facilities
-      halls: [{ n: 1, built: true, cooling: "evap", crac: false, roomT: 24 }, { n: 2, built: false, cooling: "evap", crac: false, roomT: 24 }],
+      halls: [{ n: 1, built: true, cooling: "evap", crac: false, roomT: 24 }],
       ups: false, outage: null,
       // ch12 energy
       power: { noise: 1 }, heatWave: null, ppa: null, solar: false,
@@ -146,6 +150,7 @@
       revDays: [], profitDays: [], dayAcc: { rev: 0, profit: 0, missed: {} },
     };
     for (const k of Object.keys(LOSS_LABEL)) { s.losses[k] = 0; s.lossBy[k] = {}; }
+    ensureHalls(s);
     // seeded hidden truths
     const realExotic = nextRand(s) < 0.5 ? "lattice" : "photon";
     const fakeExotic = realExotic === "lattice" ? "photon" : "lattice";
@@ -172,8 +177,19 @@
     sampleHistory(s);
     return s;
   }
+  const HALL_LETTERS = ["ABC", "DEF", "GHJ"];
+  /* halls are generic: s.halls[n-1] for n = 1..HALLS_MAX (old two-hall saves get the missing entries) */
+  function ensureHalls(s) {
+    while (s.halls.length < K.HALLS_MAX) s.halls.push({ n: s.halls.length + 1, built: false, cooling: "evap", crac: false, roomT: 24 });
+  }
+  const hallCost = n => n <= 2 ? { cost: K.HALL_COST, days: K.HALL_DAYS } : { cost: K.HALL3_COST, days: K.HALL3_DAYS };
+  function nextHall(s) {       // the next hall to build: first unbuilt one
+    ensureHalls(s);
+    const h = s.halls.find(x => !x.built);
+    return h ? h.n : null;
+  }
   function addHallRacks(s, hall) {
-    const letters = hall === 1 ? "ABC" : "DEF";
+    const letters = HALL_LETTERS[hall - 1];
     for (let r = 0; r < K.ROWS; r++) for (let c = 0; c < K.COLS; c++)
       s.racks.push({ id: letters[r] + (c + 1), hall, row: r, col: c, devices: [], pending: [], mode: "std", workload: "train", tank: false });
   }
@@ -328,7 +344,7 @@
       s.transit = Math.max(0, Math.ceil((st.supply.web + st.supply.infer) / K.TRANSIT_PER) - K.TRANSIT_FREE);
       log(s, `fabric: starter transit ${s.transit} (+${K.TRANSIT_FREE} free)`);
     }
-    if (key === "contracts") s.nextOffer = d + 5;
+    if (key === "contracts") { s.nextOffer = d + 5; s.nextBts = d + K.BTS_FIRST; }
     if (key === "investors") s.nextRound = d + 15;
     if (key === "finance") s.creditLimit = creditLimitOf(s);
   }
@@ -401,6 +417,9 @@
       case "demandShock": {    // M65
         if (s.hidden.demandCut) {
           s.market.dmult.infer *= K.DEMAND_CUT;
+          for (const c of s.contracts.filter(x => x.bts && x.w === "infer"))    // build-to-suit customers need far less too
+            pushNews(s, { title: `${c.cust} cancels its build-to-suit deal`, body: "They need far less compute now. No penalty; the fit-out is sunk.", tone: "bad", cat: "contracts" });
+          s.contracts = s.contracts.filter(x => !(x.bts && x.w === "infer"));
           pushNews(s, { title: "Inference demand drops 35 %", body: "Labs ship the new algorithm; they need far less compute.", tone: "bad", cat: "market" });
         } else pushNews(s, { title: "Inference demand steady", body: "The hyped paper changed nothing.", tone: "info", cat: "market" });
         log(s, `demand shock real=${s.hidden.demandCut}`); break;
@@ -522,7 +541,7 @@
   const activeAt = (x, day) => !!x && day < x.until && day >= (x.start != null ? x.start : -1);
 
   /* sell a supply vector: frontier first, then contracts (fixed price), then spot */
-  function sellOutput(s, mk, supply, frontierElig) {
+  function sellOutput(s, mk, supply, frontierElig, day) {
     const revenue = { web: 0, train: 0, infer: 0, frontier: 0, contracts: 0 }, wRev = { web: 0, train: 0, infer: 0 };
     const cDel = {}, cMiss = {}, lostCap = {};
     let penalties = 0;
@@ -534,7 +553,7 @@
     }
     if (s.contracts.length) {
       for (const w of ["web", "train", "infer"]) {
-        const cs = s.contracts.filter(c => c.w === w);
+        const cs = s.contracts.filter(c => c.w === w && !(c.start > day + 1e-9));   // build-to-suit starts after its lead time
         if (!cs.length) continue;
         const Cu = cs.reduce((a, c) => a + c.units, 0), del = Math.min(left[w], Cu);
         for (const c of cs) {
@@ -659,11 +678,11 @@
         for (const r of s.racks) { const o = perRack[r.id].out; o.web *= transitF; o.infer *= transitF; }
       }
     }
-    let sold = sellOutput(s, mk, supply, frontierElig), outageLoss = 0;
+    let sold = sellOutput(s, mk, supply, frontierElig, day), outageLoss = 0;
     if (blackout) {
       outageLoss = sold.gross;
       for (const r of s.racks) { const o = perRack[r.id].out; o.web = o.train = o.infer = 0; }
-      sold = sellOutput(s, mk, { web: 0, train: 0, infer: 0 }, 0);
+      sold = sellOutput(s, mk, { web: 0, train: 0, infer: 0 }, 0, day);
       supply.web = supply.train = supply.infer = 0;
     }
     const { revenue, wRev, gross, lostCap } = sold;
@@ -814,7 +833,8 @@
     pr: "reputation", lobby: "policy" };
   const no = msg => ({ ok: false, msg });
   const gridNext = s => s.gridTier === 0 ? { kw: K.GRID_KW_UP, cost: K.GRID_COST, days: K.GRID_DAYS }
-    : s.gridTier === 1 && on(s, "facilities") ? { kw: K.GRID_KW_UP2, cost: K.GRID_COST2, days: K.GRID_DAYS2 } : null;
+    : s.gridTier === 1 && on(s, "facilities") ? { kw: K.GRID_KW_UP2, cost: K.GRID_COST2, days: K.GRID_DAYS2 }
+    : s.gridTier === 2 && on(s, "facilities") ? { kw: K.GRID_KW_UP3, cost: K.GRID_COST3, days: K.GRID_DAYS3 } : null;
   function ppaQuote(s) {  // tracks the recent spot average (season + noise), a little below it
     const H = s.history.slice(-12);
     const avg = H.length ? H.reduce((a, h) => a + (h.sp || seasonAt(h.d).powerPrice / K.PUE_BASE), 0) / H.length : seasonAt(s.day).powerPrice / K.PUE_BASE;
@@ -870,7 +890,7 @@
       }
       case "grid": {
         const g = gridNext(s);
-        if (!g) return no(s.gridTier >= 2 ? "Grid fully upgraded" : "Next upgrade unlocks in chapter 11");
+        if (!g) return no(s.gridTier >= 3 ? "Grid fully upgraded" : "Next upgrade unlocks in chapter 11");
         if (s.jobs.some(j => j.kind === "grid")) return no("Upgrade under way");
         if (s.cash < g.cost) return no(`Needs $${g.cost}k`);
         return { ok: true, msg: `Grid to ${g.kw} kW, $${g.cost}k, ${g.days} days` };
@@ -929,7 +949,9 @@
       case "signContract": {
         const o = s.offers.find(x => x.id === a.id); if (!o) return no("Offer gone");
         if (o.foreign && s.policyFx.exportCtl) return no("Customer barred by export controls");
-        return { ok: true, msg: `Sign: ${o.units} ${o.w} units for ${o.days} days at $${round2(o.price)}k` };
+        if (o.bts && s.cash < o.fitout) return no(`Fit-out needs $${o.fitout}k`);
+        return { ok: true, msg: o.bts ? `Build-to-suit: $${o.fitout}k fit-out now, ${o.units} ${o.w} units from day ${Math.round(s.day + o.lead)} for ${o.days} days at $${round2(o.price)}k`
+          : `Sign: ${o.units} ${o.w} units for ${o.days} days at $${round2(o.price)}k` };
       }
       case "declineContract": return s.offers.some(x => x.id === a.id) ? { ok: true, msg: "Decline" } : no("Offer gone");
       // ---- ch9 memory
@@ -963,10 +985,18 @@
         return { ok: true, msg: `Return, ${K.SELL_DAYS} day` };
       }
       // ---- ch11 facilities
-      case "buildHall":
-        if (s.halls[1].built || s.jobs.some(j => j.kind === "buildHall")) return no("Hall 2 already built");
-        if (s.cash < K.HALL_COST) return no(`Needs $${K.HALL_COST}k`);
-        return { ok: true, msg: `Hall 2: $${K.HALL_COST}k, ${K.HALL_DAYS} days` };
+      case "buildHall": {
+        if (s.jobs.some(j => j.kind === "buildHall")) return no("A hall is already under construction");
+        const n = a.hall != null ? a.hall : nextHall(s);
+        if (n == null) return no("All halls built");
+        const h = hallOf(s, n);
+        if (!h || n < 2) return no("No such hall");
+        if (h.built) return no(`Hall ${n} already built`);
+        if (!hallOf(s, n - 1).built) return no(`Build Hall ${n - 1} first`);
+        const hc = hallCost(n);
+        if (s.cash < hc.cost) return no(`Needs $${hc.cost}k`);
+        return { ok: true, msg: `Hall ${n}: $${hc.cost}k, ${hc.days} days` };
+      }
       case "ups":
         if (s.ups || s.jobs.some(j => j.kind === "ups")) return no("Already have backup");
         if (s.cash < K.UPS_COST) return no(`Needs $${K.UPS_COST}k`);
@@ -1103,7 +1133,9 @@
       case "transit": s.transitOrders.push({ day: s.day + K.TRANSIT_DAYS, delta: Math.round(a.delta) }); break;
       case "signContract": {
         const i = s.offers.findIndex(x => x.id === a.id), [o] = s.offers.splice(i, 1);
-        s.contracts.push(Object.assign(o, { start: s.day, end: s.day + o.days, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 }));
+        const start = o.bts ? s.day + o.lead : s.day;
+        if (o.bts) spend(s, o.fitout, "capex");
+        s.contracts.push(Object.assign(o, { signed: s.day, start, end: start + o.days, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 }));
         s.contractLog.signed++;
         break;
       }
@@ -1122,10 +1154,12 @@
         Object.assign(job, { dev: d, phase: "wait", left: K.SELL_DAYS, total: K.SELL_DAYS });
         s.jobs.push(job); break;
       }
-      case "buildHall":
-        spend(s, K.HALL_COST, "capex");
-        Object.assign(job, { phase: "contract", left: K.HALL_DAYS, total: K.HALL_DAYS });
+      case "buildHall": {
+        const n = a.hall != null ? a.hall : nextHall(s), hc = hallCost(n);
+        spend(s, hc.cost, "capex");
+        Object.assign(job, { hall: n, phase: "contract", left: hc.days, total: hc.days });
         s.jobs.push(job); break;
+      }
       case "ups": case "solar": {
         const cost = a.type === "ups" ? K.UPS_COST : K.SOLAR_COST, days = a.type === "ups" ? K.UPS_DAYS : K.SOLAR_DAYS;
         spend(s, cost, "capex");
@@ -1230,8 +1264,10 @@
     else if (k === "repair") { const f = findAnywhere(s, j.uid); if (f) f.d.failed = false; }
     else if (k === "spine") s.spines[j.key] = true;
     else if (k === "buildHall") {
-      s.halls[1].built = true; s.halls[1].roomT = s.roomT; addHallRacks(s, 2);
-      pushNews(s, { title: "Hall 2 is open", body: "18 more racks. Same grid.", tone: "good", cat: "facilities" });
+      const n = j.hall || 2;
+      ensureHalls(s);
+      s.halls[n - 1].built = true; s.halls[n - 1].roomT = s.roomT; addHallRacks(s, n);
+      pushNews(s, { title: `Hall ${n} is open`, body: "18 more racks. Same grid.", tone: "good", cat: "facilities" });
     }
     else if (k === "ups") s.ups = true;
     else if (k === "solar") s.solar = true;
@@ -1286,6 +1322,24 @@
     s.offers.push(o);
     pushNews(s, { title: `Contract offer: ${cust.name}`, body: `${units} ${w} units x ${days} days at $${round2(price)}k (SLA ${Math.round(sla * 100)} %).`, tone: "info", cat: "contracts", icon: "doc" });
     log(s, `offer ${o.id} ${w} ${units}u ${days}d p=${o.price} spot=${o.spot}`);
+  }
+  /* build-to-suit: a big customer wants dedicated capacity. Long term, fixed price above spot, high SLA and
+     penalty, an up-front fit-out, delivery after a lead time (time to buy the hardware). */
+  function makeBts(s) {
+    const st = stats(s), mk = st.mk, rf = repF(s), R = () => nextRand(s);
+    const w = R() < 0.5 ? "train" : "infer";
+    const ref = Math.max(st.supply[w], 0.5 * mk[w].demand);
+    const units = Math.max(K.BTS_MIN_UNITS, Math.round(ref * (0.4 + 0.4 * R())));
+    const days = [360, 450, 540][Math.floor(R() * 3)];
+    const price = mk[w].price * (1 + K.BTS_PREMIUM * R()) * (1 + 0.2 * rf);
+    let cust = C.CUSTOMERS[Math.floor(R() * C.CUSTOMERS.length)];
+    if (s.policyFx.exportCtl && cust.foreign) cust = C.CUSTOMERS[0];
+    const o = { id: "c" + s.nextId++, bts: true, cust: cust.name, icon: cust.icon, foreign: cust.foreign, w, units, days, lead: K.BTS_LEAD,
+      fitout: Math.round(units * K.BTS_FIT_PER_UNIT), price: +price.toFixed(4), spot: +mk[w].price.toFixed(4), repAdj: +(1 + 0.2 * rf).toFixed(4),
+      sla: K.BTS_SLA, penalty: +(price * K.BTS_PENALTY_MULT).toFixed(4), expires: s.day + K.BTS_EXPIRY };
+    s.offers.push(o);
+    pushNews(s, { title: `Build-to-suit request: ${cust.name}`, body: `${units} ${w} units x ${days} days at $${round2(price)}k from day ${Math.round(s.day + o.lead)}. Fit-out $${o.fitout}k up front, SLA ${Math.round(o.sla * 100)} %.`, tone: "info", cat: "contracts", icon: "building" });
+    log(s, `bts offer ${o.id} ${w} ${units}u ${days}d p=${o.price} fit=${o.fitout}`);
   }
   function makeRound(s) {
     const R = () => nextRand(s);
@@ -1357,6 +1411,10 @@
         makeOffer(s);
         const rf = repF(s);
         s.nextOffer = d + Math.max(8, Math.round(K.OFFER_EVERY * (1 - 0.2 * rf) + (nextRand(s) * 2 - 1) * K.OFFER_JITTER));
+      }
+      if (s.nextBts != null && s.nextBts >= 0 && d >= s.nextBts) {
+        makeBts(s);
+        s.nextBts = d + Math.round(K.BTS_EVERY + (nextRand(s) * 2 - 1) * K.BTS_JITTER);
       }
     }
     // investors: round offers and the board

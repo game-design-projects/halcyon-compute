@@ -108,8 +108,8 @@ test("summary lists the biggest measurable losses and 3 lessons", () => {
 test("M19-M21: four launches (d390..1560), rumours ~60 days ahead, old gen discounted", () => {
   assert.deepEqual(Sim.GEN_LAUNCH, [390, 780, 1170, 1560]);
   const s = camp(8);
-  Sim.advance(s, 1165);
-  const rum = s.news.filter(n => /rumored/.test(n.title)).map(n => n.day);
+  const rum = [];   // collected while advancing: the feed keeps only the last 60 items
+  for (let d = 0; d < 1165; d++) { Sim.advance(s, 1); for (const n of s.news) if (/rumored/.test(n.title) && !rum.includes(n.day)) rum.unshift(n.day); }
   assert.equal(rum.length, 3);
   for (const [i, d] of rum.slice().reverse().entries()) assert.ok(Math.abs(Sim.GEN_LAUNCH[i] - 60 - d) <= 8);
   const c3 = s.items.c3.price;
@@ -167,7 +167,7 @@ test("M23: repair = parts wait + 1 technician day, 8 % of list; auto-repair poli
   assert.ok(Sim.apply(s, { type: "repairPolicy", on: false }).ok);
   const cash = s.cash;
   assert.ok(Sim.apply(s, { type: "repair", rack: "B1", uid: d.uid }).ok);
-  assert.ok(near(cash - s.cash, 180 * K.REPAIR_FRAC));
+  assert.ok(near(cash - s.cash, Math.round(Sim.BASE_ITEMS.c1.price * K.REPAIR_FRAC * 10) / 10));
   Sim.advance(s, K.REPAIR_PARTS_DAYS + K.REPAIR_DAYS - 0.5);
   assert.equal(d.failed, true);
   Sim.advance(s, 0.75);
@@ -288,7 +288,7 @@ test("M29/M31: offers arrive every ~25 days, expire in 15, quoted within +-15 % 
     Sim.advance(s, 1);
     for (const o of s.offers) if (!seen.has(o.id)) seen.set(o.id, Object.assign({ at: s.day }, o));
   }
-  const offers = [...seen.values()];
+  const offers = [...seen.values()].filter(o => !o.bts);   // build-to-suit offers have their own timer and premium (M29b)
   assert.ok(offers.length >= 8 && offers.length <= 20, `${offers.length} offers in 300 days`);
   for (const o of offers) {
     const q = o.price / o.repAdj;
@@ -389,7 +389,7 @@ test("M36: leasing: no upfront, 0.45 %/day, excluded from net worth, returned by
   assert.ok(Sim.apply(s, { type: "lease", item: "c1", rack: "B1" }).ok);
   assert.equal(s.cash, cash);
   assert.ok(near(Sim.netWorth(s), w0));
-  assert.ok(near(Sim.stats(s).costs.lease, 180 * K.LEASE_RATE));
+  assert.ok(near(Sim.stats(s).costs.lease, Sim.BASE_ITEMS.c1.price * K.LEASE_RATE));
   Sim.advance(s, 8.25);
   const d = rack(s, "B1").devices.find(x => x.leased);
   assert.ok(d);
@@ -403,7 +403,7 @@ test("M36: leasing: no upfront, 0.45 %/day, excluded from net worth, returned by
 test("M37: 21 % tax on positive quarterly profit after 3-year straight-line depreciation", () => {
   const s = sb(1);
   Sim.apply(s, { type: "buy", item: "c1", rack: "B1" });
-  assert.ok(near(s.deprec[0].rate, 180 / 1080));
+  assert.ok(near(s.deprec[0].rate, Sim.BASE_ITEMS.c1.price / 1080));   // v3: c1 list price is a balance constant (was 180)
   Sim.advance(s, 89.75 - s.day);
   s.fin = { rev: 1000, opex: 400, dep: 100 };
   Sim.advance(s, 0.25);
@@ -842,11 +842,107 @@ function playRandom(seed, opts, until) {
   return { s, drv };
 }
 
+/* ============ v3 sinks: Hall 3, grid tier 4, build-to-suit contracts (SPEC §2 M38b/M07b/M29b) ============ */
+test("M38b: Hall 3 needs Hall 2, costs more, takes 120 days and adds racks G1..J6 (halls stay generic)", () => {
+  const s = sb(1);
+  s.cash = 1e5;
+  assert.equal(s.halls.length, 3);
+  assert.ok(Sim.apply(s, { type: "buildHall" }).ok, "no hall given: builds the next one (Hall 2)");
+  assert.ok(!Sim.check(s, { type: "buildHall", hall: 3 }).ok, "Hall 3 waits for Hall 2");
+  Sim.advance(s, K.HALL_DAYS + 1);
+  const cash = s.cash;
+  const chk = Sim.check(s, { type: "buildHall" });
+  assert.ok(chk.ok && /Hall 3/.test(chk.msg), chk.msg);
+  assert.ok(Sim.apply(s, { type: "buildHall" }).ok);
+  assert.ok(near(cash - s.cash, K.HALL3_COST));
+  assert.ok(!Sim.check(s, { type: "buildHall" }).ok, "one at a time / all built");
+  Sim.advance(s, K.HALL3_DAYS - 0.5);
+  assert.equal(s.racks.length, 36);
+  Sim.advance(s, 1);
+  assert.equal(s.racks.length, 54);
+  assert.ok(rack(s, "G1") && rack(s, "J6") && rack(s, "H3").hall === 3);
+  assert.equal(Sim.stats(s).halls.length, 3);
+  assert.ok(Sim.apply(s, { type: "buy", item: "c1", rack: "J6" }).ok);
+  assert.ok(Sim.apply(s, { type: "spine", hall: 3, row: 2 }).ok, "spines work in Hall 3");
+  assert.ok(Sim.check(s, { type: "cooling", hall: 3, mode: "chiller" }).ok);
+});
+
+test("M07b: a 4th grid tier follows the 700 kW tier, with a long lead time", () => {
+  const s = sb(1);
+  s.cash = 1e5;
+  for (const kw of [K.GRID_KW_UP, K.GRID_KW_UP2]) { assert.ok(Sim.apply(s, { type: "grid" }).ok); Sim.advance(s, 50); assert.equal(s.gridKw, kw); }
+  const cash = s.cash;
+  assert.ok(Sim.apply(s, { type: "grid" }).ok);
+  assert.ok(near(cash - s.cash, K.GRID_COST3));
+  Sim.advance(s, K.GRID_DAYS3 - 1);
+  assert.equal(s.gridKw, K.GRID_KW_UP2);
+  Sim.advance(s, 1.5);
+  assert.equal(s.gridKw, K.GRID_KW_UP3);
+  assert.ok(!Sim.check(s, { type: "grid" }).ok, "fully upgraded");
+});
+
+test("old saves with two halls still load, step and build Hall 2", () => {
+  const s = sb(1);
+  s.halls = s.halls.slice(0, 2);
+  const t = JSON.parse(JSON.stringify(s));
+  t.cash = 5000;
+  assert.ok(Sim.apply(t, { type: "buildHall" }).ok);
+  Sim.advance(t, K.HALL_DAYS + 1);
+  assert.equal(t.racks.length, 36);
+  assert.ok(Sim.check(t, { type: "buildHall" }).ok, "Hall 3 offered once Hall 2 stands");
+});
+
+function btsOffer(s) {
+  s.nextBts = s.day;
+  Sim.advance(s, 1);
+  return s.offers.find(o => o.bts);
+}
+test("M29b: build-to-suit offers are big, long, high-SLA and need an up-front fit-out", () => {
+  const s = sb(3);
+  Sim.advance(s, 10);
+  fill(s, "A3", "m1", 4, "infer"); fill(s, "A4", "c1", 4, "train");
+  const o = btsOffer(s);
+  assert.ok(o, "a build-to-suit offer arrives on its own timer");
+  assert.ok(o.days >= 360 && o.sla >= 0.95 && o.lead > 0 && o.fitout > 0);
+  assert.ok(near(o.penalty, o.price * K.BTS_PENALTY_MULT, 1e-3));
+  const st = Sim.stats(s);
+  assert.ok(o.units >= st.supply[o.w] * 0.4 || o.units >= K.BTS_MIN_UNITS, "big relative to today's output");
+  s.cash = o.fitout - 1;
+  assert.ok(!Sim.check(s, { type: "signContract", id: o.id }).ok, "needs the fit-out cash");
+  s.cash = o.fitout + 100;
+  assert.ok(Sim.apply(s, { type: "signContract", id: o.id }).ok);
+  assert.ok(near(s.cash, 100), "fit-out paid up front");
+  assert.ok(s.deprec.length > 0, "fit-out is capex (depreciated)");
+  const c = s.contracts.find(x => x.id === o.id);
+  assert.ok(near(c.start, s.day + o.lead) && near(c.end, c.start + o.days));
+  const before = Sim.stats(s);
+  assert.equal(before.cDel[c.id] || 0, 0, "nothing delivered during the lead time");
+  assert.equal(before.revenue.contracts, 0);
+  Sim.advance(s, o.lead + 1);
+  const after = Sim.stats(s);
+  assert.ok(after.cDel[c.id] > 0, "served once it starts");
+});
+
+test("M29b/M65: a real demand cut sends inference build-to-suit customers away (no penalty, fit-out sunk)", () => {
+  for (const cut of [true, false]) {
+    const s = sb(5);
+    s.hidden.demandCut = cut;
+    s.contracts.push({ id: "b1", cust: "T", icon: "x", foreign: false, bts: true, w: "infer", units: 50, days: 400, price: 0.3, sla: 0.95, penalty: 0.9,
+      start: s.day, end: s.day + 400, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 });
+    s.contracts.push({ id: "b2", cust: "T", icon: "x", foreign: false, bts: true, w: "train", units: 50, days: 400, price: 0.3, sla: 0.95, penalty: 0.9,
+      start: s.day, end: s.day + 400, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 });
+    inject(s, { kind: "demandShock", group: "disrupt" });
+    Sim.advance(s, 0.25);
+    assert.equal(s.contracts.some(c => c.id === "b1"), !cut, `inference BTS kept iff the cut is fake (cut=${cut})`);
+    assert.ok(s.contracts.some(c => c.id === "b2"), "training BTS unaffected");
+  }
+});
+
 test("full 1800-day campaign with a random-action driver is deterministic", () => {
-  const a = playRandom(22).s, b = playRandom(22).s;   // seed 22: takes an equity round and reaches d1800
+  const a = playRandom(22).s, b = playRandom(22).s;   // seed 22: takes an equity round and reaches d1800 (re-check the seed when RNG draws change)
   assert.equal(JSON.stringify(a), JSON.stringify(b));
   assert.equal(a.over, "end", `game lasted ${a.day} days (${a.over})`);
-  assert.ok(a.equity.rounds >= 1 && a.contractLog.signed >= 1 && a.racks.length === 36, "the driver touched the late chapters");
+  assert.ok(a.equity.rounds >= 1 && a.contractLog.signed >= 1 && a.racks.length >= 36, "the driver touched the late chapters (Hall 2+)");
   const c = playRandom(26).s;
   assert.notEqual(JSON.stringify(a.hidden), JSON.stringify(c.hidden));
 });

@@ -72,67 +72,71 @@ force, and compresses the game state usefully.
 
 Two scripted players share the simulation core (`bots/bots.js`), so we can measure how much thinking pays:
 
-- **Greedy** buys whatever raises income *right now* the most per dollar (≤ 200-day payback). It ignores seasons,
-  launches, vendor risk and contracts, never sells, hedges or pilots. It does the obvious chores (transit for its
-  traffic, auto-repair, one more technician when repairs pile up). It is the gut-feeling player.
+- **Greedy** buys whatever raises income *right now* the most per dollar (payback ≤ 300 days). It ignores seasons,
+  launches, vendor risk and contracts, and never hedges or pilots. Like a gut player, it sells a part that loses
+  money *today* and lets an idle technician go. It also does the obvious chores (transit for its traffic,
+  auto-repair, one more technician when repairs pile up).
 - **Planner** plays the heuristics above across all 17 chapters with one value function: change in daily profit
   over a lookahead (150 days, or the rest of the game in the last 420), plus the final-quarter profit × 730 that the
   score counts, plus resale using the public launch calendar, minus the reputation cost of SLA misses. On top: it
-  signs contracts it can serve (buying the capacity when that pays), builds grid 700 kW + Hall 2 when demand outruns
-  the floor, buys UPS/solar/PPA, switches cooling for droughts, reads scare follow-ups, pilots exotic cards, reads
-  the demand-disruption signal, and takes a VC round only when the board can no longer fire it. It sees only public
-  state, news and its own pilots (never the seed's hidden truths).
+  signs contracts and build-to-suit deals it can serve with ≥10–15 % headroom (buying the capacity when that pays and
+  is affordable before delivery starts), builds grid tiers and Hall 2 when demand outruns the floor, buys UPS/solar/PPA,
+  switches each hall's cooling for droughts, reads scare follow-ups, pilots exotic cards, reads the demand-disruption
+  signal (inference build-to-suit customers walk away if it is real), and takes a VC round only when the board can
+  no longer fire it. It sees only public state, news and its own pilots (never the seed's hidden truths).
 
-`node bots/run.js --seeds 12 --ablate` (reports/depth.json). **n = 12 seeds (1–12) per row, one planner
-implementation, score = founder equity value (SPEC §1).** The gap is a *lower bound* on depth: a better planner would
-open it further, and a better greedy would close it. Weak signals, not proof.
+`node bots/run.js --seeds 12 --ablate` (reports/depth.json, v3 balance: GPU prices ×1.6, build-to-suit every ~60
+days). **n = 12 seeds (1–12) per row, one planner implementation, score = founder equity value (SPEC §1).** The gap
+is a *lower bound* on depth: a better planner would open it further, and a better greedy would close it. Weak
+signals, not proof.
 
 | Variant | Greedy score (mean $k) | Planner score | Relative gap (mean / median / min) | Planner wins | Note |
 |---|---|---|---|---|---|
-| **Full game** | 11,609 | 120,416 | **+937 %** / +954 % / +543 % | 12/12 | net worth gap +339 % |
-| No heat/seasons | 12,436 | 115,534 | +829 % | 12/12 | |
-| No generations | 77,697 | 231,656 | +198 % | 12/12 | confounded: prices never fall, so greedy's never-sell strategy stops losing |
-| No operations | 14,123 | 114,721 | +712 % | 12/12 | |
-| No fabric (spines, frontier, transit) | 19,406 | 222,691 | +1,048 % | 12/12 | confounded: removes transit, a big late cost |
-| **No contracts** | 10,109 | 56,018 | **+454 %** | 12/12 | the largest single drop |
-| No memory market | 11,935 | 126,361 | +959 % | 12/12 | |
-| No finance | 13,824 | 117,094 | +747 % | 12/12 | |
-| No facilities | 12,708 | 103,525 | +715 % | 12/12 | |
-| No energy | 12,406 | 90,060 | +626 % | 12/12 | |
-| No environment | 11,110 | 111,677 | +905 % | 12/12 | |
-| No investors | 11,527 | 108,504 | +841 % | 12/12 | |
-| No reputation | 13,445 | 104,221 | +675 % | 12/12 | |
-| No policy | 11,692 | 116,641 | +898 % | 12/12 | |
-| No disruption | 13,224 | 149,795 | +1,033 % | 12/12 | |
-| No network | 12,926 | 115,211 | +791 % | 12/12 | |
-| No roofline (identical cards) | 1,589 | 54,634 | +3,338 % | 12/12 | confounded: both families become poor at inference; greedy bankrupt 4/12 |
+| **Full game** | 7,719 | 61,829 | **+701 % / +666 % / +290 %** | 12/12 | net worth gap +662 % |
+| No heat/seasons | 14,315 | 70,517 | +393 % / +331 % / +134 % | 12/12 |  |
+| No generations | 58,334 | 171,066 | +193 % / +181 % / +90 % | 12/12 | confounded: prices never fall, so the never-sell greedy stops losing |
+| No operations | 16,188 | 71,295 | +340 % / +399 % / +94 % | 12/12 |  |
+| No fabric | 41,564 | 211,483 | +409 % / +408 % / +208 % | 12/12 | confounded: also removes transit, a large late cost for both bots |
+| **No contracts** | 7,705 | 37,527 | **+387 % / +471 % / +152 %** | 12/12 | also removes build-to-suit, the planner's main sink |
+| No memory market | 9,197 | 72,390 | +687 % / +688 % / +325 % | 12/12 |  |
+| No finance | 12,641 | 76,913 | +508 % / +481 % / +268 % | 12/12 | greedy bankrupt 1/12 (no credit line: floor −$150k) |
+| No facilities | 10,013 | 62,918 | +528 % / +522 % / +193 % | 12/12 |  |
+| **No energy** | 12,060 | 51,635 | **+328 % / +441 % / +143 %** | 12/12 |  |
+| No environment | 8,420 | 61,958 | +636 % / +678 % / +299 % | 12/12 |  |
+| No investors | 7,956 | 49,175 | +518 % / +552 % / +219 % | 12/12 |  |
+| No reputation | 8,592 | 58,881 | +585 % / +572 % / +259 % | 12/12 |  |
+| No policy | 8,169 | 74,430 | +811 % / +822 % / +388 % | 12/12 |  |
+| No disruption | 7,706 | 94,174 | +1,122 % / +1,189 % / +438 % | 12/12 |  |
+| No network | 10,815 | 74,805 | +592 % / +600 % / +192 % | 12/12 |  |
+| No roofline | 1,904 | 42,327 | +2,123 % / +3,082 % / +426 % | 12/12 | confounded: both families become poor at inference |
 
-Balance targets (SPEC §6) on the full game, n = 12: idle survives on every seed and ends at 0.5 % of the
-planner's score; greedy is never bankrupt; the planner is never fired (0 in every row above); planner beats greedy on
-12/12 seeds by at least +543 %. Every chapter changed the planner's actions in most games (games out of 12): racks,
-power, GPUs, heat, generations, operations, fabric, contracts, memory, facilities, energy, reputation, disruption 12;
-finance, investors, policy 11 (investors and policy still made an explicit decision, a decline or "don't lobby",
-in the 12th); environment 10 (the other two seeds had no drought after chapter 13, so there was nothing to decide).
-Timing: planner ≈3.5 s per game, greedy ≈0.6 s (single thread, n = 6 seeds).
+Balance targets (SPEC §6) on the full game, n = 12:
+- **Idle** survives on every seed and ends at 1.0 % of the planner's score.
+- **Greedy** is never bankrupt (3.8–24× idle).
+- **The planner** is never fired (0 in every row) and beats greedy on 12/12 seeds by at least +290 %.
+- **Idle cash** (the planner's longest stretch with more than $2M in the bank, mean over seeds) is **311 days**
+  (it was 1,256 before v3), but 4/12 seeds still exceed a year (385–645 days).
+- **Chapter coverage** (games out of 12 where the chapter changed the planner's actions): 15 chapters in 12/12.
+  Environment 10/12: seeds 6 and 10 have no drought after chapter 13. Policy 10/12 (12/12 counting explicit
+  "don't lobby" decisions).
+- **Timing:** planner ≈1.9 s per game, greedy ≈0.6 s (single thread, n = 12).
 
 What this suggests (tentatively):
-- **Contracts carry the most depth**: removing them roughly halves the relative gap (+937 % → +454 %). They are the
-  planner's main sink (it builds capacity for them) and its hedge before launches.
-- **Energy, reputation, operations, facilities and finance each carry some** (gap falls to +626…+747 %); heat,
-  investors, network, policy and environment a little (+791…+905 %). Differences of this size are within one
-  standard deviation of the per-seed gap (±32M), so the ordering is a hypothesis, not a result.
-- **Removing disruption, fabric or the memory market does not shrink the gap** (it grows slightly). For disruption
-  and memory that means the planner's gain from them (pilots, dumping the doomed vendor, reading scares) is smaller than
-  what the rest of the game offers; fabric is confounded (transit is a large late cost for both bots). **Don't cut
-  any of them on this evidence**; the next test is a cleaner ablation (e.g. fabric without the transit cost) and
+- **Contracts (with build-to-suit) carry the most depth**: removing them roughly halves the planner's score
+  and the gap falls to +387 %. They are the planner's main cash sink and its hedge before launches.
+- **Energy, operations, heat and fabric carry a lot too** (gap +328…+409 % without them). Finance, facilities,
+  investors and reputation carry some (+508…+585 %). Environment, network, memory and policy carry little or
+  nothing (+592…+811 %). The per-seed spread of the gap is large (±$16–64M), so this ordering is a hypothesis,
+  not a result.
+- **Removing disruption *widens* the gap** (+1,122 %). The planner does better without the late shocks, and greedy
+  isn't hurt by them because it ignores exotic tech. That is not evidence that disruption adds depth. **Don't cut or
+  keep any mechanic on this evidence**; the next tests are cleaner ablations (fabric without the transit cost) and
   playtests.
-- **Generations and roofline ablations are confounded** (they change the whole economy), as before.
-- **The size of the gap is itself a caveat.** Most of it comes from the endgame: the planner builds run-rate for the
-  score's earnings multiple and replaces old cards, while greedy never sells and ends running loss-making old
-  hardware. A human in between these two is the interesting case, which only playtests can show.
-- **Not met: idle cash.** Both bots hold more than $2M for ~3.4 years (planner 1,256 days on average). The planner
-  reinvests almost everything it can, but markets are demand-bound and the floor caps at two halls. No constants-only
-  change we tried fixed it without bankrupting greedy (`.claude/state/diagnosis-idle-cash.md`).
+- **Generations, fabric and roofline ablations are confounded** (they change the whole economy).
+- **Hall 3 and the 1000 kW grid tier were never built by the planner (0/12).** At v3 margins it rarely fills two
+  halls, so they are a bet it declines. They exist as a choice, but this data doesn't show them working as a sink.
+- **The gap is still large (≈7×).** Most of it comes from contracts/build-to-suit and the endgame run-rate that the
+  score's earnings multiple rewards. A human will sit somewhere between the two bots, which only playtests can show.
 
 The end screen of every game replays the same seed with both bots, so each playtester sees how they
 compare with gut-feeling play and with thinking-ahead play.
