@@ -3,6 +3,13 @@
 All notable changes to Halcyon Compute. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions are milestones of the week-3 project; there are no tagged releases.
 
+## [Unreleased]
+
+### Changed
+- `DESIGN.md` rewritten for the full game: the 17-chapter table, characteristics and 14 heuristics, the playtest
+  round 1 summary and new playtest questions. The v3 depth-evidence section is kept.
+- README screenshot retaken from v0.3 (mid-game heat map, pace chip, cluster meter, HBM shortage).
+
 ## [0.3.0] - 2026-09-24
 Post-playtest fix round (playtest round 1: three AI personas and a code review; see `docs/playtests/SYNTHESIS.md`).
 
