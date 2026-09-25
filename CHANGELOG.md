@@ -6,6 +6,8 @@ release plus the fix and merged back here afterwards.
 
 ## [Unreleased]
 
+## [0.4.6] - 2026-09-25
+
 Improvement round driven by real telemetry (v0.4.4, seed 45823, one player, replay-verified to day 730).
 
 ### Changed
