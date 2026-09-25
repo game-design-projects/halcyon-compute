@@ -105,6 +105,10 @@ with an unplugged icon and a `--sweep` light sweep (CSS `@property`) when a swit
 racks, a blinking red LED on failures, `FX.vignette` for big losses and walk-outs, `FX.danger` (depth ∝ 60 − runway days,
 heartbeat under 30), `FX.fly` for offers → board badge, chapters → goal flag, signing → the serving racks. Every signal is
 ≤ 400 ms or a steady state, never blocks input; reduced motion (OS or the Settings override, `FX.setReduced`) keeps colour
-only. Rejection text stays in tooltips and the `#sr` aria-live region. Perf at 8x with 36 racks, 1920×1080 (n=1 run,
-3 × 8 s windows): frame() JS p95 4.7–4.9 ms, max 7–15 ms; rAF 16.7 ms p95; baseline HEAD a125ef8 on the same harness
-p95 5.3 ms (the HUD's forced layout per render was replaced by a ResizeObserver).
+only. Rejection text stays in tooltips and the `#sr` aria-live region. Perf at 8x with 36 racks, 1920×1080
+(`.playwright-mcp/perfA.js`, n=2 runs × 2 windows): frame() JS p95 3.1–3.3 ms, median 0.8, max 6–8 ms; rAF p95 16.7 ms.
+The pre-pass build (HEAD a125ef8) measured 7.5–8.1 ms p95 on the same machine in interleaved runs (n=3; the machine was
+slower than in the earlier 5.3 ms measurement, so only interleaved numbers compare). Two findings: (1) setting `ctx.font`
+on the page canvas right after ui.js rewrote the DOM forced a full style recalc inside FX.tick (≈6 ms of the slowest
+frames); floating text is now a cached OffscreenCanvas sprite; (2) the HUD's `offsetHeight` read in every render forced
+a layout; a ResizeObserver replaced it.

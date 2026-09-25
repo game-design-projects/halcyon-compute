@@ -26,7 +26,8 @@ const s = Sim.newGame(log.seed, { sandbox: log.sandbox });
 const timeline = [
   ...log.snaps.map(x => ({ d: x.d, kind: 0, x })),
   ...log.actions.filter(x => x.k === "act").map((x, i) => ({ d: x.d, kind: 1, i, x })),
-].sort((a, b) => a.d - b.d || a.kind - b.kind || (a.i || 0) - (b.i || 0));
+].sort((a, b) => a.d - b.d || ((a.x.rt != null && b.x.rt != null) ? a.x.rt - b.x.rt : 0) || a.kind - b.kind || (a.i || 0) - (b.i || 0));
+// same game day: the recorded real time decides (a snapshot taken while paused after actions, e.g. at export, comes after them)
 let drift = 0, maxDrift = 0, firstDrift = null, rejectedOnReplay = [];
 for (const e of timeline) {
   if (s.over) break;

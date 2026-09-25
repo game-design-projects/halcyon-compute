@@ -3085,8 +3085,8 @@
     if (e.code === "Space") { e.preventDefault(); if (V.skip) stopSkip("key"); setSpeed(V.speed ? 0 : V.lastSpeed); }
     else if (SPEEDS[k] && !mod) { if (V.skip) stopSkip("key"); setSpeed(SPEEDS[k]); }
     else if (k === "Escape") {
+      hoverHide();                   // the hover card never eats an Esc meant for something else
       if (drag && drag.started) cancelDrag("Esc");
-      else if (V.hover) hoverHide();
       else if (V.armed) { V.armed = null; renderAll(); }
       else if (V.pop) closePop();
       else if (V.multi.size) clearMulti();

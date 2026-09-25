@@ -50,8 +50,14 @@ Versions are milestones of the week-3 project; there are no tagged releases.
 - End screen: lesson icons by loss key (idle, cancelled, SLA, …); contracts row adds cancelled / late.
 - The HUD export button moved into Settings (still in the main menu and on the end screen); the HUD Contracts button is
   replaced by the board header. Lease is a tag flag on the rack tile.
-- Perf: the HUD height is tracked with a ResizeObserver instead of a forced layout in every render (renderAll ≈4.3 →
-  0.9 ms in a 200-render loop, n=1).
+- Perf: the HUD height is tracked with a ResizeObserver instead of a forced layout in every render; floating text is
+  pre-rendered into cached OffscreenCanvas sprites (setting `ctx.font` after a DOM rewrite forced a document style
+  recalc in the slowest 5 % of frames); fly/cash-signal rect reads wait for the next frame; job chips are cached. At 8x,
+  36 racks, 1920×1080 (n=2 runs × 2 windows): frame() JS p95 3.1–3.3 ms, median 0.8 ms, vs the pre-pass build on the same
+  machine and harness 7.5–8.1 ms p95 (interleaved, n=3).
+- Esc clears a tapped card before anything else (it used to hide the hover card first, and the next rack click then
+  tried to place the card). `tools/replay.js` orders same-day actions and snapshots by recorded real time (an export
+  snapshot taken while paused no longer reads as a divergence).
 
 ### Added
 - **Fixed game screen that fits any window.** The UI is one 1920×1080 screen (authored at 1440×810, zoom 4/3) scaled
