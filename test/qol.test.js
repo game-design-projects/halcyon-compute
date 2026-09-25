@@ -188,3 +188,14 @@ test("ui.js never shadows the string helper L (a local `L` would break every L()
   const bad = src.split("\n").map((l, i) => [i + 1, l]).filter(([, l]) => /(\bconst|\blet|\bvar)\s+L\s*=|[,(]\s*L\s*=[^=>]|function\s+\w*\s*\(([^)]*,\s*)?L\s*[,)]/.test(l) && !/const L = window\.L/.test(l));
   assert.deepEqual(bad, [], bad.map(([n, l]) => `${n}: ${l.trim()}`).join("\n"));
 });
+
+test("auto-pause defaults (v0.4.2 hotfix): only cash < 0 is on; offer/failure/SLA are opt-in; old settings migrate", () => {
+  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "ui.js"), "utf8");
+  const m = src.match(/AP_V = (\d+), AP_DEFAULT = (\{[^}]*\})/);
+  assert.ok(m, "AP_V / AP_DEFAULT declared");
+  const def = Function(`return (${m[2]})`)();
+  assert.deepEqual(def, { offer: false, fail: false, cash: true, sla: false });
+  assert.ok(+m[1] >= 2, "settings version bumped past the v0.4.1 default");
+  assert.match(src, /if \(!\(raw\.apV >= AP_V\)\)/, "saved settings older than AP_V are migrated to the new default");
+  assert.match(src, /!SET\.apFirstDone/, "one teaching pause on the very first offer");
+});

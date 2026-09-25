@@ -39,9 +39,23 @@
   };
   const UNDO = QOL ? QOL.undoStack(20) : null;
   /* ================= settings (localStorage, guarded) ================= */
-  const SET_DEFAULT = { master: 1, sfx: 1, hum: 1, reduced: null, cb: false, scale: 1, ap: { offer: true, fail: true, cash: true, sla: true }, apTouched: false, campaigns: 0 };
+  /* auto-pause (v0.4.2 hotfix, player: "每次出新的合同都自动暂停"): by default only cash < 0 pauses (chapter cards and the
+     runway warnings are modal and stop time on their own) plus ONE teaching pause on the very first new offer ever
+     (`apFirstDone`). Offer / failure / SLA pauses are opt-in in Settings. AP_V bumps migrate old saved settings once. */
+  const AP_V = 2, AP_DEFAULT = { offer: false, fail: false, cash: true, sla: false };
+  const SET_DEFAULT = { master: 1, sfx: 1, hum: 1, reduced: null, cb: false, scale: 1, ap: Object.assign({}, AP_DEFAULT), apTouched: false, apV: AP_V, apFirstDone: false, campaigns: 0 };
   let SET = JSON.parse(JSON.stringify(SET_DEFAULT));
-  try { const raw = JSON.parse(localStorage.getItem(SET_KEY) || "null"); if (raw) SET = Object.assign(SET, raw, { ap: Object.assign({}, SET.ap, raw.ap || {}) }); } catch (e) { /* storage blocked */ }
+  try {
+    const raw = JSON.parse(localStorage.getItem(SET_KEY) || "null");
+    if (raw) {
+      SET = Object.assign(SET, raw, { ap: Object.assign({}, SET.ap, raw.ap || {}) });
+      if (!(raw.apV >= AP_V)) {          // saved before the bump: the old "everything on" default goes, whatever it was
+        SET.ap = Object.assign({}, AP_DEFAULT); SET.apTouched = false; SET.apV = AP_V;
+        SET.apFirstDone = !!(raw.campaigns || raw.taught);   // a returning player has already seen offers arrive
+        try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (e) { /* storage blocked */ }
+      }
+    }
+  } catch (e) { /* storage blocked */ }
   function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (e) { /* storage blocked */ } }
   const PACE_ON = params.get("pace") !== "0";      // ?pace=0 turns the ghost off (A/B frame-time measurement)
   /* the pace chip compares you with the HUMAN-PACED bots (Casual = humanized greedy, Expert = humanized planner); the
@@ -519,7 +533,9 @@
     V.apSeen = now;
     if (!prev) return;
     let why = null, el = null;
-    if (ap.offer && S.offers.some(o => !prev.offers.has(o.id))) { why = "offer"; el = $("offerstrip"); }
+    const newOffer = S.offers.some(o => !prev.offers.has(o.id));
+    if (newOffer && !ap.offer && !SET.apFirstDone && !S.sandbox) { why = "offer"; el = $("offerstrip"); SET.apFirstDone = true; saveSettings(); }   // one teaching pause, ever
+    else if (ap.offer && newOffer) { why = "offer"; el = $("offerstrip"); }
     else if (ap.fail && failed > prev.failed) { why = "fail"; el = $("alertbtn"); }
     else if (ap.cash && now.neg && !prev.neg) { why = "cash"; el = $("h-cashchip"); }
     else if (ap.sla && miss && !prev.miss) { why = "sla"; el = $("offerstrip"); }
@@ -2276,7 +2292,7 @@
     try { TELE.snap(S, Sim.score(S)); TELE.end(S, Sim.summary(S)); } catch (e) { dlog("tele end", e); }
     if (V.skip) stopSkip("over");
     // auto-pause is on by default for the first campaign only (unless the player changed it)
-    if (!S.sandbox) { SET.campaigns = (SET.campaigns || 0) + 1; if (!SET.apTouched) SET.ap = { offer: false, fail: false, cash: true, sla: false }; saveSettings(); }
+    if (!S.sandbox) { SET.campaigns = (SET.campaigns || 0) + 1; if (!SET.apTouched) SET.ap = Object.assign({}, AP_DEFAULT); saveSettings(); }
     const sm = Sim.summary(S), H = sm.hidden, NAME = { lattice: "Lattice", photon: "Photon" };
     $("ot").textContent = L("end." + (S.over === "bankrupt" ? "bankrupt" : S.over === "fired" ? "fired" : "done"));
     $("osub").textContent = `${L("menu.seed")} ${seed}${S.sandbox ? " · " + L("menu.sandbox") : ""}`;

@@ -5,6 +5,13 @@ Versions are milestones of the week-3 project; there are no tagged releases.
 
 ## [Unreleased]
 
+### Changed
+- **Auto-pause is quiet by default** (player telemetry: ~20 pauses in 6 minutes, 19 of them on new offers; "每次出新的合同都自动
+  暂停"). New offers, failures and SLA misses no longer pause unless you turn them on in Settings; only cash below 0 pauses
+  (chapter cards and the runway warnings still stop time), plus one teaching pause on the very first new offer ever.
+  Saved settings from v0.4.1 and earlier are migrated to the new default once (settings version 2); toggles you change
+  afterwards stick.
+
 ## [0.4.1] - 2026-09-25
 
 ### Added
