@@ -1059,3 +1059,20 @@ kbd { font: 600 12px var(--sans); background: var(--page); border: 1px solid var
 .cpill { flex: none; }
 .cpill span { max-width: 96px; }
 .cpill .m { width: 28px; }
+/* compact offer cards: two rows (who/what/price, then Sign · ✕ · deliverability · expiry); expiry = the thin bottom line */
+.board .ocard { min-height: 0; position: relative; padding: 6px 8px 8px; gap: 6px; overflow: hidden; }
+.board .oshead { grid-row: 1; cursor: pointer; }
+.board .cpills { grid-column: 1 / 5; }
+.ocard .oa { gap: 6px; }
+.ocard .oa .ofit { flex: 1; min-width: 0; }
+.ocard .oa .ofit > span:last-child { white-space: nowrap; }
+.ocard .expd { display: inline-flex; align-items: center; gap: 2px; color: var(--ink-2); white-space: nowrap; }
+.ocard > .exp { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; background: transparent; }
+.ocard > .exp i { display: block; height: 100%; background: var(--c-warn); opacity: .8; }
+.ocard .op { grid-template-columns: auto auto; column-gap: 3px; align-items: baseline; }
+.ocard .op small.up, .ocard .op small.down { grid-column: 1 / 3; text-align: right; }
+.hud .board-dup { display: none !important; }
+.rack .links { top: 4px; bottom: auto; height: 4px; }
+.rack .earn { top: 10px; }
+.rack.front-top .links { top: 5px; }
+.rack .leasetag { left: auto; right: 6px; top: 22px; }

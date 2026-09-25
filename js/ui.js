@@ -840,14 +840,14 @@
   }
   /* quarter tally card: revenue − costs = profit, ticking up; display only, pointer-events none */
   let qcardT;
-  function quarterCard(L) {
-    const el = $("qcard"); if (!el || !L) return;
-    const rev = L.web + L.train + L.infer + L.frontier + L.contracts;
-    const cost = L.power + L.upkeep + L.salaries + L.transit + L.interest + L.lease + L.water + L.diesel + L.carbonTax + L.fines + L.penalties + L.repairs + L.other + L.tax;
-    const profit = rev - cost, q = L.q;
+  function quarterCard(Q) {
+    const el = $("qcard"); if (!el || !Q) return;
+    const rev = Q.web + Q.train + Q.infer + Q.frontier + Q.contracts;
+    const cost = Q.power + Q.upkeep + Q.salaries + Q.transit + Q.interest + Q.lease + Q.water + Q.diesel + Q.carbonTax + Q.fines + Q.penalties + Q.repairs + Q.other + Q.tax;
+    const profit = rev - cost, q = Q.q;
     el.innerHTML = `<div class="qh">${icon("trend")}Q${q % 4 + 1} Y${Math.floor(q / 4) + 1} closed</div>
       <div class="qr"><span>Revenue</span><b style="color:var(--hud-good)">+${money(rev)}</b></div><div class="qr"><span>Costs</span><b style="color:var(--hud-bad)">−${money(cost)}</b></div>
-      ${L.tax > 0.5 ? `<div class="qr"><span>incl. tax</span><b style="color:var(--hud-bad)">−${money(L.tax)}</b></div>` : ""}<div class="qr qp"><span>Profit</span><b id="qcard-p">$0k</b></div>`;
+      ${Q.tax > 0.5 ? `<div class="qr"><span>incl. tax</span><b style="color:var(--hud-bad)">−${money(Q.tax)}</b></div>` : ""}<div class="qr qp"><span>Profit</span><b id="qcard-p">$0k</b></div>`;
     el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
     const pEl = $("qcard-p");
     pEl.style.color = profit >= 0 ? "var(--hud-good)" : "var(--hud-bad)";
@@ -872,12 +872,21 @@
     if (!rack(V.selected) || rack(V.selected).hall !== V.hall) { const hr = hallRacks(V.hall); V.selected = hr.length ? hr[0].id : null; }
     const st = Sim.stats(S);
     V.sig = signature(); V.lastFull = performance.now();
-    renderHUD(st); renderDrawerBtns(); renderBanners(st); renderGoal(st); renderOffers(st); renderHallTabs(); renderModes(); renderFloor(st); renderShelf();
-    renderDetail(st); renderTray(); renderMarket(); renderBench(); renderNews();
+    // __game.V.profOn = true collects per-renderer timings in V.prof (perf investigations; off by default)
+    const P = V.profOn ? (name, fn) => { const t = performance.now(); fn(); V.prof[name] = (V.prof[name] || 0) + performance.now() - t; } : (name, fn) => fn();
+    if (V.profOn && !V.prof) V.prof = {};
+    P("hud", () => renderHUD(st)); P("drawerBtns", renderDrawerBtns); P("banners", () => renderBanners(st)); P("goal", () => renderGoal(st)); P("board", () => renderOffers(st));
+    P("halls", renderHallTabs); P("modes", renderModes); P("floor", () => renderFloor(st)); P("shelf", renderShelf);
+    P("detail", () => renderDetail(st)); P("tray", renderTray); P("market", renderMarket); P("bench", renderBench); P("news", renderNews);
+    if (V.profOn) V.prof.n = (V.prof.n || 0) + 1;
     if (V.drawer) renderDrawer(st);
     if (V.pop) renderPop(st);
-    const hh = $("hud").offsetHeight;
-    if (hh !== V.hudH) { V.hudH = hh; document.documentElement.style.setProperty("--hud-h", hh + "px"); }
+    if (!V.hudRO) {   // --hud-h follows the HUD's height without forcing a synchronous layout in every render (perf)
+      const setH = hh => { if (hh && hh !== V.hudH) { V.hudH = hh; document.documentElement.style.setProperty("--hud-h", hh + "px"); } };
+      if (window.ResizeObserver) { V.hudRO = new ResizeObserver(() => setH($("hud").offsetHeight)); V.hudRO.observe($("hud")); }
+      else V.hudRO = true;
+      setH($("hud").offsetHeight);
+    }
     document.body.classList.toggle("armed", !!V.armed);
     document.body.classList.toggle("leasing", V.lease && on("finance"));
     const dt = performance.now() - t0;
@@ -1070,14 +1079,14 @@
     renderLegend();
   }
   function renderLegend() {
-    const L = $("legend"), RP = ramps();
+    const LG = $("legend"), RP = ramps();
     const keys = list => `<div class="keys">${list.map(([c, n]) => `<span><i style="background:${c}"></i>${n}</span>`).join("")}</div>`;
-    if (V.mode === "role") L.innerHTML = keys(["web", "train", "infer", "tank"].filter(k => k !== "tank" || on("disrupt")).filter(k => k === "web" || on("gpu")).map(k => [R[k].color, R[k].name]));
-    else if (V.mode === "gen") L.innerHTML = keys([[COL.good, "Current"], [COL.warn, "One behind"], [COL.bad, "Two behind"]]);
-    else if (V.mode === "cluster") L.innerHTML = keys([0, 1, 2].map(i => [COL["row" + i], `Row ${builtHalls().map(n => hallLetters(n)[i]).join("/")} spine`]).concat([[COL.none, "No spine"]])) + `<span>${icon("star", `color:${COL.frontier};width:14px;height:14px`)} = frontier cluster (${K.FRONTIER_MIN_GPUS}+ training GPUs)</span>`;
+    if (V.mode === "role") LG.innerHTML = keys(["web", "train", "infer", "tank"].filter(k => k !== "tank" || on("disrupt")).filter(k => k === "web" || on("gpu")).map(k => [R[k].color, R[k].name]));
+    else if (V.mode === "gen") LG.innerHTML = keys([[COL.good, "Current"], [COL.warn, "One behind"], [COL.bad, "Two behind"]]);
+    else if (V.mode === "cluster") LG.innerHTML = keys([0, 1, 2].map(i => [COL["row" + i], `Row ${builtHalls().map(n => hallLetters(n)[i]).join("/")} spine`]).concat([[COL.none, "No spine"]])) + `<span>${icon("star", `color:${COL.frontier};width:14px;height:14px`)} = frontier cluster (${K.FRONTIER_MIN_GPUS}+ training GPUs)</span>`;
     else {
       const lab = { heat: ["22 °C", "36 °C"], power: ["0 kW", "30 kW"], free: ["Full", "20U free"], fail: ["Safe", "1 %/day"] }[V.mode];
-      L.innerHTML = `<span>${lab[0]}</span><span class="ramp" style="background:linear-gradient(90deg,${RP[V.mode].join(",")})"></span><span>${lab[1]}</span>${V.mode === "fail" ? `<span>${icon("cross", `color:${COL.fail};width:14px;height:14px`)} failed part</span>` : ""}`;
+      LG.innerHTML = `<span>${lab[0]}</span><span class="ramp" style="background:linear-gradient(90deg,${RP[V.mode].join(",")})"></span><span>${lab[1]}</span>${V.mode === "fail" ? `<span>${icon("cross", `color:${COL.fail};width:14px;height:14px`)} failed part</span>` : ""}`;
     }
   }
 
@@ -1111,10 +1120,10 @@
 
   /* placeholder for a hall that is not built yet: cost/days from the sim, one generic build button */
   function unbuiltHallHTML(n) {
-    const hj = S.jobs.find(j => j.kind === "buildHall"), hc = Sim.hallCost(n), L = hallLetters(n);
+    const hj = S.jobs.find(j => j.kind === "buildHall"), hc = Sim.hallCost(n), HLs = hallLetters(n);
     const body = hj && hj.hall === n ? `<span>Under construction: ${Math.ceil(hj.left)} days left</span><div class="bar"><i style="width:${Math.round((1 - jobFrac(hj)) * 100)}%"></i></div>`
       : hj ? `<span>Hall ${hj.hall} is under construction: ${Math.ceil(hj.left)} days left. One hall at a time.</span>`
-      : `<span>${K.HALL_RACKS} more racks (${L[0]}1–${L[2]}${K.COLS}) on the same grid. ${money(hc.cost)}, ${hc.days} days to build.</span>${n > 1 && !S.halls[n - 2].built ? `<span class="sub">Build Hall ${n - 1} first.</span>` : ""}${actBtn({ type: "buildHall", hall: n }, `Build Hall ${n} · ${money(hc.cost)}`, { confirm: true, cls: "primary", icon: "building" })}`;
+      : `<span>${K.HALL_RACKS} more racks (${HLs[0]}1–${HLs[2]}${K.COLS}) on the same grid. ${money(hc.cost)}, ${hc.days} days to build.</span>${n > 1 && !S.halls[n - 2].built ? `<span class="sub">Build Hall ${n - 1} first.</span>` : ""}${actBtn({ type: "buildHall", hall: n }, `Build Hall ${n} · ${money(hc.cost)}`, { confirm: true, cls: "primary", icon: "building" })}`;
     return `<div class="hall2">${icon("building", "width:40px;height:40px")}<span class="big">Hall ${n}</span>${body}</div>`;
   }
   function renderFloor(st) {
@@ -1126,7 +1135,6 @@
     }
     let h = "";
     const nowMs = performance.now();
-    const L = hallLetters(V.hall);
     [[1, "cold", "Cold aisle"], [3, "hot", "Hot aisle"], [5, "cold", "Cold aisle"], [7, "hot", "Hot aisle"]].forEach(([row, k, l]) =>
       h += `<div class="aisle ${k}" style="grid-row:${row}">${icon(k === "cold" ? "snow" : "flame")}${l}</div>`);
     const hall = S.halls[V.hall - 1];
@@ -1168,6 +1176,7 @@
       const gb = genBehind(r); if (gb != null && gb >= 2) flags.push("clock");
       if (pr.frontier && pr.trainGpus) flags.push("star");
       const nFail = r.devices.filter(d => d.failed).length, nLease = r.devices.concat(r.pending).filter(d => d.leased).length;
+      if (nLease) flags.push("tag");   // leased parts: a tag icon (the rack tile is too short for a text badge at 720p)
       const nosw = noSwitch(r, pr);
       // v4 links: the contracts this rack's output goes to, as coloured segments (width = units); unallocated output = idle
       const to = {};
@@ -1188,8 +1197,8 @@
       const st8 = `${nosw ? " nosw" : ""}${pr.throttle < 1 ? " hot" : ""}${r.mode === "off" ? " off" : ""}${idle ? " idle" : ""}`;
       h += `<button class="rack ${r.row === 1 ? "front-bottom" : "front-top"}${r.tank ? " tank" : ""}${tgt}${ms}${st8}" style="${pos}" data-rack="${r.id}" aria-pressed="${r.id === V.selected}" aria-label="${esc(tip)}">
         <span class="fill" style="${fillStyle}"></span>${fan}<span class="front${util > 0 ? " blink" : ""}${nFail ? " bad" : ""}"${led}></span>
-        ${pr.rev > 0.05 ? `<span class="earn">$${pr.rev.toFixed(1)}k</span>` : ""}${nLease ? `<span class="leasetag">LEASE</span>` : ""}
-        <span class="flags">${flags.map(f => icon(f, f === "star" ? `color:${COL.frontier}` : "")).join("")}</span><span class="id">${r.id}</span>${free ? `<span class="free">${free}U</span>` : ""}
+        ${pr.rev > 0.05 ? `<span class="earn">$${pr.rev.toFixed(1)}k</span>` : ""}
+        <span class="flags">${flags.map(f => icon(f, f === "star" ? `color:${COL.frontier}` : f === "tag" ? `color:${COL.lease}` : "")).join("")}</span><span class="id">${r.id}</span>${free ? `<span class="free">${free}U</span>` : ""}
         ${nFail ? `<span class="xmark" title="${nFail} failed">${icon("cross")}</span>` : ""}${nosw ? `<span class="noswitch" aria-hidden="true">${icon("unplug")}</span>` : ""}${r.mode === "off" ? `<span class="offmark" aria-hidden="true">${icon("power")}</span>` : ""}${links}${prog}</button>`;
     }
     F.innerHTML = h;
@@ -1200,10 +1209,10 @@
     const rs = S.racks.filter(r => r.hall === hall && r.row === row && !r.tank);
     const n = rs.reduce((a, r) => a + ((st.perRack[r.id] || {}).trainGpus || 0), 0);
     const coming = rs.reduce((a, r) => a + (r.workload === "train" ? r.pending.filter(d => item(d.type).role === "gpu").length : 0), 0);
-    const hasSpine = !!S.spines[`${hall}-${row}`], L = hallLetters(hall)[row], need = K.FRONTIER_MIN_GPUS;
-    const tip = `Row ${L} cluster: ${n}/${need} training GPUs${coming ? ` (+${coming} on the way)` : ""} → frontier training ×${K.FRONTIER_PRICE} at ${need}` +
+    const hasSpine = !!S.spines[`${hall}-${row}`], RL = hallLetters(hall)[row], need = K.FRONTIER_MIN_GPUS;
+    const tip = `Row ${RL} cluster: ${n}/${need} training GPUs${coming ? ` (+${coming} on the way)` : ""} → frontier training ×${K.FRONTIER_PRICE} at ${need}` +
       (n >= need ? (hasSpine ? ". Frontier price active." : ". Build the row spine to unlock it.") : `. ${need - n} more${hasSpine ? "" : ", plus a row spine"}. Partial clusters earn the normal training price.`);
-    return { n, coming, f: Math.min(1, n / need), tip, hasSpine, L };
+    return { n, coming, f: Math.min(1, n / need), tip, hasSpine, L: RL };
   }
   /* post-render juice for the floor: colour cross-fades, cold-air drift phase, calendar tint, rack animations */
   function floorLife(F, nowMs) {
@@ -1637,11 +1646,11 @@
       + sect("flag", "Track record", "", `<div class="kv"><span>Signed</span><b>${Lg.signed}</b></div><div class="kv"><span>Fulfilled</span><b>${Lg.fulfilled}</b></div><div class="kv"><span>Ended short</span><b>${Lg.failed}</b></div><div class="kv"><span>Cancelled / late</span><b>${Lg.cancelled || 0} / ${Lg.late || 0}</b></div>`);
   }
 
-  function waterfallSVG(L) {
-    const rev = [["Web", L.web, COL.web], ["Train", L.train, COL.train], ["Infer", L.infer, COL.infer], ["Frontier", L.frontier, COL.frontier], ["Contracts", L.contracts, COL.contract]];
-    const cost = [["Power", L.power, COL.pow], ["Staff", L.upkeep + L.salaries, COL.net], ["Transit", L.transit, "#8FC4FF"], ["Interest", L.interest, COL.debt], ["Leases", L.lease, COL.lease],
-      ["Water", L.water, COL.water], ["Diesel", L.diesel, COL.hot], ["Carbon tax", L.carbonTax, COL.carbon], ["Fines", L.fines, COL.bad], ["Penalties", L.penalties, COL.bad],
-      ["Repairs", L.repairs, COL.fail], ["Other", L.other, COL.info], ["Tax", L.tax, COL.vc]];
+  function waterfallSVG(Q) {
+    const rev = [["Web", Q.web, COL.web], ["Train", Q.train, COL.train], ["Infer", Q.infer, COL.infer], ["Frontier", Q.frontier, COL.frontier], ["Contracts", Q.contracts, COL.contract]];
+    const cost = [["Power", Q.power, COL.pow], ["Staff", Q.upkeep + Q.salaries, COL.net], ["Transit", Q.transit, "#8FC4FF"], ["Interest", Q.interest, COL.debt], ["Leases", Q.lease, COL.lease],
+      ["Water", Q.water, COL.water], ["Diesel", Q.diesel, COL.hot], ["Carbon tax", Q.carbonTax, COL.carbon], ["Fines", Q.fines, COL.bad], ["Penalties", Q.penalties, COL.bad],
+      ["Repairs", Q.repairs, COL.fail], ["Other", Q.other, COL.info], ["Tax", Q.tax, COL.vc]];
     const items = rev.filter(x => x[1] > 0.5).concat(cost.filter(x => x[1] > 0.5).map(x => [x[0], -x[1], x[2]]));
     const n = items.length + 1, W = 400, base = 170, w = Math.min(38, (W - 20) / n - 4), gap = (W - 20 - n * w) / Math.max(1, n - 1);
     let run = 0, lo = 0, hi = 0;
@@ -1662,10 +1671,10 @@
   }
   function financeHTML(st) {
     const useLast = V.wfLast && S.lastQuarter;
-    const L = useLast ? S.lastQuarter : S.ledger, q = useLast ? S.lastQuarter.q : Math.floor(S.day / 90);
+    const Q = useLast ? S.lastQuarter : S.ledger, q = useLast ? S.lastQuarter.q : Math.floor(S.day / 90);
     let out = sect("trend", `Y${Math.floor(q / 4) + 1} Q${q % 4 + 1} ${useLast ? "results" : "so far"}`, "",
       `<div class="buylease" role="group" style="justify-self:start"><button data-wf="0" aria-pressed="${!useLast}">This quarter</button><button data-wf="1" aria-pressed="${!!useLast}"${S.lastQuarter ? "" : " disabled"}>Last quarter</button></div>
-       <div class="wfall">${waterfallSVG(L)}</div>${L.lost > 0.5 ? `<div class="sub">${icon("flame", `color:${COL.hot};width:14px;height:14px`)} Throttling cost ${money(L.lost)} of revenue this quarter.</div>` : ""}
+       <div class="wfall">${waterfallSVG(Q)}</div>${Q.lost > 0.5 ? `<div class="sub">${icon("flame", `color:${COL.hot};width:14px;height:14px`)} Throttling cost ${money(Q.lost)} of revenue this quarter.</div>` : ""}
        ${on("finance") ? `<div class="sub">Tax: ${K.TAX * 100} % of positive quarterly profit (revenue − opex − depreciation over 3 years).</div>` : ""}`);
     if (on("finance")) {
       const nw = Sim.netWorth(S), lim = Math.max(0, K.LOAN_LTV * nw);
@@ -1717,8 +1726,8 @@
       buildingStatus(jobOf("grid")) || (g || S.gridTier < 3 ? null : "owned"), g ? actBtn({ type: "grid" }, `${money(g.cost)}`, { confirm: true, cls: "primary" }) : ""));
     if (on("facilities")) {
       for (const h of S.halls.filter(x => x.n > 1)) {
-        const hc = Sim.hallCost(h.n), L = hallLetters(h.n);
-        cards.push(facCard("building", COL.info, `Hall ${h.n}`, `${K.HALL_RACKS} racks (${L[0]}1–${L[2]}${K.COLS}), same grid. ${hc.days} days.${!h.built && !S.halls[h.n - 2].built ? ` Needs Hall ${h.n - 1}.` : ""}`,
+        const hc = Sim.hallCost(h.n), HLs = hallLetters(h.n);
+        cards.push(facCard("building", COL.info, `Hall ${h.n}`, `${K.HALL_RACKS} racks (${HLs[0]}1–${HLs[2]}${K.COLS}), same grid. ${hc.days} days.${!h.built && !S.halls[h.n - 2].built ? ` Needs Hall ${h.n - 1}.` : ""}`,
           h.built ? "owned" : buildingStatus(jobOf("buildHall", h.n)), actBtn({ type: "buildHall", hall: h.n }, money(hc.cost), { confirm: true, cls: "primary" })));
       }
       cards.push(facCard("battery", COL.good, "UPS + generator", "Rides through grid outages. Burns diesel while it runs.", S.ups ? "owned" : buildingStatus(jobOf("ups")), actBtn({ type: "ups" }, money(K.UPS_COST), { confirm: true, cls: "primary" })));
@@ -1818,8 +1827,8 @@
     return `<div class="ocard k-${k}${o.stretch ? " stretch" : ""}${fresh ? " fresh" : ""}" style="--wc:${kindCol(k)}" data-offer="${o.id}" title="${esc(tip)}">
       <div class="ot"><span class="av" style="background:${kindCol(k)}" title="${esc(kindName)}">${icon(ic)}</span><span class="on"><b>${esc(o.cust)}</b><small><em>${esc(kindName)}</em> · ${offerTerms(o).map(esc).join(" · ")}</small></span>
         <span class="op"><b>$${(o.price * 1000).toFixed(0)}</b><small>/u·d</small><small class="${up ? "up" : "down"}" title="${esc(L("board.vsIndex", { sign: up ? "+" : "−", p: Math.abs(diff).toFixed(0) }))}">${up ? "▲" : "▼"}${Math.abs(diff).toFixed(0)} %</small></span></div>
-      <div class="ofit ${f.level}" title="${esc(L("board.freeTip"))}"><span class="bar"><i style="width:${Math.min(100, f.frac * 100).toFixed(0)}%"></i></span><span>${esc(L("board.free", { free: f.free < 10 ? f.free.toFixed(1).replace(/\.0$/, "") : Math.round(f.free), need: +f.need.toFixed(1) }))}</span></div>
-      <div class="oa">${actBtn({ type: "signContract", id: o.id }, o.bts ? `${L("board.sign")} · ${money(o.fitout)}` : L("board.sign"), { cls: "good sign", icon: "hand", confirm: !!o.bts })}${actBtn({ type: "declineContract", id: o.id }, "", { cls: "decl", icon: "cross", title: L("board.decline") })}<span class="exp" title="${esc(L("board.expires", { d: Math.ceil(left) }))}"><i style="width:${Math.min(100, left / ttl * 100).toFixed(0)}%"></i></span><small>${Math.ceil(left)}d</small></div></div>`;
+      <div class="oa">${actBtn({ type: "signContract", id: o.id }, o.bts ? `${L("board.sign")} · ${money(o.fitout)}` : L("board.sign"), { cls: "good sign", icon: "hand", confirm: !!o.bts })}${actBtn({ type: "declineContract", id: o.id }, "", { cls: "decl", icon: "cross", title: L("board.decline") })}<span class="ofit ${f.level}" title="${esc(L("board.freeTip"))}"><span class="bar"><i style="width:${Math.min(100, f.frac * 100).toFixed(0)}%"></i></span><span>${esc(L("board.free", { free: f.free < 10 ? f.free.toFixed(1).replace(/\.0$/, "") : Math.round(f.free), need: +f.need.toFixed(1) }))}</span></span><small class="expd" title="${esc(L("board.expires", { d: Math.ceil(left) }))}">${icon("clock", "width:12px;height:12px")}${Math.ceil(left)}d</small></div>
+      <span class="exp" aria-hidden="true"><i style="width:${Math.min(100, left / ttl * 100).toFixed(0)}%"></i></span></div>`;
   }
   function contractPill(c, st) {
     const k = kindOf(c), [ic] = KIND[k] || KIND.web, col = QOL.linkColor(c.id), miss = (st.cMiss[c.id] || 0) > 1e-6;
@@ -1838,7 +1847,7 @@
     if (!vis) { el.innerHTML = ""; return; }
     const list = S.offers.slice().sort((a, b) => a.expires - b.expires).slice(0, OFFER_STRIP_MAX);
     const nextIn = S.nextOffer != null ? Math.max(0, Math.ceil(S.nextOffer - S.day)) : null;
-    const head = `<div class="oshead"><span class="bt">${icon("hand")}<b>${esc(L("board.title"))}</b><span class="badge" id="board-badge">${S.offers.length}</span></span>
+    const head = `<div class="oshead" data-drawer="contracts" title="Contracts: offers, active contracts, track record"><span class="bt">${icon("hand")}<b>${esc(L("board.title"))}</b><span class="badge" id="board-badge">${S.offers.length}</span></span>
       ${S.offers.length > OFFER_STRIP_MAX ? `<button class="btn slim" data-drawer="contracts">${esc(L("board.more", { n: S.offers.length - OFFER_STRIP_MAX }))}</button>` : nextIn != null ? `<small>${esc(L("board.next", { d: nextIn }))}</small>` : ""}
       <button class="toggle mini" data-act='${esc(JSON.stringify({ type: "policy", key: "autoRenew", on: !S.policy.autoRenew }))}' data-keep-title aria-pressed="${!!S.policy.autoRenew}" title="${esc(L("board.autoRenewTip"))}"><span class="sw"></span><small>${esc(L("board.autoRenew"))}</small></button></div>`;
     const cards = list.map(o => offerCard(o, st)).join("") + Array.from({ length: OFFER_STRIP_MAX - list.length }, (_, i) => `<div class="ocard empty">${i === 0 && !list.length ? `${icon("mail")}<small>${esc(L("board.none"))}</small>` : ""}</div>`).join("");
@@ -2954,7 +2963,7 @@
     if (oc) { jumpToRacks(offerPreview(oc.dataset.offer) || {}, "#FFFFFF", oc); return; }
     if (t.closest("dialog [data-close]")) { const d = t.closest("dialog"); if (d.open) d.close(); return; }
     const dr = t.closest("[data-drawer]");
-    if (dr) { if (dr.closest("#h-debt, #h-rep, #h-carbon, #h-equity, #offerstrip") || dr.classList.contains("iconbtn")) openDrawer(dr.dataset.drawer); return; }
+    if (dr) { if (dr.closest("#h-debt, #h-rep, #h-carbon, #h-equity, #offerstrip") || dr.classList.contains("iconbtn")) { if (!(dr.classList.contains("oshead") && V.drawer === "contracts")) openDrawer(dr.dataset.drawer); else closeDrawer(); } return; }
     if (t.closest("#drawer-close")) { closeDrawer(); return; }
     if (t.closest("#h-techs")) { if (on("ops")) openPop("techs", $("h-techs")); return; }
     if (t.closest("#h-transit")) { openPop("transit", $("h-transit")); return; }
@@ -3145,7 +3154,7 @@
   else showMenu(false);
   /* console / test hook. ff(days) fast-forwards and stops at the next chapter unlock or game end. */
   window.__game = {
-    get S() { return S; }, V, act, start, showMenu, openDrawer, closeDrawer, renderAll,
+    get S() { return S; }, V, act, start, showMenu, openDrawer, closeDrawer, renderAll, get SET() { return SET; },
     ff(days) {
       const target = S.day + days, ch0 = S.chapter;
       while (!S.over && S.day < target - 1e-9) { Sim.advance(S, Math.min(1, target - S.day)); if (S.chapter !== ch0) break; }

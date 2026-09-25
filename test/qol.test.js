@@ -181,3 +181,9 @@ test("pace chip ghosts the human-paced bots (Casual, Expert) up to the player's 
   assert.equal(rows.casual.score, Sim.score(s), "same as a casual game stopped at the same day");
   assert.equal(Bots.LABELS.casual, "Casual"); assert.equal(Bots.LABELS.expert, "Expert");
 });
+
+test("ui.js never shadows the string helper L (a local `L` would break every L() call in its scope)", () => {
+  const src = require("fs").readFileSync(require("path").join(__dirname, "..", "js", "ui.js"), "utf8");
+  const bad = src.split("\n").map((l, i) => [i + 1, l]).filter(([, l]) => /(\bconst|\blet|\bvar)\s+L\s*=|[,(]\s*L\s*=[^=>]|function\s+\w*\s*\(([^)]*,\s*)?L\s*[,)]/.test(l) && !/const L = window\.L/.test(l));
+  assert.deepEqual(bad, [], bad.map(([n, l]) => `${n}: ${l.trim()}`).join("\n"));
+});
