@@ -64,7 +64,7 @@ test("constraints: U, rack kW, grid kW, cash, tank compatibility", () => {
   assert.equal(res.ok, false);
   assert.match(res.msg, /U|kW/);
   assert.equal(Sim.check(s, { type: "mode", rack: "C1", mode: "boost" }).ok, false, "boost would exceed rack kW");
-  s.day = 460;
+  s.day = 1300;
   assert.match(Sim.check(s, { type: "buy", item: "lat1", rack: "C2" }).msg, /tank/);
   s.cash = 1;
   assert.equal(Sim.check(s, { type: "buy", item: "cpu", rack: "C2" }).ok, false);
@@ -160,10 +160,10 @@ test("generation launch drops compute prices and resale of older cards", () => {
   assert.ok(Sim.shopItems(s).includes("c2"));
 });
 
-test("fake exotic vendor: 60% field performance, dies at day 840; real one keeps shipping", () => {
+test("fake exotic vendor: 60% field performance, dies at day 1500; real one keeps shipping", () => {
   const s = fresh(5);
   s.cash = 1e6;
-  Sim.advance(s, 900);
+  Sim.advance(s, 1600);
   const fake = s.hidden.fakeExotic, real = s.hidden.realExotic;
   assert.equal(s.vendors[fake].dead, true);
   assert.equal(s.vendors[real].dead, false);
@@ -175,7 +175,7 @@ test("fake exotic vendor: 60% field performance, dies at day 840; real one keeps
 test("benchmark signal: real vendor's curve accelerates, fake one flattens", () => {
   for (const seed of [1, 2, 3, 4]) {
     const s = fresh(seed);
-    Sim.advance(s, 830);
+    Sim.advance(s, 1670);
     const r = s.bench[s.hidden.realExotic], f = s.bench[s.hidden.fakeExotic];
     assert.ok(r.at(-1).v > f.at(-1).v, `seed ${seed}: real ends higher`);
     assert.ok(f[3].v > r[3].v * 0.95, `seed ${seed}: fake looks as good early on`);
@@ -186,7 +186,7 @@ test("PM-900: boosts bandwidth while alive, bricks the rack when Nanofab dies", 
   let seed = 1, s;
   do { s = fresh(seed++); } while (!s.hidden.nanofabDies);
   s.cash = 1e6;
-  Sim.advance(s, 530);
+  Sim.advance(s, 1340);
   const r = rack(s, "C1");
   r.workload = "infer";
   r.devices = [{ uid: 1, type: "sw" }, { uid: 2, type: "m1" }, { uid: 3, type: "m1" }];
@@ -194,7 +194,7 @@ test("PM-900: boosts bandwidth while alive, bricks the rack when Nanofab dies", 
   r.devices.push({ uid: 4, type: "pm9" });
   assert.ok(Sim.stats(s).perRack.C1.raw.infer > base * 1.2);
   assert.ok(s.items.pm9.price < Sim.BASE_ITEMS.pm9.price, "pitched at a discount");
-  Sim.advance(s, 800 - s.day);
+  Sim.advance(s, 1570 - s.day);
   assert.equal(Sim.stats(s).perRack.C1.penalty, 0.6);
   assert.equal(Sim.resale(s, r.devices[3]), 0);
 });
@@ -206,7 +206,9 @@ test("chapters unlock over time and gate the shop", () => {
   assert.ok(Sim.shopItems(s).includes("c1"));
   assert.equal(s.chapter, 2);
   Sim.advance(s, 400);
-  assert.equal(s.chapter, 5);
+  assert.equal(s.chapter, 7, "contracts chapter opens at d480");
+  Sim.advance(s, 1300 - s.day);
+  assert.equal(s.chapter, 16);
 });
 
 test("tank conversion needs an empty rack and takes a technician", () => {
@@ -230,7 +232,7 @@ test("move and sell round-trip", () => {
   assert.ok(s.cash > cash + st * 1.5 - 1, "got resale money");
 });
 
-test("game ends at day 1080 and doing nothing still survives", () => {
+test("game ends at day 1800 and doing nothing still survives", () => {
   const s = fresh();
   Sim.advance(s, 2000);
   assert.equal(s.over, "end");

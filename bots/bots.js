@@ -91,7 +91,7 @@
   function beliefView(s, p, day, mem) {
     // pending hardware will be installed within the horizon: count it
     const racks = p.racks.map(r => r.pending.length ? Object.assign({}, r, { devices: r.devices.concat(r.pending), pending: [] }) : r);
-    const v = Object.assign({}, p, { racks, market: { mult: Object.assign({}, p.market.mult), noise: p.market.noise }, vendors: {}, items: {} });
+    const v = Object.assign(Object.create(p), { racks, market: Object.assign({}, p.market, { mult: Object.assign({}, p.market.mult) }), vendors: {}, items: {} });
     for (const g of knownLaunches(s)) if (day >= g) for (const w of Sim.WORKLOADS) v.market.mult[w] *= w === "train" ? 0.72 : 0.75;
     const risky = riskyVendors(s);
     for (const [k, x] of Object.entries(p.vendors)) v.vendors[k] = { dead: x.dead || (risky.has(k) && day > s.day + 45) };
@@ -231,14 +231,26 @@
     }
   }
 
-  const POLICIES = { idle: () => {}, greedy, planner };
+  /* ---------------- shared housekeeping (v2 mechanics both bots handle the same, naive way) ---------------- */
+  // keep internet transit a unit ahead of web + inference traffic (ch7)
+  function keepTransit(s) {
+    if (!Sim.on(s, "fabric")) return;
+    const st = Sim.stats(s), need = Math.ceil((st.supply.web + st.supply.infer) / st.transitF / K.TRANSIT_PER) - K.TRANSIT_FREE + 1;
+    const cur = Sim.transitTarget(s);
+    if (need > cur) Sim.apply(s, { type: "transit", delta: need - cur });
+    else if (cur > need + 3) Sim.apply(s, { type: "transit", delta: need + 1 - cur });
+  }
+  function housekeeping(s) { keepTransit(s); }
+  const withHousekeeping = fn => (s, mem) => { if (s.day >= (mem.nextHk || 0)) { mem.nextHk = s.day + 2; housekeeping(s); } fn(s, mem); };
+
+  const POLICIES = { idle: () => {}, greedy: withHousekeeping(greedy), planner: withHousekeeping(planner) };
 
   /* play a whole game headlessly. Returns final net worth and a small trace */
   function play(seed, policy, opts) {
     const s = Sim.newGame(seed, opts);
     const mem = {}, fn = POLICIES[policy];
     while (!s.over) { fn(s, mem); Sim.advance(s, 1); }
-    return { seed, policy, worth: Sim.netWorth(s), over: s.over, state: s };
+    return { seed, policy, worth: Sim.netWorth(s), score: Sim.score(s), over: s.over, state: s };
   }
 
   return { play, POLICIES, greedy, planner };
