@@ -212,6 +212,7 @@
   function greedySign(s, mem) {
     const st = Sim.stats(s), cap = Sim.capacity(s, st), owed = owedBy(s), left = END - s.day;
     const reserve = greedyReserve(s);
+    const perKw = st.kw > 0 ? st.costs.power / st.kw : K.POWER_PRICE * 1.3;     // $k per kW-day, incl. cooling overhead
     let spent = 0;
     // Casual: "I'm still catching up" - no new promises while any market owes more than it can deliver
     if (mem.h && ["web", "train", "infer"].some(w => owed[w] > cap[w] + 0.5)) return;
@@ -219,7 +220,9 @@
       if (mem.offerSeen.has(o.id)) continue;
       mem.offerSeen.add(o.id);
       const m = o.kind === "frontier" ? "frontier" : o.w;
-      const free = Math.max(0, cap[m] - owed[m]), short = Math.max(0, o.units - free);
+      // Casual reads the board's deliverability bar (v0.4.2: capacity at the offer's start minus the peak of everything
+      // signed over its window); full-speed greedy keeps its myopic "today's free capacity" (a measurement baseline)
+      const free = mem.h ? Sim.deliverable(s, o, st).free : Math.max(0, cap[m] - owed[m]), short = Math.max(0, o.units - free);
       const card = Sim.bestCard(s, m === "frontier" ? "train" : m);
       let capex = o.bts ? o.fitout : 0, n = 0;
       if (short > 0) {
@@ -231,9 +234,16 @@
       }
       const term = Math.max(0, Math.min(o.days, left - (o.lead || 0)));
       const revenue = Sim.isJob(o) ? (o.days <= left ? o.pay : 0) : o.units * term * o.price;
-      const perDay = revenue / Math.max(1, Sim.isJob(o) ? o.days : term);
-      const profit = noisy(mem, revenue * 0.85 - capex * 0.5);
-      const ok = revenue > 0 && profit > 0 && capex + spent <= s.cash - reserve && (capex === 0 || capex / Math.max(1e-6, perDay) <= payback(mem));
+      // v0.4.2: serving has running costs (power + upkeep) for the whole term, and the payback is judged on the
+      // NET daily income. With price-elastic web offers (D61) a cheap web deal that needs new servers stops paying:
+      // greedy/Casual see it through this, not through a demand wall
+      // every unit served costs power + upkeep vs parking the hardware (whether it is new or already there)
+      const runCost = card ? o.units / card.u * (s.items[card.k].kw * perKw + K.UPKEEP_PER_DEV) * (Sim.isJob(o) ? o.days : term) : 0;
+      const perDay = (revenue - runCost) / Math.max(1, Sim.isJob(o) ? o.days : term);
+      const profit = noisy(mem, revenue * 0.85 - capex * 0.5 - runCost);
+      // a deal that needs no new hardware is taken even when cash is below the reserve (it only earns: idle servers
+      // cost the same either way). v0.4.2: before, a broke greedy/Casual declined free-capacity deals and died slowly
+      const ok = revenue > 0 && profit > 0 && (capex === 0 || (capex + spent <= s.cash - reserve && perDay > 0 && capex / perDay <= payback(mem)));
       if (ok) {
         // Casual keeps a running tally of what it just promised and what that will cost; full-speed greedy does not
         const res = ap(s, { type: "signContract", id: o.id });

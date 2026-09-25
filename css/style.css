@@ -1130,3 +1130,53 @@ html.lang-zh .end, html.lang-zh .pop h3, html.lang-zh .goal b { font-weight: 600
 /* text diet: map modes and inactive info tabs are icons (names in tooltips); the active tab keeps its label */
 .modes button .mlab { display: none; }
 .tabs button[aria-selected="false"] > span:not(.dot) { display: none; }
+
+/* ===== v0.4.2 telemetry fixes: overbooking, walk-away countdown, starter GPU offer, web saturation, speed hint ===== */
+/* deliverability bar: the tick at 2/3 = your capacity at the offer's start; grey = already committed, colour = this
+   offer, red stripes = past capacity (overbooked) */
+.ocard .ofit .bar { position: relative; overflow: visible; background: linear-gradient(90deg, var(--tile) 66.67%, transparent 66.67%); min-width: 54px; }
+.ocard .ofit .bar::after { content: ""; position: absolute; left: 66.67%; top: -3px; bottom: -3px; width: 2px; margin-left: -1px; background: var(--ink-2); border-radius: 1px; }
+.ocard .ofit .bar i { position: absolute; top: 0; height: 100%; border-radius: 0; }
+.ocard .ofit .bar i.cm { left: 0; background: #9AA3AD !important; border-radius: 3px 0 0 3px; }
+.ocard .ofit .bar i.nw { background: var(--ok-c) !important; }
+.ocard .ofit .bar i.ov { background: repeating-linear-gradient(135deg, var(--bad-c) 0 4px, #FF9A86 4px 7px) !important; border-radius: 0 3px 3px 0; animation: ov-pulse 0.9s ease-in-out infinite alternate; }
+.ocard .ofit.over span { color: var(--bad-c); font-weight: 700; }
+.ocard.over { box-shadow: inset 0 0 0 1px rgba(214, 69, 50, .45); }
+.ocard .btn.sign.over { background: #F4D9D3; color: var(--bad-c); border-color: var(--bad-c); }
+.ocard .btn.sign.over.confirm { background: var(--bad-c); color: var(--white); }
+@keyframes ov-pulse { from { opacity: .65; } to { opacity: 1; } }
+.ocard.starter { box-shadow: 0 0 0 2px #FFD24A, 0 0 12px rgba(255, 210, 74, .45); }
+/* board header: overbooked chip + web-market saturation meter */
+.board .oshead .obk { align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; padding: 0 5px; border-radius: 9px; background: var(--bad-c); color: var(--white); font: 700 12px/18px var(--sans); opacity: 1; animation: ov-pulse .8s ease-in-out infinite alternate; }
+.board .oshead .wprice { display: inline-flex; align-items: center; gap: 3px; font: 600 12px var(--sans); }
+.board .oshead .wprice b { font-weight: 700; }
+.board .oshead .wprice.warm { color: #FFE08A; }
+.board .oshead .wprice.low { color: #FFB199; }
+.board .oshead .wprice.floor { color: #FF9A86; }
+/* contract pills: below SLA pulses; the walk-away countdown; dashed red = overbooked market */
+.cpill.miss { border-color: var(--bad-c); animation: miss-pulse 1.1s ease-in-out infinite; }
+.cpill.short { border: 1px dashed var(--bad-c); }
+.cpill small.walk { color: var(--bad-c); font-weight: 700; }
+@keyframes miss-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(214, 69, 50, 0); } 50% { box-shadow: 0 0 0 3px rgba(214, 69, 50, .45); } }
+/* speed discoverability: a one-time glow on 2x/4x and a key hint */
+.speed { position: relative; }
+.speed button.fx-hint { animation: speed-hint 1s ease-in-out 4; }
+@keyframes speed-hint { 0%, 100% { box-shadow: 0 0 0 0 rgba(90, 209, 230, 0); background: none; } 50% { box-shadow: 0 0 0 3px #5AD1E6, 0 0 14px rgba(90, 209, 230, .8); background: rgba(90, 209, 230, .35); color: var(--white); } }
+.speedhint { position: absolute; top: calc(100% + 6px); left: 50%; transform: translateX(-50%); white-space: nowrap; padding: 3px 8px; border-radius: 5px; background: #5AD1E6; color: #1E252D; font: 700 12px var(--sans); z-index: 30; pointer-events: none; box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+.speedhint[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .ocard .ofit .bar i.ov, .cpill.miss, .board .oshead .obk, .speed button.fx-hint { animation: none !important; } }
+/* kind filter chips (board header + Contracts drawer) */
+.kchips { display: flex; flex-wrap: wrap; gap: 3px; }
+.kchip { display: inline-flex; align-items: center; gap: 2px; padding: 1px 5px; border-radius: 9px; border: 1px solid transparent; background: rgba(255,255,255,.18); color: inherit; font: 700 11px/16px var(--sans); cursor: pointer; }
+.kchip.on { background: var(--white); color: var(--c-contract); }
+.kchips.wide { margin: 0 0 8px; }
+.kchips.wide .kchip { background: var(--tile); color: var(--ink-2); padding: 3px 8px; font-size: 12px; }
+.kchips.wide .kchip.on { background: var(--c-contract); color: var(--white); }
+/* v0.4.2: drawers dock in the lower half of the right column; the rack panel above stays usable (DECISIONS D63) */
+#stage { --dock-h: calc((var(--stage-h, 810px) - 72px) * 0.46); }
+.drawer { top: auto; right: 10px; bottom: 10px; width: 380px; height: var(--dock-h); border: 1px solid var(--line); border-radius: 8px; transform: translateY(calc(100% + 24px)); box-shadow: 0 -8px 24px rgba(0,0,0,.18); }
+.drawer.open { transform: none; }
+.stage.docked .side { padding-bottom: calc(var(--dock-h) + 10px); }
+.stage.docked .tabcard { min-height: 120px; }
+.drawer > header { padding: 6px 10px; border-radius: 8px 8px 0 0; }
+.drawer > header h2 { font-size: 17px; }

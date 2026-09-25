@@ -11,7 +11,7 @@
   Sim.setDebug(DEBUG);
   const dlog = (...a) => { if (DEBUG) console.log("[ui]", ...a); };
   const DAYS_PER_SEC = 2;
-  const SAVE_KEY = "halcyon.save.v2", META_KEY = "halcyon.meta.v2", SLOT_KEY = n => `halcyon.slot.${n}`, SET_KEY = "halcyon.settings";
+  const SAVE_KEY = "halcyon.save.v2", META_KEY = "halcyon.meta.v2", SLOT_KEY = n => `halcyon.slot.${n}`, SET_KEY = "halcyon.settings", KF_KEY = "halcyon.kindFilter";
   /* every user-visible string goes through L(key, params) = I18N.t (js/i18n.js + js/i18n/*.js dictionaries, docs/I18N.md) */
   const I18 = window.I18N;
   const L = window.L || ((k, p) => k);
@@ -92,7 +92,7 @@
     : it.role === "mem" ? COL.mem : it.role === "exotic" ? COL.tank : it.fam === "C" ? COL.train : COL.infer;
   const MODE_ICON = { eco: "leaf", std: "gauge", boost: "rocket", off: "power" };
   const KIND = { web: ["globe", "web"], infer: ["bubble", "infer"], train: ["brain", "train"], frontier: ["star", "frontier"], bts: ["building", "contract"] };
-  const kindOf = o => o.bts ? "bts" : o.kind || o.w;
+  const kindOf = o => QOL.kindOf(o);
   const MAP_MODES = [
     { key: "role", icon: "layers", ch: "racks" }, { key: "power", icon: "bolt", ch: "power" }, { key: "heat", icon: "temp", ch: "heat" },
     { key: "gen", icon: "clock", ch: "gens" }, { key: "fail", icon: "cross", ch: "ops" }, { key: "cluster", icon: "net", ch: "fabric" },
@@ -548,6 +548,38 @@
     dlog("[autopause]", why);
   }
 
+  /* v0.4.2 (telemetry: customers walked with nothing obvious before it): a contract that newly drops below its SLA pulses
+     its pill and the alert bell with a warning sound, once per miss streak; no pause (auto-pause SLA is opt-in) */
+  function slaWatch(st) {
+    if (!S || S.over || V.slaDay === S.day) return;
+    V.slaDay = S.day;
+    const now = new Set(Object.keys(st.cMiss || {}).filter(k => st.cMiss[k] > 1e-6)), prev = V.slaSeen;
+    V.slaSeen = now;
+    if (!prev) return;
+    const fresh = [...now].filter(id => !prev.has(id));
+    if (!fresh.length) return;
+    for (const id of fresh) pulse(document.querySelector(`#offerstrip .cpill[data-contract="${id}"]`), "fx-attn", 1400);
+    pulse($("alertbtn"), "fx-attn", 1400);
+    SND("warn", null, 1500);
+    dlog("[sla] below SLA", fresh.join(","));
+  }
+  /* v0.4.2 (telemetry: the player never left 1x): after 60 real seconds of running at 1x, the 2x/4x buttons pulse once and
+     a key hint shows for 6 s. Once per player (SET.speedHint); using any faster speed also retires it. */
+  function speedHint(dt) {
+    if (!S || S.over || SET.speedHint) return;
+    if (V.speed > 1) { SET.speedHint = true; saveSettings(); return; }
+    if (V.speed !== 1 || !running()) return;
+    V.t1x = (V.t1x || 0) + dt;
+    if (V.t1x < SPEED_HINT_S) return;
+    SET.speedHint = true; saveSettings();
+    for (const v of ["2", "4"]) pulse(document.querySelector(`.speed [data-speed="${v}"]`), "fx-hint", 4200);
+    const h = $("speedhint");
+    if (h) { h.hidden = false; setTimeout(() => { h.hidden = true; }, 6000); }
+    TELE.event(S.day, "speedHint", { t: Math.round(V.t1x) });
+    dlog("[speed] hint shown after", Math.round(V.t1x), "s at 1x");
+  }
+  const SPEED_HINT_S = 60;
+
   /* ================= live affordability: every cost-bearing control re-checks while cash moves ================= */
   function refreshAfford(force) {
     const now = performance.now();
@@ -602,6 +634,8 @@
         tRen = performance.now();
         afterTick();
         autoPause(st);
+        slaWatch(st);
+        speedHint(dtSec);
         refreshAfford();
         if (now - V.alertsT > 500) { V.alertsT = now; renderAlerts(st); teachTick(); }
         if (V.hover && now - V.hover.t > 1000) refreshHover();
@@ -1631,10 +1665,11 @@
     if (V.drawer === k) { closeDrawer(); return; }
     V.drawer = k; closePop();
     $("drawer").classList.add("open"); $("drawer").setAttribute("aria-hidden", "false");
+    $("stage").classList.add("docked");     // v0.4.2: the drawer docks under the rack panel; both stay usable (DECISIONS D63)
     renderDrawer(Sim.stats(S)); renderDrawerBtns();
     dlog("drawer", k);
   }
-  function closeDrawer() { V.drawer = null; const d = $("drawer"); d.classList.remove("open"); d.setAttribute("aria-hidden", "true"); if (S) renderDrawerBtns(); }
+  function closeDrawer() { V.drawer = null; const d = $("drawer"); d.classList.remove("open"); d.setAttribute("aria-hidden", "true"); $("stage").classList.remove("docked"); if (S) renderDrawerBtns(); }
   function renderDrawer(st) {
     const k = V.drawer; if (!k) return;
     $("drawer-title").innerHTML = `${icon(DRAWERS[k])} ${esc(L("dr." + k))}`;
@@ -1646,8 +1681,8 @@
   const sect = (ic, title, sub, inner, cls) => `<section class="sect ${cls || ""}"><h3>${icon(ic)}${title}${sub ? `<span class="sub">${sub}</span>` : ""}</h3>${inner}</section>`;
 
   function contractsHTML(st) {
-    const offers = S.offers.slice().sort((a, b) => a.expires - b.expires).map(o => offerCard(o, st)).join("");
-    const act = S.contracts.map(c => {
+    const offers = QOL.byKind(S.offers, V.kf).slice().sort((a, b) => a.expires - b.expires).map(o => offerCard(o, st)).join("");
+    const act = QOL.byKind(S.contracts, V.kf).map(c => {
       const k = kindOf(c), col = QOL.linkColor(c.id);
       const racks = [...new Set((st.alloc || []).filter(l => l.id === c.id).map(l => l.rack))];
       const head = `<div class="kv"><span><i class="swatch" style="background:${col}"></i>${icon((KIND[k] || KIND.web)[0], "width:14px;height:14px;vertical-align:-2px")} <b>${esc(c.cust)}</b> · ${esc(L("kind." + k))}${Sim.isJob(c) ? "" : ` · ${c.units}u · $${(c.price * 1000).toFixed(0)}`}</span>`;
@@ -1672,7 +1707,7 @@
     }).join("");
     const Lg = S.contractLog;
     const renew = `<button class="toggle" data-act='${esc(JSON.stringify({ type: "policy", key: "autoRenew", on: !S.policy.autoRenew }))}' data-keep-title aria-pressed="${!!S.policy.autoRenew}" title="${esc(L("board.autoRenewTip"))}"><span class="sw"></span><span><b>${esc(L("board.autoRenew"))}</b></span></button>`;
-    return sect("doc", L("ct.offers"), `${S.offers.length}`, `<div class="ocards">${offers || `<div class="sub">${esc(L("board.none"))}</div>`}</div>${renew}`)
+    return kindChips("wide") + sect("doc", L("ct.offers"), `${S.offers.length}`, `<div class="ocards">${offers || `<div class="sub">${esc(L("board.none"))}</div>`}</div>${renew}`)
       + sect("hand", L("board.active"), `${S.contracts.length}`, act || `<div class="sub">—</div>`)
       + sect("flag", L("ct.record"), "", `<div class="kv"><span>${esc(L("ct.signed"))}</span><b>${Lg.signed}</b></div><div class="kv"><span>${esc(L("ct.fulfilled"))}</span><b>${Lg.fulfilled}</b></div><div class="kv"><span>${esc(L("ct.short"))}</span><b>${Lg.failed}</b></div><div class="kv"><span>${esc(L("ct.cancelLate"))}</span><b>${Lg.cancelled || 0} / ${Lg.late || 0}</b></div>`);
   }
@@ -1851,35 +1886,74 @@
     const tip = `${o.cust} · ${kindName} · ${offerTerms(o).join(" · ")} · SLA ${pct(o.sla)} · ${L("board.penalty", { x: (o.penalty * 1000).toFixed(0) })}${Sim.isJob(o) ? ` · ${L("board.lateFee", { x: money(o.lateFee || 0) })}` : ""}`;
     const fresh = !V.boardSeen.has(o.id);        // only a new card slides in (the board re-renders every second)
     V.boardSeen.add(o.id);
-    return `<div class="ocard k-${k}${o.stretch ? " stretch" : ""}${fresh ? " fresh" : ""}" style="--wc:${kindCol(k)}" data-offer="${o.id}" title="${esc(tip)}">
+    // v0.4.2 deliverability bar (telemetry: 36 units signed on 16 of capacity): the track is your capacity at the offer's
+    // start (the tick at 2/3 of the bar = 100 %); grey = already committed over its window, colour = this offer, red =
+    // past 100 % (overbooked). Signing an overbooking offer needs a second tap (the button wobbles first).
+    const U = 100 / 1.5, cap = Math.max(1e-9, f.cap), a = f.cap > 0 ? Math.min(f.peak, cap) / cap : 0;
+    const b = f.cap > 0 ? Math.max(0, Math.min(f.peak + f.need, cap) - f.peak) / cap : 0;
+    const c = f.cap > 0 ? Math.min(0.5, Math.max(0, f.peak + f.need - cap) / cap) : 0.5;
+    const bar = `<span class="bar"><i class="cm" style="width:${(a * U).toFixed(1)}%"></i><i class="nw" style="left:${(a * U).toFixed(1)}%;width:${(b * U).toFixed(1)}%"></i>${f.over ? `<i class="ov" style="left:${U.toFixed(1)}%;width:${(c * U).toFixed(1)}%"></i>` : ""}</span>`;
+    const fitTip = f.over ? L("board.overTip", { n: +(f.peak + f.need - f.cap).toFixed(1) }) : L("board.freeTip");
+    return `<div class="ocard k-${k}${o.stretch ? " stretch" : ""}${o.starter ? " starter" : ""}${f.over ? " over" : ""}${fresh ? " fresh" : ""}" style="--wc:${kindCol(k)}" data-offer="${o.id}" title="${esc((o.starter ? L("board.starterTip") + " · " : "") + tip)}">
       <div class="ot"><span class="av" style="background:${kindCol(k)}" title="${esc(kindName)}">${icon(ic)}</span><span class="on"><b>${esc(o.cust)}</b><small>${offerTerms(o).map(esc).join(" · ")}</small></span>
         <span class="op" title="${esc(L("board.priceTip"))}"><b>$${(o.price * 1000).toFixed(0)}</b><small class="${up ? "up" : "down"}" title="${esc(L("board.vsIndex", { sign: up ? "+" : "−", p: Math.abs(diff).toFixed(0) }))}">${up ? "▲" : "▼"}${Math.abs(diff).toFixed(0)} %</small></span></div>
-      <div class="oa">${actBtn({ type: "signContract", id: o.id }, o.bts ? `${L("board.sign")} · ${money(o.fitout)}` : L("board.sign"), { cls: "good sign", icon: "hand", confirm: !!o.bts })}${actBtn({ type: "declineContract", id: o.id }, "", { cls: "decl", icon: "cross", title: L("board.decline") })}<span class="ofit ${f.level}" title="${esc(L("board.freeTip"))}"><span class="bar"><i style="width:${Math.min(100, f.frac * 100).toFixed(0)}%"></i></span><span>${esc(L("board.free", { free: f.free < 10 ? f.free.toFixed(1).replace(/\.0$/, "") : Math.round(f.free), need: +f.need.toFixed(1) }))}</span></span><small class="expd" title="${esc(L("board.expires", { d: Math.ceil(left) }))}">${icon("clock", "width:12px;height:12px")}${L("u.days", { d: Math.ceil(left) })}</small></div>
+      <div class="oa">${actBtn({ type: "signContract", id: o.id }, o.bts ? `${L("board.sign")} · ${money(o.fitout)}` : L("board.sign"), { cls: `good sign${f.over ? " over" : ""}`, icon: f.over ? "warn" : "hand", confirm: !!o.bts || f.over })}${actBtn({ type: "declineContract", id: o.id }, "", { cls: "decl", icon: "cross", title: L("board.decline") })}<span class="ofit ${f.level}${f.over ? " over" : ""}" title="${esc(fitTip)}">${bar}<span>${esc(L("board.free", { free: f.free < 10 ? f.free.toFixed(1).replace(/\.0$/, "") : Math.round(f.free), need: +f.need.toFixed(1) }))}</span></span><small class="expd" title="${esc(L("board.expires", { d: Math.ceil(left) }))}">${icon("clock", "width:12px;height:12px")}${L("u.days", { d: Math.ceil(left) })}</small></div>
       <span class="exp" aria-hidden="true"><i style="width:${Math.min(100, left / ttl * 100).toFixed(0)}%"></i></span></div>`;
   }
-  function contractPill(c, st) {
+  function contractPill(c, st, ob) {
     const k = kindOf(c), [ic] = KIND[k] || KIND.web, col = QOL.linkColor(c.id), miss = (st.cMiss[c.id] || 0) > 1e-6;
+    // v0.4.2: a missed customer shows how many days it will wait ("⏳ 12d"); a contract in an overbooked market is dashed red
+    const walk = Sim.walkIn(S, c), o = ob && ob[c.w], short = !!(o && o.short > 0.5 && c.start <= o.at + 1e-9 && o.at < c.end);
     let f, left;
     if (Sim.isJob(c)) { f = clamp01(c.done / c.work); left = c.deadline - S.day; }
     else if (S.day < c.start) { f = 0; left = c.start - S.day; }
     else { const el = Math.max(0.01, S.day - c.start); f = clamp01(c.delivered / (c.units * el)); left = c.end - S.day; }
     const racks = [...new Set((st.alloc || []).filter(l => l.id === c.id).map(l => l.rack))];
     const tip = `${c.cust} · ${L("kind." + k)} · ${c.units}u · ${Sim.isJob(c) ? `${Math.round(c.done)}/${Math.round(c.work)} u·d · ${L("board.due", { d: Math.ceil(c.deadline - S.day) })}` : S.day < c.start ? L("board.starts", { d: Math.ceil(c.start - S.day) }) : `${pct(Math.min(1, f))} / SLA ${pct(c.sla)} · ${L("u.days", { d: Math.ceil(c.end - S.day) })}`} · ${racks.length ? L("board.served", { racks: racks.join(", ") }) : L("board.unserved")}`;
-    return `<button class="cpill${miss ? " miss" : ""}${S.day < c.start ? " soon" : ""}${c.anchor ? " anchor" : ""}" data-contract="${c.id}" style="--lc:${col}" title="${esc(tip)}"><i class="sw"></i>${icon(ic)}<span>${esc(c.cust.split(" ")[0])}</span><span class="m"><i style="width:${(f * 100).toFixed(0)}%"></i>${Sim.isJob(c) ? "" : `<em style="left:${c.sla * 100}%"></em>`}</span></button>`;
+    const wt = walk != null ? L("board.leavesTip", { d: Math.ceil(walk) }) + " · " : short ? L("board.shortTip") + " · " : "";
+    return `<button class="cpill${miss ? " miss" : ""}${walk != null ? " walking" : ""}${short ? " short" : ""}${S.day < c.start ? " soon" : ""}${c.anchor ? " anchor" : ""}" data-contract="${c.id}" style="--lc:${col}" title="${esc(wt + tip)}"><i class="sw"></i>${icon(ic)}<span>${esc(c.cust.split(" ")[0])}</span><span class="m"><i style="width:${(f * 100).toFixed(0)}%"></i>${Sim.isJob(c) ? "" : `<em style="left:${c.sla * 100}%"></em>`}</span>${walk != null ? `<small class="walk">⏳${esc(L("board.leaves", { d: Math.ceil(walk) }))}</small>` : ""}</button>`;
+  }
+  /* kind filter chips (All + each kind present, icon + count); the choice is remembered (localStorage, guarded) */
+  V.kf = (() => { const v = store.get(KF_KEY); return v && (v === "all" || QOL.KINDS.includes(v)) ? v : "all"; })();
+  function kindChips(cls) {
+    const n = QOL.kindCounts(S.offers, S.contracts);
+    const chip = (k, ic, title) => `<button class="kchip${V.kf === k ? " on" : ""}" data-kf="${k}" aria-pressed="${V.kf === k}" title="${esc(title)}">${icon(ic, "width:12px;height:12px")}<b>${n[k]}</b></button>`;
+    return `<div class="kchips ${cls || ""}" role="group" aria-label="${esc(L("kf.aria"))}">${chip("all", "layers", L("kf.all"))}${QOL.KINDS.filter(k => n[k] > 0 || V.kf === k).map(k => chip(k, (KIND[k] || KIND.web)[0], L("kind." + k))).join("")}</div>`;
+  }
+  function setKindFilter(k) {
+    V.kf = k === V.kf ? "all" : k;
+    store.set(KF_KEY, V.kf);
+    TELE.event(S.day, "kindFilter", { k: V.kf });
+    renderAll();
+    if (V.drawer === "contracts") renderDrawer(Sim.stats(S));
+  }
+  function webPriceChip(st) {
+    const h = Sim.held(S).web, f = Sim.webPriceF(S), p = st.mk.web.price * (1 + K.CONTRACT_PREMIUM) * Sim.repFactor(S) * f;
+    const hMax = Math.max(2 * K.WEB_DREF, 1.6 * h), W = 44, H = 14, X = x => (x / hMax * W).toFixed(1), Y = v => (1 + (1 - v) * (H - 2)).toFixed(1);
+    const pts = Array.from({ length: 23 }, (_, i) => { const x = i / 22 * hMax; return `${X(x)},${Y(Sim.webPriceAt(x))}`; }).join(" ");
+    const down = f < 0.999, cls = f <= K.WEB_FLOOR + 1e-9 ? " floor" : f < 0.6 ? " low" : down ? " warm" : "";
+    return `<span class="wprice${cls}" title="${esc(L("board.webPrice", { x: (p * 1000).toFixed(0), p: Math.round(f * 100), h: Math.round(h) }))}">${icon("globe", "width:11px;height:11px")}<b>$${(p * 1000).toFixed(0)}</b>${down ? "▼" : ""}<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.3" opacity=".75"/><circle cx="${X(Math.min(h, hMax))}" cy="${Y(f)}" r="2.4" fill="currentColor"/></svg></span>`;
   }
   function renderOffers(st) {
     const el = $("offerstrip");
     const vis = Sim.contractsOn(S);
     show(el, vis);
     if (!vis) { el.innerHTML = ""; return; }
-    const list = S.offers.slice().sort((a, b) => a.expires - b.expires).slice(0, OFFER_STRIP_MAX);
+    const list = QOL.byKind(S.offers, V.kf).slice().sort((a, b) => a.expires - b.expires).slice(0, OFFER_STRIP_MAX);
     const nextIn = S.nextOffer != null ? Math.max(0, Math.ceil(S.nextOffer - S.day)) : null;
+    const ob = Sim.overbook(S, st), obW = ["web", "train", "infer"].filter(w => ob[w].short > 0.5);
+    V.overbook = ob;
+    // v0.4.2: overbooked = commitments (active + signed-future) above the capacity you will have. Web price trend (D61): the
+    // price of the NEXT web contract at the volume you already hold, with the curve and your position on it (soft signal)
+    const obChip = obW.length ? `<small class="obk" title="${esc(obW.map(w => L("board.overHead", { n: Math.ceil(ob[w].short), w: "@wl." + w, d: Math.max(0, Math.ceil(ob[w].at - S.day)) })).join(" · "))}">${icon("warn", "width:12px;height:12px")}−${obW.map(w => Math.ceil(ob[w].short)).join("/")}</small>` : "";
+    const satChip = webPriceChip(st);
     // text diet: icon + count; "next offer" and auto-renew are an icon chip and a switch, their words in tooltips
-    const head = `<div class="oshead" data-drawer="contracts" title="${esc(L("board.headTip"))}"><span class="bt">${icon("hand")}<b>${esc(L("board.title"))}</b><span class="badge" id="board-badge">${S.offers.length}</span></span>
-      ${S.offers.length > OFFER_STRIP_MAX ? `<button class="btn slim" data-drawer="contracts">${esc(L("board.more", { n: S.offers.length - OFFER_STRIP_MAX }))}</button>` : nextIn != null ? `<small title="${esc(L("board.nextTip"))}">${icon("mail", "width:12px;height:12px")}${esc(L("board.next", { d: nextIn }))}</small>` : ""}
+    const head = `<div class="oshead" data-drawer="contracts" title="${esc(L("board.headTip"))}"><span class="bt">${icon("hand")}<b>${esc(L("board.title"))}</b><span class="badge" id="board-badge">${S.offers.length}</span></span>${obChip}${satChip}
+      ${kindChips("mini")}
+      ${QOL.byKind(S.offers, V.kf).length > OFFER_STRIP_MAX ? `<button class="btn slim" data-drawer="contracts">${esc(L("board.more", { n: QOL.byKind(S.offers, V.kf).length - OFFER_STRIP_MAX }))}</button>` : nextIn != null ? `<small title="${esc(L("board.nextTip"))}">${icon("mail", "width:12px;height:12px")}${esc(L("board.next", { d: nextIn }))}</small>` : ""}
       <button class="toggle mini" data-act='${esc(JSON.stringify({ type: "policy", key: "autoRenew", on: !S.policy.autoRenew }))}' data-keep-title aria-pressed="${!!S.policy.autoRenew}" title="${esc(L("board.autoRenew") + ": " + L("board.autoRenewTip"))}" aria-label="${esc(L("board.autoRenew"))}"><span class="sw"></span>${icon("undoarrow", "width:12px;height:12px")}</button></div>`;
     const cards = list.map(o => offerCard(o, st)).join("") + Array.from({ length: OFFER_STRIP_MAX - list.length }, (_, i) => `<div class="ocard empty">${i === 0 && !list.length ? `${icon("mail")}<small>${esc(L("board.none"))}</small>` : ""}</div>`).join("");
-    const pills = S.contracts.map(c => contractPill(c, st)).join("");
+    const pills = QOL.byKind(S.contracts, V.kf).map(c => contractPill(c, st, ob)).join("");
     if (V.boardSeen.size > 100) V.boardSeen = new Set(S.offers.map(o => o.id));   // bounded: only live offers matter
     if (previewCache.size > 30) previewCache.clear();
     el.innerHTML = head + cards + `<div class="cpills" role="list" aria-label="${esc(L("board.active"))}">${pills}</div>`;
@@ -2896,11 +2970,11 @@
   }
 
   /* ================= alerts tray (HUD bell) ================= */
-  const ALERT_ICON = { nosw: "unplug", fail: "cross", hot: "flame", sla: "warn", idle: "power", runway: "coin" };
+  const ALERT_ICON = { nosw: "unplug", fail: "cross", hot: "flame", sla: "warn", idle: "power", runway: "coin", idleSum: "power", overbook: "warn" };
   function renderAlerts(st) {
     if (!S || !QOL) return;
     const rw = runwayDays(st);
-    V.alerts = QOL.alerts(Sim, S, st, { runway: rw ? rw.days : null });
+    V.alerts = QOL.alerts(Sim, S, st, { runway: rw ? rw.days : null, overbook: V.overbook });
     const n = V.alerts.length, btn = $("alertbtn"), dot = btn.querySelector(".dot");
     dot.hidden = !n; dot.textContent = n > 9 ? "9+" : String(n);
     btn.classList.toggle("hot", V.alerts.some(a => a.sev >= 3));
@@ -2910,7 +2984,9 @@
     const list = V.alerts;
     if (!list.length) return `<h3>${icon("bell")}${esc(L("alerts.title"))}</h3><div class="sub">${icon("check")} ${esc(L("alerts.none"))}</div>`;
     return `<h3>${icon("bell")}${esc(L("alerts.title"))} <small>${list.length}</small></h3><div class="alist">${list.slice(0, 12).map(a => {
-      const lbl = a.kind === "runway" ? L("alert.runway", { d: a.n }) : L("alert." + a.kind) + (a.kind === "sla" ? ` · ${a.cust}` : a.kind === "hot" ? ` ${a.n} %` : a.kind === "idle" ? ` ${a.n}u` : "");
+      const lbl = a.kind === "runway" ? L("alert.runway", { d: a.n }) : a.kind === "idleSum" ? L("alert.idleSum", { n: a.n })
+        : a.kind === "overbook" ? L("alert.overbook", { n: a.n, w: "@wl." + a.w })
+        : L("alert." + a.kind) + (a.kind === "sla" ? ` · ${a.cust}${a.walk != null ? ` · ⏳${L("board.leaves", { d: Math.ceil(a.walk) })}` : ""}` : a.kind === "hot" ? ` ${a.n} %` : a.kind === "idle" ? ` ${a.n}u` : "");
       return `<button class="arow sev${a.sev}" data-jump="${a.rack || ""}"${a.id ? ` data-contract="${a.id}"` : ""}>${icon(ALERT_ICON[a.kind] || "warn")}<span>${esc(lbl)}</span><b>${a.rack || ""}</b></button>`;
     }).join("")}</div>`;
   }
@@ -3006,13 +3082,27 @@
     if (bk) { bulk(JSON.parse(bk.dataset.bulk), bk); return; }
     const du = t.closest("[data-dup]");
     if (du) { duplicateRack(du.dataset.dup, du); return; }
+    const kf = t.closest("[data-kf]");
+    if (kf) { setKindFilter(kf.dataset.kf); return; }
     const ab = t.closest("[data-act]");
     if (ab) {
       const a = JSON.parse(ab.dataset.act), key = JSON.stringify(a);
       if (ab.hasAttribute("data-confirm")) {
         const res = Sim.check(S, a);
         if (!res.ok) { act(a, { src: ab }); return; }    // refused: show-not-tell feedback (and the rejection is logged)
-        if (!(V.confirm === key && performance.now() - V.confirmT < CONFIRM_MS)) { V.confirm = key; V.confirmT = performance.now(); sr(`${chk(res)} · ${L("fb.again")}`); renderAll(); return; }
+        if (!(V.confirm === key && performance.now() - V.confirmT < CONFIRM_MS)) {
+          V.confirm = key; V.confirmT = performance.now();
+          const over = ab.classList.contains("over");
+          sr(over ? L("fb.overSign") : `${chk(res)} · ${L("fb.again")}`);
+          renderAll();
+          if (over) {           // v0.4.2: signing would overbook you: the button says no once, the bar flashes red
+            const nb = [...document.querySelectorAll("#offerstrip [data-act]")].find(x => x.dataset.act === ab.dataset.act) || ab;
+            wobble(nb); SND("bonk"); pulse(nb.closest(".ocard") && nb.closest(".ocard").querySelector(".ofit"), "fx-attn", 900);
+            TELE.event(S.day, "overSign", { id: a.id });
+            dlog("[board] overbooking sign needs a second tap", a.id);
+          }
+          return;
+        }
       }
       const ok = act(a, { src: ab });
       if (ok && ab.closest("#card")) $("card").close();

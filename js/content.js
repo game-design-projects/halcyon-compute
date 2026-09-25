@@ -19,7 +19,7 @@
     off:   { kw: 0,    out: 0,    label: "Off" },      // v4: park hardware with no contract (0 power, 0 output, no failures)
   };
   const MARKET = {
-    web:   { base: 0.18, demand: 30, growth: 1.0,  drift: 1.0 },
+    web:   { base: 0.18, demand: 30, growth: 1.0,  drift: 1.0 },   // demand = the ablation buyer's volume + bot pipeline; v4 web offers are price-elastic (sim K.WEB_*)
     train: { base: 0.25, demand: 60, growth: 1.25, drift: 0.985 },
     infer: { base: 0.55, demand: 25, growth: 2.2,  drift: 0.985 },
   };

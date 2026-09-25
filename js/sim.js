@@ -41,8 +41,19 @@
     SLA_WEB: 0.9, SLA_INFER: 0.95, WEB_DAYS: [60, 90, 120, 180], INFER_DAYS: [90, 180, 270, 360],
     JOB_DAYS: [30, 45, 60, 90, 120], JOB_PREMIUM: 0.15, JOB_SPEED: 2, JOB_LATE_PEN: 0.005, JOB_LATE_MAX: 20,
     ANCHOR_UNITS: 15, START_OFFERS: 2, REP_SLA_DAY_MAX: 0.45, REP_JOB_CANCEL: 3,
-    SLA_WALK_DAYS: 20,
-    RENEW_BEFORE: 10,           // a serving customer on track (SLA met so far) offers a renewal this many days before the end          // a serving customer whose SLA is missed this many days in a row terminates the contract
+    SLA_WALK_DAYS: 20,          // a serving customer whose SLA is missed this many days in a row terminates the contract
+    RENEW_BEFORE: 10,           // a serving customer on track (SLA met so far) offers a renewal this many days before the end
+    // v0.4.2 onboarding grace (telemetry: a new player lost the anchor on day 46): a miss streak that began before
+    // GRACE_DAYS is tolerated GRACE_PATIENCE x longer, and the anchor cannot walk before GRACE_DAYS (it only pays less)
+    GRACE_DAYS: 90, GRACE_PATIENCE: 2,
+    // v0.4.2 web is an unbounded, price-elastic market (designer: "web 需求需要做 inf 下去，满了 web 降低单价"; DECISIONS D61):
+    // new web offers are priced x max(WEB_FLOOR, min(1, (WEB_DREF / H)^WEB_EPS)), H = web units a day you already hold.
+    // Flat up to the old 30-unit market; ~1-year server payback near H 75; below a server's running cost past ~170.
+    // Offer size: at most max(WEB_CAP_MIN, WEB_CAP_FRAC x your web capacity) (sane steps instead of a demand wall)
+    WEB_DREF: 30, WEB_EPS: 0.8, WEB_FLOOR: 0.25, WEB_CAP_MIN: 12, WEB_CAP_FRAC: 0.6,
+    // once GPUs are unlocked, web customers arrive on their own clock (every WEB_EVERY +- OFFER_JITTER days) instead of
+    // taking GPU offers' turns on the board: web never closes now, and it must not crowd out the GPU offer flow
+    WEB_EVERY: 8, WEB_BOARD_MAX: 3,
     // v4 player-triggered chapters (DECISIONS D49): one chapter per CH_GAP days at most; a stalled active player gets the
     // next chapter after CH_STALL days
     CH_GAP: 30, CH_STALL: 240,
@@ -597,6 +608,14 @@
   function jobNeed(c, day) {
     const rem = Math.max(0, c.work - c.done), left = c.deadline - day;
     return left > 1e-9 ? Math.min(c.maxRate, rem / left) : Math.min(c.maxRate, rem);
+  }
+  /* missed days in a row a customer tolerates: doubled for a streak that began in the onboarding grace */
+  function patience(s, c) { return K.SLA_WALK_DAYS * (s.day - (c.streak || 0) < K.GRACE_DAYS ? K.GRACE_PATIENCE : 1); }
+  /* days until serving contract c walks away at its current miss streak (0 = today), or null when it is not at risk.
+     The anchor cannot walk before GRACE_DAYS. */
+  function walkIn(s, c) {
+    if (!c || isJob(c) || c.phantom || !(c.streak > 0)) return null;
+    return Math.max(0, patience(s, c) - c.streak, c.anchor ? K.GRACE_DAYS - s.day : 0);
   }
   /* active on `day`: started, and not yet over (serving: before its end; job: work left) */
   const activeC = (c, day) => !(c.start > day + 1e-9) && (isJob(c) ? c.done < c.work - 1e-9 : day < c.end);
@@ -1727,18 +1746,88 @@
   /* ================= v4 order board ================= */
   /* what the player can deliver per workload today: installed output (parked racks count as if on) plus hardware
      that is on its way. Offers scale with this (designer: offers must not outrun the player). */
-  function capacity(s, st) {
-    const cap = { web: 0, train: 0, infer: 0, frontier: st.frontierElig };
+  function capacity(s, st) { return capacityAt(s, Infinity, st); }
+  /* days until a pending device is installed and producing (shipping + install; a queued install counts its work) */
+  function pendingEta(s, d) {
+    const j = s.jobs.find(x => x.dev && x.dev.uid === d.uid && x.to != null);
+    if (!j) return K.INSTALL_DAYS;
+    return j.phase === "ship" ? j.left + (j.work != null ? j.work : K.INSTALL_DAYS) : j.left;
+  }
+  /* capacity on `day`: installed output plus the pending hardware that is installed by then (v0.4.2: the board judges an
+     offer by the capacity you will have when it STARTS, not by hardware that arrives too late or never) */
+  function capacityAt(s, day, st) {
+    st = st || stats(s);
+    const cap = { web: 0, train: 0, infer: 0, frontier: st.frontierElig }, dt = day - s.day;
     for (const r of s.racks) {
       const pr = st.perRack[r.id];
       for (const w of ["web", "train", "infer"]) cap[w] += r.mode === "off" ? pr.raw[w] * pr.netF : (pr.outPre || pr.out)[w];   // a blackout is not lost capacity
       for (const d of r.pending) {
+        if (dt !== Infinity && pendingEta(s, d) > dt + 1e-9) continue;
         const it = itemOf(s, d);
         if (it.role === "cpu") cap.web += 1;
         else if (it.role === "gpu") cap[r.workload] += Math.min(it.F, it.B * INTENSITY[r.workload]);
       }
     }
     return cap;
+  }
+  const marketOf = c => c.kind === "frontier" ? "frontier" : c.w;
+  /* every signed commitment in market m as a window [a, b) at u units a day: serving = [start, end) at its units (a
+     signed-but-not-started contract counts from its start); job = from today to its deadline at the rate it still needs */
+  function commitments(s, m) {
+    const out = [];
+    for (const c of s.contracts) {
+      if (c.phantom || marketOf(c) !== m) continue;
+      if (isJob(c)) {
+        if (c.done >= c.work - 1e-9) continue;
+        out.push({ id: c.id, a: Math.max(s.day, c.start || 0), b: c.deadline > s.day + 1e-9 ? c.deadline : c.end, u: jobNeed(c, s.day) });
+      } else if (c.end > s.day) out.push({ id: c.id, a: c.start, b: c.end, u: c.units });
+    }
+    return out;
+  }
+  /* the most units a day market m is committed to at any time in [from, to) (active + signed-future contracts) */
+  function commitmentPeak(s, m, from, to) {
+    const L = commitments(s, m).filter(x => x.b > from + 1e-9 && x.a < to - 1e-9);
+    let peak = 0;
+    for (const t of [from, ...L.map(x => x.a).filter(t => t > from)]) {
+      let u = 0;
+      for (const x of L) if (x.a <= t + 1e-9 && x.b > t + 1e-9) u += x.u;
+      if (u > peak) peak = u;
+    }
+    return peak;
+  }
+  /* can you deliver offer o? capacity at its start (installs finished by then) minus the peak of everything already
+     committed over its window. over = signing it would overbook you */
+  function deliverable(s, o, st) {
+    st = st || stats(s);
+    const m = marketOf(o), job = isJob(o);
+    const start = s.day + (job ? 0 : (o.lead || 0)), end = start + Math.max(1, o.days || 1);
+    const need = Math.max(1e-9, +o.units || (job ? o.work / o.days : 0));
+    const cap = capacityAt(s, start, st)[m] || 0, peak = commitmentPeak(s, m, start, end);
+    const free = Math.max(0, cap - peak);
+    return { market: m, need, cap, peak, free, start, end, frac: free / need, load: (peak + need) / Math.max(1e-9, cap), over: peak + need > cap + 1e-6 };
+  }
+  /* commitments vs capacity per serving market over the next `horizon` days: the worst shortfall and when it starts
+     (checked at today, every contract start and every pending install); short > 0 = you are overbooked */
+  function overbook(s, st, horizon) {
+    st = st || stats(s);
+    horizon = horizon || 90;
+    const res = {}, to = s.day + horizon;
+    const etas = [];
+    for (const r of s.racks) for (const d of r.pending) etas.push(s.day + pendingEta(s, d));
+    for (const m of ["web", "train", "infer"]) {
+      const L = commitments(s, m);
+      const pts = [s.day, ...L.map(x => x.a), ...etas].filter(t => t >= s.day - 1e-9 && t < to);
+      let worst = { short: 0, at: null, cap: 0, owe: 0 };
+      for (const t of pts) {
+        let owe = 0;
+        for (const x of L) if (x.a <= t + 1e-9 && x.b > t + 1e-9) owe += x.u;
+        if (owe <= 0) continue;
+        const cap = capacityAt(s, t, st)[m], short = owe - cap;
+        if (short > worst.short + 1e-9) worst = { short, at: t, cap, owe };
+      }
+      res[m] = worst;
+    }
+    return res;
   }
   /* the cheapest capacity on sale for a workload: $ per unit a day, including a share of a switch */
   function bestCard(s, w) {
@@ -1797,26 +1886,40 @@
      plausibly serve, and whose market still has open demand). Size = 0.3-1.2x what the player can DELIVER: free capacity
      (capacity, incl. hardware on its way, minus what is owed) plus what half the cash on hand can buy; a quarter of
      the time a "stretch" of 1.2-1.6x that; always capped by the market's open demand */
+  /* web price elasticity (D61): the factor on the index for the NEXT web contract when you already hold h units a day */
+  const webPriceAt = h => Math.max(K.WEB_FLOOR, Math.min(1, Math.pow(K.WEB_DREF / Math.max(1e-9, h), K.WEB_EPS)));
+  const webPriceF = (s, extra) => webPriceAt(held(s).web + (extra || 0));
+  /* after the GPU chapter, a player with no GPU hardware and no GPU work always has one starter GPU offer on the board */
+  function needsStarter(s) {
+    if (!core(s) || !on(s, "gpu")) return false;
+    if (s.offers.some(o => !o.bts && (o.w === "train" || o.w === "infer"))) return false;
+    if (s.contracts.some(c => !c.phantom && c.w !== "web")) return false;
+    // installed GPUs only: an order that is cancelled while it ships must leave the game unchanged (cancelOrder test)
+    return !s.racks.some(r => r.devices.some(d => itemOf(s, d).role === "gpu"));
+  }
   function makeOffer(s, force) {
     const st = stats(s), mk = st.mk, rf = repF(s), R = () => nextRand(s);
     const cap = capacity(s, st), H = held(s), f = fleet(s), owed = owedNow(s);
     const kinds = [];
-    const openOf = w => Math.max(0, mk[w].demand - H[w]);   // a full market sends no offers
+    // GPU markets: a full market sends no offers (demand grows 1.25-2.2x a year). Web never fills: it gets cheaper (D61)
+    const openOf = w => w === "web" ? Infinity : Math.max(0, mk[w].demand - H[w]);
     const add = (kind, w, market) => {
       const card = bestCard(s, w === "frontier" ? "train" : w), m = w === "frontier" ? "frontier" : w;
       const c = cap[m], free = Math.max(0, c - owed[m]);
       const afford = card && kind !== "frontier" ? Math.min(Math.max(0, s.cash - 50) * 0.5 / card.per, roomFor(s, card.k, w) * card.u) : 0;
       const canBuy = card && s.cash >= card.price + s.items.sw.price;
-      if (kind !== "web" && kind !== "frontier" && c < 0.5 && !canBuy) return;       // nothing to serve it with, can't afford a card
+      // nothing to serve it with and can't afford a card (a starter offer is shown anyway: it is the goal to save for)
+      if (kind !== "web" && kind !== "frontier" && c < 0.5 && !canBuy && force !== "starter") return;
       const open = openOf(market);
       if (open < K.OFFER_MIN_UNITS) return;
       kinds.push({ kind, w, market, card, cap: c, free, afford, open, weight: 1 });   // every open market gets its share of the board
     };
     if (force === "web") add("web", "web", "web");
+    else if (force === "starter") { add("infer", "infer", "infer"); add("train", "train", "train"); }
     else {
-      add("web", "web", "web");
       if (on(s, "gpu")) { add("infer", "infer", "infer"); add("train", "train", "train"); }
       if (on(s, "fabric") && (cap.frontier > 0 || f.rowTrainMax >= 8)) add("frontier", "train", "frontier");
+      if (!kinds.length || !core(s) || !on(s, "gpu")) add("web", "web", "web");   // after ch3 web has its own clock (webClock)
     }
     if (!kinds.length) return null;
     const tot = kinds.reduce((a, k) => a + k.weight, 0);
@@ -1825,17 +1928,22 @@
     const { kind, w, market, card } = pick;
     // a first offer in a market the player has no hardware for is at most one card's worth (never a stretch)
     const first = card && pick.cap < 0.5 && kind !== "web", deliver = first ? card.u : pick.free + pick.afford;
+    const starter = force === "starter";
     const stretch = !first && R() < K.OFFER_STRETCH;
-    let units = first ? card.u * (0.5 + 0.35 * R())            // slack for the 8 days of shipping and install
+    let units = starter ? card.u * (0.8 + 0.8 * R())            // one rack's worth: a switch + 1-2 cards
+      : first ? card.u * (0.5 + 0.35 * R())            // slack for the 8 days of shipping and install
       : deliver * (stretch ? 1.2 + 0.4 * R() : K.OFFER_CAP_MIN + (K.OFFER_CAP_MAX - K.OFFER_CAP_MIN) * R());
     if (force === "web" && s.day === 0) units = 4 + Math.round(4 * R());               // the two starter offers: small
-    units = Math.max(K.OFFER_MIN_UNITS, Math.round(Math.min(units, pick.open)));
+    units = Math.min(units, pick.open, kind === "web" ? Math.max(K.WEB_CAP_MIN, K.WEB_CAP_FRAC * cap.web) : Infinity);
+    units = Math.max(K.OFFER_MIN_UNITS, Math.round(units));
     const cust = customer(s), spread = (1 + K.CONTRACT_PREMIUM) * (1 + (R() * 2 - 1) * K.QUOTE_SPREAD), repAdj = 1 + 0.2 * rf;
-    const P = mk[market].price, ttl = K.OFFER_EXPIRY_MIN + Math.round(R() * (K.OFFER_EXPIRY - K.OFFER_EXPIRY_MIN));
-    const o = { id: "c" + s.nextId++, kind, cust: cust.name, icon: cust.icon, foreign: cust.foreign, w, spot: +P.toFixed(4),
+    const pf = market === "web" ? webPriceAt(H.web) : 1, P = mk[market].price * pf, ttl = K.OFFER_EXPIRY_MIN + Math.round(R() * (K.OFFER_EXPIRY - K.OFFER_EXPIRY_MIN));
+    const o = { id: "c" + s.nextId++, kind, cust: cust.name, icon: cust.icon, foreign: cust.foreign, w, spot: +mk[market].price.toFixed(4),
       repAdj: +repAdj.toFixed(4), stretch, expires: s.day + ttl, ttl };
+    if (starter) o.starter = true;
+    if (pf < 1) o.pf = +pf.toFixed(4);           // the web volume discount it was signed at (a renewal keeps it, D61)
     if (kind === "train" || kind === "frontier") {
-      const days = pickOf(s, K.JOB_DAYS), work = Math.max(K.OFFER_MIN_UNITS * days, Math.round(units * days));
+      const days = pickOf(s, starter ? K.JOB_DAYS.filter(x => x >= 60) : K.JOB_DAYS), work = Math.max(K.OFFER_MIN_UNITS * days, Math.round(units * days));
       const pay = work * P * (1 + K.JOB_PREMIUM) * spread * repAdj;
       Object.assign(o, { units: +(work / days).toFixed(2), days, lead: 0, work, pay: +pay.toFixed(2), price: +(pay / work).toFixed(4),
         maxRate: +(work / days * K.JOB_SPEED).toFixed(3), lateFee: +(pay * K.JOB_LATE_PEN).toFixed(3), lateMax: K.JOB_LATE_MAX,
@@ -1867,14 +1975,17 @@
   }
   /* the renewal of serving contract c: same customer, units and term, today's price, starting when c ends */
   function renewalOffer(s, c) {
-    const mk = marketAt(s, s.day), rf = repF(s), P = mk[c.w].price;
+    // a renewal re-prices to today's index but keeps the volume discount the customer signed at (D61): your existing book
+    // does not get cheaper because you grew; only new customers see the lower price
+    const mk = marketAt(s, s.day), rf = repF(s), P = mk[c.w].price * (c.pf || 1);
     const spread = (1 + K.CONTRACT_PREMIUM) * (1 + (nextRand(s) * 2 - 1) * K.QUOTE_SPREAD), repAdj = 1 + 0.2 * rf;
     const price = c.bts ? P * (1 + K.BTS_PREMIUM * nextRand(s)) * repAdj : P * spread * repAdj;
     const ttl = Math.max(1, Math.round(c.end - s.day));
     const o = { id: "c" + s.nextId++, kind: c.kind || c.w, renewOf: c.id, cust: c.cust, icon: c.icon, foreign: c.foreign, w: c.w,
-      units: c.units, days: c.days, lead: +(c.end - s.day).toFixed(2), price: +price.toFixed(4), spot: +P.toFixed(4), repAdj: +repAdj.toFixed(4),
+      units: c.units, days: c.days, lead: +(c.end - s.day).toFixed(2), price: +price.toFixed(4), spot: +mk[c.w].price.toFixed(4), repAdj: +repAdj.toFixed(4),
       sla: c.sla, penalty: +(price * (c.bts ? K.BTS_PENALTY_MULT : K.PENALTY_MULT)).toFixed(4), expires: c.end, ttl, stretch: false };
     if (c.bts) Object.assign(o, { bts: true, fitout: 0 });      // the fit-out is already built
+    if (c.pf) o.pf = c.pf;
     s.offers.push(o);
     pushNews(s, { title: `Renewal offer: ${c.cust}`, body: `Same ${o.units} ${o.w} units for another ${o.days} days at $${round2(o.price)}k (was $${round2(c.price)}k).`, tone: "info", cat: "contracts", icon: "doc", ...kp("n.renewal", { c: c.cust, u: o.units, d: o.days, x: Math.round(o.price * 1000), was: Math.round(c.price * 1000) }) });
     log(s, `renewal offer ${o.id} for ${c.id} p=${o.price} (was ${c.price})`);
@@ -1927,13 +2038,13 @@
       }
     }
     // sustained failure: the customer walks away (penalties stop, the revenue too; counts as a failed contract)
-    for (const c of s.contracts.filter(x => !isJob(x) && x.streak >= K.SLA_WALK_DAYS && d < x.end)) {
+    for (const c of s.contracts.filter(x => !isJob(x) && d < x.end && walkIn(s, x) === 0)) {
       c.end = d; c.walked = true;
       s.offers = s.offers.filter(o => o.renewOf !== c.id);                    // no renewal from a customer who left
       s.contracts = s.contracts.filter(x => !(x.renewOf === c.id && x.start > d - 1e-9));
       if (on(s, "reputation")) repHit(s, K.REP_JOB_CANCEL);
-      logCash(s, 0, "contractLost", `${c.cust} terminated: ${K.SLA_WALK_DAYS} days of missed deliveries ($${Math.round(c.penaltyPaid)}k in penalties)`, { c: c.cust });
-      pushNews(s, { title: `${c.cust} walks away`, body: `${K.SLA_WALK_DAYS} days of missed deliveries. Contract terminated; penalties paid $${Math.round(c.penaltyPaid)}k.`, tone: "bad", cat: "contracts", icon: "doc", ...kp("n.walk", { c: c.cust, d: K.SLA_WALK_DAYS, x: Math.round(c.penaltyPaid) }) });
+      logCash(s, 0, "contractLost", `${c.cust} terminated: ${c.streak} days of missed deliveries ($${Math.round(c.penaltyPaid)}k in penalties)`, { c: c.cust });
+      pushNews(s, { title: `${c.cust} walks away`, body: `${c.streak} days of missed deliveries. Contract terminated; penalties paid $${Math.round(c.penaltyPaid)}k.`, tone: "bad", cat: "contracts", icon: "doc", ...kp("n.walk", { c: c.cust, d: c.streak, x: Math.round(c.penaltyPaid) }) });
       log(s, `contract ${c.id} terminated after ${c.streak} missed days`);
     }
     for (const c of s.contracts.filter(x => !isJob(x) && d >= x.end)) {
@@ -1956,13 +2067,24 @@
     for (const o of s.offers.filter(x => d >= x.expires)) log(s, `offer ${o.id} expired`);
     s.offers = s.offers.filter(x => d < x.expires);
     if (s.nextOffer >= 0 && d >= s.nextOffer) {
-      const board = s.offers.filter(o => !o.bts).length;
+      // after ch3 web offers have their own clock and their own board room (WEB_BOARD_MAX), so they never block GPU arrivals
+      const own = o => !o.bts && !(core(s) && on(s, "gpu") && o.w === "web");
+      const board = s.offers.filter(own).length;
       if (board < K.BOARD_MAX) makeOffer(s);
-      const after = s.offers.filter(o => !o.bts).length;
+      const after = s.offers.filter(own).length;
       // arrivals do not speed up when the player declines (the market's appetite is the limit); an empty board refills
       s.nextOffer = board >= K.BOARD_MAX ? d + 2
         : after === 0 ? d + 1 + Math.floor(nextRand(s) * 2)
         : d + Math.max(1, Math.round(K.OFFER_EVERY * (1 - 0.2 * repF(s)) + (nextRand(s) * 2 - 1) * K.OFFER_JITTER));
+    }
+    if (needsStarter(s)) { const o = makeOffer(s, "starter"); if (o) log(s, `starter gpu offer ${o.id}`); }
+    // web's own arrival clock after the GPU chapter (D61)
+    if (on(s, "gpu")) {
+      if (!(s.nextWeb >= 0)) s.nextWeb = d + K.WEB_EVERY;
+      else if (d >= s.nextWeb) {
+        if (s.offers.filter(o => !o.bts && o.w === "web").length < K.WEB_BOARD_MAX) makeOffer(s, "web");
+        s.nextWeb = d + Math.max(1, Math.round(K.WEB_EVERY + (nextRand(s) * 2 - 1) * K.OFFER_JITTER));
+      }
     }
     if (on(s, "contracts") && s.nextBts != null && s.nextBts >= 0 && d >= s.nextBts) {
       makeBts(s);
@@ -2327,7 +2449,7 @@
     K, MODES, MARKET, INTENSITY, NET_NEED, CHAPTERS, BASE_ITEMS, SHOP_ORDER, GEN_LAUNCH, WORKLOADS, CONTENT: C, LOSS_LABEL,
     newGame, step, advance, stats, check, apply, project, shallowClone, netWorth, resale, score, summary, companyValue,
     // v4 contracts core + player-triggered chapters
-    contractsOn: core, isJob, jobNeed, capacity, bestCard, held, roomFor, owedNow, fleet, milestone, nextChapter, makeOffer, LESSON,
+    contractsOn: core, isJob, jobNeed, capacity, capacityAt, commitmentPeak, deliverable, overbook, walkIn, patience, needsStarter, webPriceF, webPriceAt, bestCard, held, roomFor, owedNow, fleet, milestone, nextChapter, makeOffer, LESSON,
     seasonAt, marketAt, rackById, rackIndex, usedU, rackKw, rackKwAll, gridKwAll, shopItems, currentGen, busyTechs, isDead, throttleAt,
     on, repOf, repFactor, hazard, naturalWorkload, logCash, ppaQuote, creditLimitOf, shelfLoad, transitTarget, trailingRevenue, hbmF, gridNext, hallCost, HALL_LETTERS,
     setDebug(v) { DEBUG = !!v; },

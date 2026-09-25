@@ -5,12 +5,45 @@ Versions are milestones of the week-3 project; there are no tagged releases.
 
 ## [Unreleased]
 
+Fix round driven by real player telemetry (v0.4.1, seed 298670, two sessions of one player; replay-verified).
+
+### Fixed
+- **Overbooking was invisible.** The board judged an offer against today's free capacity; a new player signed 36 units
+  on 16 of capacity on day 4 and lost customers six weeks later. Deliverability now lives in the sim
+  (`Sim.capacityAt`, `commitmentPeak`, `deliverable`, `overbook`): capacity at the offer's start (installs finished by then)
+  minus the peak of every signed contract, active or not yet started, over its window. The bar's track is your capacity
+  (tick), grey = already committed, colour = this offer, **red stripes past 100 %**; an overbooking **Sign** turns red
+  with ⚠ and needs a second tap (it wobbles and bonks first). The board header shows "⚠−N" and contract pills in a short
+  market get a dashed red outline; the alerts tray lists "Overbooked: N web short".
+- **Customers walked away without warning.** A contract below its SLA pulses, its pill counts down "⏳ Nd" to the
+  walk-out (also in the alert), and a new miss pulses the pill and the bell with a warning sound. Onboarding grace: in
+  the first 90 days a customer waits twice as long (40 days), and the starting lifetime customer cannot leave before
+  day 90 (it keeps paying penalties).
+- **Empty order board after the GPU chapter.** GPU offers only appeared once you could afford a card, and web stopped
+  at 30 units, so the board could stay empty for months. Now a **starter GPU offer** (one rack: a switch + 1–2 cards,
+  gold outline) is always there until your first GPU is installed, and an alert says "N units idle, no contract".
+- Bots: greedy/Casual no longer decline deals that need no new hardware when cash is below their reserve, charge power
+  + upkeep for every unit they serve, and judge payback on net income. Casual reads the board's deliverability.
+
 ### Changed
+- **Web demand is unbounded and price-elastic** (designer: a full market lowers its price instead of stopping). New web
+  offers are priced × max(0.25, min(1, (30 / web units you hold)^0.8)): unchanged up to the old 30-unit market, about a
+  1-year server payback near 75 units, and below a server's running cost past ~170 units. Existing contracts keep their
+  price and renewals keep the discount they were signed at. The board header shows the next web price with a ▼ and the
+  price curve with your position; web offers show "▼ x %" against the index. After the GPU chapter web customers arrive
+  on their own clock (every ~8 days, up to 3 on the board) so they never crowd out GPU offers. Web-only play now tops
+  out around 12–15 % of the GPU path (bots, n = 6).
+- **Contracts drawer docks under the rack panel** (right column, lower half) instead of covering it: you can select
+  racks, change mode/workload, drag parts and sell while reading contracts.
+- **Filter chips** on the order board and in the Contracts drawer: All · Web · Inference · Training · Frontier ·
+  Build-to-suit, icon + count (kinds present only); the choice is remembered; the badge still counts every offer.
+- **Speed controls are easier to find:** after a minute at 1× the 2×/4× buttons glow once and a "Faster: 2 · 3 · 4" hint
+  appears. The 1× rate stays 2 days a second.
 - **Auto-pause is quiet by default** (player telemetry: ~20 pauses in 6 minutes, 19 of them on new offers; "每次出新的合同都自动
   暂停"). New offers, failures and SLA misses no longer pause unless you turn them on in Settings; only cash below 0 pauses
   (chapter cards and the runway warnings still stop time), plus one teaching pause on the very first new offer ever.
   Saved settings from v0.4.1 and earlier are migrated to the new default once (settings version 2); toggles you change
-  afterwards stick.
+  afterwards stick. (Released as the v0.4.2 hotfix.)
 
 ## [0.4.1] - 2026-09-25
 

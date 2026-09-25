@@ -199,3 +199,20 @@ test("auto-pause defaults (v0.4.2 hotfix): only cash < 0 is on; offer/failure/SL
   assert.match(src, /if \(!\(raw\.apV >= AP_V\)\)/, "saved settings older than AP_V are migrated to the new default");
   assert.match(src, /!SET\.apFirstDone/, "one teaching pause on the very first offer");
 });
+
+test("kind filter (v0.4.2): byKind keeps one kind (bts wins over its workload), kindCounts counts offers + contracts", () => {
+  const list = [{ kind: "web", w: "web" }, { kind: "infer", w: "infer" }, { kind: "bts", bts: true, w: "train" }, { kind: "train", w: "train" }, { w: "web", anchor: true }];
+  assert.equal(QOL.kindOf(list[2]), "bts");
+  assert.equal(QOL.kindOf(list[4]), "web", "the anchor has only a workload");
+  assert.deepEqual(QOL.byKind(list, "train"), [list[3]]);
+  assert.deepEqual(QOL.byKind(list, "web"), [list[0], list[4]]);
+  assert.equal(QOL.byKind(list, "all"), list);
+  assert.equal(QOL.byKind(list, "nonsense"), list, "an unknown stored value shows everything");
+  const n = QOL.kindCounts(list.slice(0, 2), list.slice(2));
+  assert.deepEqual(n, { all: 5, web: 2, infer: 1, train: 1, frontier: 0, bts: 1 });
+  // real board: every offer falls in exactly one kind
+  const s = Sim.newGame(5, { sandbox: true });
+  Sim.advance(s, 40);
+  const c = QOL.kindCounts(s.offers);
+  assert.equal(QOL.KINDS.reduce((a, k) => a + c[k], 0), s.offers.length);
+});

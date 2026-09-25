@@ -19,7 +19,9 @@ below are the implemented ones; DECISIONS D48–D53 record why.
 - **Order board:** an offer every ~4 days (up to 6 on the board), each expiring in 10–20 days. **Offers scale with the
   player** (designer feedback): size = 0.3–1.2× what the player can deliver (free capacity + what half the cash buys, limited
   by floor room; a quarter are 1.2–1.6× "stretch" offers; a first offer in a new market is 0.5–0.85 of one card), capped by
-  the market's open demand (demand − what the player already holds: a full market sends no offers). Kinds are those the
+  the market's open demand (demand − what the player already holds: a full GPU market sends no offers). **v0.4.2: web is
+  unbounded and price-elastic instead** (D61): new web offers × max(0.25, min(1, (30/H)^0.8)), H = web units held; after
+  ch3 web offers arrive on their own ~8-day clock. Kinds are those the
   player has unlocked and can plausibly serve. The price = the market price index × 1.2 (contract premium) ± 15 %, which
   drops at generation launches and in the disruption price war. Reputation raises offer frequency and price.
 - **Allocation is automatic:** every substep, rack output fills contracts: first every contract's SLA minimum (jobs: the rate

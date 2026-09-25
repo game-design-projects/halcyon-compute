@@ -4,7 +4,8 @@
  * - blueprint / blueprintDiff: copy a rack's layout, turn it into the actions that rebuild it on another rack
  * - fillPlan: shift+drag fill (how many copies of an order fit, as a list of actions)
  * - undoPre / undoEntry / resolveUndo: multi-step undo for reversible actions, expressed as ordinary sim actions
- * - alerts: live problems (no switch, failed part, throttling, SLA at risk, idle capacity, runway)
+ * - alerts: live problems (no switch, failed part, throttling, SLA at risk + walk-away countdown, idle capacity per rack
+ *   and in total, overbooked commitments, runway)
  * Every action produced here is an ordinary sim action; the UI still sends each one through act() → Sim.check/apply.
  * Classic script (window.QOL) + CommonJS.
  */
@@ -29,14 +30,13 @@
   }
 
   /* ---------- order board: can you deliver this offer? ---------- */
+  /* v0.4.2 (telemetry: a player signed 36 units against 16 of capacity on day 4): the sim's deliverability = capacity at
+     the offer's start (installs finished by then) minus the peak of every signed contract (active + not yet started)
+     over its window. `over` = signing would overbook you; `load` = (committed + this) / capacity, drawn past 100 % in red */
   function offerFit(Sim, S, o, st) {
-    st = st || Sim.stats(S);
-    const cap = Sim.capacity(S, st), owed = Sim.owedNow(S);
-    const m = o.kind === "frontier" ? "frontier" : o.w;
-    const need = Math.max(1e-9, +o.units || (Sim.isJob(o) ? o.work / o.days : 0));
-    const free = Math.max(0, (cap[m] || 0) - (owed[m] || 0));
-    const frac = free / need;
-    return { market: m, need, free, frac, level: frac >= 1 - 1e-9 ? "ok" : frac >= 0.5 ? "part" : "none" };
+    const d = Sim.deliverable(S, o, st);
+    const level = d.over ? (d.frac >= 0.5 ? "part" : "none") : "ok";
+    return { market: d.market, need: d.need, free: d.free, frac: d.frac, cap: d.cap, peak: d.peak, load: d.load, over: d.over, level };
   }
   /* which racks would serve an offer if it were signed and active now (preview; the real state is untouched) */
   function servePreview(Sim, S, o) {
@@ -196,12 +196,35 @@
       }
     }
     for (const c of S.contracts) if ((st.cMiss && st.cMiss[c.id] || 0) > 1e-6) {
-      const l = (st.alloc || []).find(x => x.id === c.id);
-      out.push({ kind: "sla", id: c.id, cust: c.cust, rack: l ? l.rack : null, sev: 3 });
+      const l = (st.alloc || []).find(x => x.id === c.id), walk = Sim.walkIn ? Sim.walkIn(S, c) : null;
+      out.push({ kind: "sla", id: c.id, cust: c.cust, rack: l ? l.rack : null, sev: 3, walk });
+    }
+    // v0.4.2: idle output with no contract, summed (idle racks light up one by one; this says how much is wasted)
+    if (Sim.contractsOn(S) && st.idle) {
+      const n = (st.idle.web || 0) + (st.idle.train || 0) + (st.idle.infer || 0);
+      if (n >= 2) out.push({ kind: "idleSum", n: Math.round(n), sev: 2 });
+    }
+    // v0.4.2: commitments (active + signed-future) above the capacity you will have
+    if (Sim.contractsOn(S) && Sim.overbook) {
+      const ob = opts.overbook || Sim.overbook(S, st);
+      for (const m of ["web", "train", "infer"]) if (ob[m] && ob[m].short > 0.5) out.push({ kind: "overbook", w: m, n: Math.ceil(ob[m].short), at: ob[m].at, sev: 3 });
     }
     if (opts.runway != null && opts.runway < 60) out.push({ kind: "runway", n: Math.max(0, Math.round(opts.runway)), sev: opts.runway < 30 ? 3 : 2 });
     out.sort((a, b) => b.sev - a.sev);
     return out;
+  }
+
+  /* ---------- order board / Contracts drawer: filter by contract kind (v0.4.2, player: "合同筛选") ---------- */
+  const KINDS = ["web", "infer", "train", "frontier", "bts"];
+  const kindOf = o => (o.bts ? "bts" : o.kind || o.w);
+  /* offers and contracts of one kind ("all" = everything; an unknown key falls back to everything) */
+  function byKind(list, sel) { return !sel || sel === "all" || !KINDS.includes(sel) ? list : list.filter(o => kindOf(o) === sel); }
+  /* how many of each kind (offers + contracts together, as the chips show them), plus `all` */
+  function kindCounts(...lists) {
+    const n = { all: 0 };
+    for (const k of KINDS) n[k] = 0;
+    for (const l of lists) for (const o of l || []) { const k = kindOf(o); if (k in n) n[k]++; n.all++; }
+    return n;
   }
 
   /* ---------- contract link colours (stable per contract id) ---------- */
@@ -213,5 +236,5 @@
     return LINK[n % LINK.length];
   }
 
-  return { reason, offerFit, servePreview, blueprint, blueprintDiff, nextEmptyRack, fillPlan, undoPre, undoEntry, resolveUndo, undoStack, alerts, linkColor, LINK };
+  return { KINDS, kindOf, byKind, kindCounts, reason, offerFit, servePreview, blueprint, blueprintDiff, nextEmptyRack, fillPlan, undoPre, undoEntry, resolveUndo, undoStack, alerts, linkColor, LINK };
 });

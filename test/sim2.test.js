@@ -319,13 +319,17 @@ test("order board: offers every ~4 days, expire in 10-20, priced at the index x 
     for (const o of s.offers) if (!seen.has(o.id)) seen.set(o.id, Object.assign({ at: s.day }, o));
   }
   const offers = [...seen.values()].filter(o => !o.bts && !o.renewOf);
-  assert.ok(offers.length >= 40 && offers.length <= 110, `${offers.length} offers in 300 days`);
-  assert.ok(maxBoard <= K.BOARD_MAX, `board ${maxBoard}`);
+  // v0.4.2: with GPUs unlocked (sandbox) web arrives on its own clock (~every WEB_EVERY days, own board room) and a
+  // starter GPU offer stays up until the first GPU is installed
+  const main = offers.filter(o => o.kind !== "web" && !o.starter), web = offers.filter(o => o.kind === "web");
+  assert.ok(main.length >= 30 && main.length <= 110, `${main.length} GPU offers in 300 days`);
+  assert.ok(web.length >= 300 / K.WEB_EVERY * 0.6 && web.length <= 300 / K.WEB_EVERY * 1.6 + 2, `${web.length} web offers in 300 days`);
+  assert.ok(maxBoard <= K.BOARD_MAX + K.WEB_BOARD_MAX + 1, `board ${maxBoard}`);
   const kinds = new Set(offers.map(o => o.kind));
   for (const k of ["web", "infer", "train"]) assert.ok(kinds.has(k), `saw ${k} offers`);
   for (const o of offers) {
     const job = o.kind === "train" || o.kind === "frontier";
-    const q = job ? o.pay / o.work / (1 + K.JOB_PREMIUM) / o.repAdj : o.price / o.repAdj;
+    const q = job ? o.pay / o.work / (1 + K.JOB_PREMIUM) / o.repAdj : o.price / o.repAdj / (o.pf || 1);   // pf = web volume discount (D61)
     const idx = o.spot * (1 + K.CONTRACT_PREMIUM);
     assert.ok(q >= idx * (1 - K.QUOTE_SPREAD) - 1e-3 && q <= idx * (1 + K.QUOTE_SPREAD) + 1e-3, `${o.kind} quote ${q} vs index ${o.spot}`);
     assert.ok(o.ttl >= K.OFFER_EXPIRY_MIN && o.ttl <= K.OFFER_EXPIRY && near(o.expires - o.at, o.ttl, 0.1) || o.expires - o.at <= o.ttl);
@@ -458,6 +462,7 @@ test("training job: paid in one lump on completion (a logged cash event), late f
 test("serving contract: a customer whose SLA is missed K.SLA_WALK_DAYS days in a row walks away", () => {
   const s = sb(4);
   s.cash = 1e5;                                       // survive the penalties long enough to see the walk-out
+  Sim.advance(s, K.GRACE_DAYS);                       // past the onboarding grace (v0.4.2: doubled patience before it)
   const c = serving(s, "infer", 40, 300, 0.5);       // no inference capacity at all
   s.contracts.push(c);
   Sim.advance(s, K.SLA_WALK_DAYS - 1);
@@ -1297,7 +1302,9 @@ test("cancelOrder: deterministic, and a cancelled order leaves the game unchange
     Sim.advance(s, 3);
     Sim.apply(s, { type: "buy", item: "c1", rack: "B2" });
     const uid = s.jobs[s.jobs.length - 1].dev.uid;
-    Sim.advance(s, 2);
+    // cancel before the next daily tick: offers are sized to capacity INCLUDING hardware on its way (by design), so an
+    // offer made while the order ships legitimately differs (v0.4.2: the starter GPU offer shifted the RNG onto such a day)
+    Sim.advance(s, 0.5);
     if (cancel) Sim.apply(s, { type: "cancelOrder", uid });
     Sim.advance(s, 200);
     return s;
@@ -1305,7 +1312,7 @@ test("cancelOrder: deterministic, and a cancelled order leaves the game unchange
   assert.equal(JSON.stringify(run(true)), JSON.stringify(run(true)), "same actions, same state");
   const a = run(true), base = sb(5);
   base.cash = 5000;
-  Sim.advance(base, 200 + 5);
+  Sim.advance(base, 200 + 3.5);
   assert.ok(near(a.cash, base.cash, 1e-9), `cash ${a.cash} vs never-bought ${base.cash}`);
   assert.ok(near(Sim.score(a), Sim.score(base), 1e-9), `score ${Sim.score(a)} vs ${Sim.score(base)}`);
 });
