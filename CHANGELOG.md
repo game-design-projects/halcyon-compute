@@ -5,6 +5,8 @@ Versions are milestones of the week-3 project; there are no tagged releases.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-25
+
 ### Added (UI pass B: English + 简体中文, and a text diet)
 - **简体中文** alongside English, for everything on screen: HUD, menus, how-to, chapter cards, the order board,
   drawers, catalog, rack panel, alerts, tooltips and aria-labels, news, customers' offers, VC / policy / press texts,
