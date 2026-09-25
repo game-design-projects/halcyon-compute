@@ -1,6 +1,6 @@
 {
   "name": "halcyon-compute",
-  "version": "0.4.7",
+  "version": "0.4.8",
   "private": true,
   "description": "Datacenter tycoon prototype, Game Design week 3",
   "scripts": {

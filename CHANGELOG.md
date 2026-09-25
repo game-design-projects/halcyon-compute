@@ -6,6 +6,8 @@ release plus the fix and merged back here afterwards.
 
 ## [Unreleased]
 
+## [0.4.8] - 2026-09-25
+
 ### Changed
 - **Score uses last year's profit**: the earnings part of the score (and company value for investors) is now 2× the
   average daily profit of the last 365 days (was the last 90). A quiet quarter between contracts no longer halves your
