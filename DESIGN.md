@@ -9,7 +9,7 @@ version history is in [CHANGELOG.md](CHANGELOG.md).
 comes from contracts (v4):** customers post offers on an order board; you sign, build the capacity before the start date,
 deliver against an SLA, and get paid. Hardware with no contract earns nothing. You drag hardware onto racks in up to 3 halls
 and decide what each rack runs, how it is powered, cooled, staffed, financed and sold. **Score = founder equity value:**
-your ownership % × (net worth + 2 years of current profit) × reputation factor. Seventeen chapters unlock the systems one at a
+your ownership % × (net worth + 2 × last year's profit) × reputation factor (profit = trailing 365-day average, D75). Seventeen chapters unlock the systems one at a
 time, simplest first, **when the player reaches each chapter's milestone** (not on a calendar). A sandbox mode unlocks
 everything on day 0.
 
@@ -101,7 +101,7 @@ Two scripted players share the simulation core (`bots/bots.js`), so we can measu
   money *today*. It ignores seasons, launches, failures, vendor risk and cash flow, and never hedges or pilots.
 - **Planner** plays the heuristics above across all 17 chapters with one value function: change in economic profit (cash
   profit + training-job progress) over a lookahead (150 days, or the rest of the game in the last 420), plus the
-  final-quarter profit × 730 that the score counts, plus resale using the public launch calendar, minus the reputation cost of
+  final-year profit × 730 that the score counts, plus resale using the public launch calendar, minus the reputation cost of
   SLA misses and the revenue lost when a customer walks. It values offers against a *pipeline belief* (idle capacity would
   find contracts at 85 % of the index, up to open demand, after the launch calendar), keeps headroom over SLA-required units
   per unlocked risk, may buy up to 10 cards (30 for build-to-suit) to take an offer, and reads signals as before. It sees only
@@ -142,6 +142,13 @@ Casual beats idle on 12/12, none bankrupt or fired.
 for its first GPU D74; the ablation table above is from v0.4.1 and was not re-run): idle 723, greedy 9,091, planner 48,880
 (wins 11/12: seed 4 flips with any chapter-spacing change, 5.1–21.0M, per-seed chaos), **Casual 8,572** (1,902–19,288),
 **Expert 9,963** (3,689–23,915); Expert > Casual 7/12, Casual > idle 12/12, none bankrupt or fired.
+
+**Late-collapse round update** (full game only, `node bots/run.js --seeds 12`, reports/bots-late-collapse.json; score on
+trailing-year profit D75, bot fixes D76–D79, price-elastic GPU markets D80 and the anchor that stays D81 on): idle 672,
+greedy 8,924 (min 3,747), planner 47,993 (min 4,510; wins 11/12, seed 4), **Casual 13,541** (5,906–32,486), **Expert
+20,352** (7,629–40,784); Expert > Casual 8/12, Casual > idle 12/12, none bankrupt or fired. "Collapses" (score < 50 % of its
+peak for 3+ monthly checkpoints) Casual 11 → 1, Expert 9 → 1; hold-out seeds 13–24: 11 → 4 and 8 → 3, but Casual 2 and
+Expert 1 bankrupt there (`.claude/state/diagnosis-late-collapse.md`).
 
 Balance targets (SPEC §6) on the full game, n = 12:
 - **Idle** (only the starting customer) survives on every seed and ends at 1.2 % of the planner's score.

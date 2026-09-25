@@ -71,6 +71,10 @@ test("capacityAt: pending hardware counts only if it is installed by that day", 
 });
 
 test("walk-away: countdown, doubled patience in the grace period, the anchor stays (pays penalties) until day 90", () => {
+  // the v0.4.2 anchor rule (it may walk after the grace) is kept behind K.ANCHOR_STAYS 0; D71 (on by default, D81) is
+  // tested in test/v046.test.js
+  const A0 = K.ANCHOR_STAYS; K.ANCHOR_STAYS = 0;
+  try {
   const s = sb(5);
   s.cash = 1e5;
   for (const r of s.racks) r.devices = [];              // nothing serves anything: the anchor misses too
@@ -100,6 +104,7 @@ test("walk-away: countdown, doubled patience in the grace period, the anchor sta
   assert.equal(Sim.patience(t, d), K.SLA_WALK_DAYS);
   Sim.advance(t, K.SLA_WALK_DAYS);
   assert.ok(d.walked);
+  } finally { K.ANCHOR_STAYS = A0; }
 });
 
 test("starter GPU offer: with the GPU chapter and no GPU, one 1-2 card GPU offer is always on the board", () => {

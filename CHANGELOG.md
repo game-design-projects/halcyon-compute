@@ -6,6 +6,26 @@ release plus the fix and merged back here afterwards.
 
 ## [Unreleased]
 
+### Changed
+- **Score uses last year's profit**: the earnings part of the score (and company value for investors) is now 2× the
+  average daily profit of the last 365 days (was the last 90). A quiet quarter between contracts no longer halves your
+  score or makes the pace chip swing; a real downturn still costs you. Tooltip: "Score = net worth + 2× last year's profit".
+- **The starting customer never walks away** (was: it could leave after day 90). While deliveries are short it charges
+  the usual penalties for as long as any customer would wait, then it simply pays for what it gets, served last.
+- **GPU markets never "fill up"**: inference, training and frontier offers keep coming when you hold more than the
+  market's demand, at a lower price (like web since 0.4.2).
+- **Reference bots** (pace chip, end screen) are steadier: Casual keeps a month of cash burn in reserve before buying
+  (it went bankrupt days before a big training job paid), Expert invests idle millions instead of fine-tuning first, and
+  the planner no longer locks cash for expansions it never made. 12 seeds: Casual 8.6M → 13.5M (min 1.9M → 5.9M),
+  Expert 10.0M → 20.4M (min 3.7M → 7.6M), none bankrupt; "collapses" (score below half its peak for 3+ months) Casual
+  11 → 1, Expert 9 → 1.
+
+### Tools
+- `reports/bots-late-collapse.json`: the 12-seed bot run for this round; `.claude/state/diagnosis-late-collapse.md`.
+
+### Known issues
+- On other seeds (13–24) Casual still goes bankrupt on 2 of 12 and Expert on 1 of 12 late in the game.
+
 ## [0.4.7] - 2026-09-25
 
 Includes everything from 0.4.6 (smart speed, tagged separately from c9c859e) plus late-chapter spacing and the first

@@ -1,9 +1,9 @@
 "use strict";
 /* v0.4.6 improvement round from telemetry feee0c29 (seed 45823, v0.4.4, one player; DECISIONS D70-D74):
  * 1. chapters from ch7 on unlock at least CH_GAP_LATE days apart (the player got four chapters in 90 days)
- * 2. (K.ANCHOR_STAYS, shipped off) the day-0 anchor never walks: penalties while any customer would wait, then it pays less
- * 3. (K.GPU_ELASTIC, shipped off) GPU markets are price-elastic instead of stopping offers when "full"
- * D71/D72 are held back until the reference bots are rebalanced; their rules are tested here with the flag on
+ * 2. (K.ANCHOR_STAYS, on by default: D81) the day-0 anchor never walks: penalties while any customer would wait, then it pays less
+ * 3. (K.GPU_ELASTIC, on by default: D80) GPU markets are price-elastic instead of stopping offers when "full"
+ * D71/D72 shipped off in v0.4.6-0.4.7 and are on by default since D80/D81; their rules are tested here with the flag on
  * (smart speed: test/smartspeed.test.js) */
 const test = require("node:test");
 const assert = require("node:assert/strict");

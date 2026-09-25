@@ -199,7 +199,12 @@
     }
   }
   /* gut feeling: keep ~CFG.GREEDY_RUNWAY days of bills (plus any debt) in the bank */
-  function greedyReserve(s) { return 40 + Math.max(0, s.debt) + CFG.GREEDY_RUNWAY * Math.max(0, Sim.stats(s).opex); }
+  function greedyReserve(s) {
+    const st = Sim.stats(s);
+    // D78: ...and reads the runway warning (the UI warns under 30 days): while the business burns cash between lump-sum
+    // job payments, it keeps GREEDY_BURN_DAYS of that burn on top (Casual went bankrupt 2 weeks before a $1.1M job paid)
+    return 40 + Math.max(0, s.debt) + CFG.GREEDY_RUNWAY * Math.max(0, st.opex) + CFG.GREEDY_BURN_DAYS * Math.max(0, -st.net);
+  }
   /* promised units per market: capacity already sold (serving units, jobs at their nominal rate, build-to-suit too) */
   function owedBy(s) {
     const o = { web: 0, train: 0, infer: 0, frontier: 0 };
@@ -321,10 +326,10 @@
   }
 
   /* ================= planner ================= */
-  const CFG = { STEP: 4, ENDGAME: 420, SPAN: 150, RESIDUAL: 0.3, SPARES: 2, TECH_MAX: 8,
+  const CFG = { STEP: 4, COMMIT_DAYS: 60, EXPERT_IDLE_CASH: 2000, ENDGAME: 420, SPAN: 150, RESIDUAL: 0.3, SPARES: 2, TECH_MAX: 8,
     PH_PRICE: 0.85, PH_DELAY: 15,
     HEADROOM_OPS: 0.06, HEADROOM_HEAT: 0.03, HEADROOM_BTS: 0.05, HEADROOM_HUMAN: 0.05,   // spare capacity over SLA-required units, per unlocked risk     // planner's pipeline belief (v4): idle capacity finds contracts at 85 % of the index
-    GREEDY_PAYBACK: 300, GREEDY_RUNWAY: 15 };            // greedy: buys only what pays for itself within this many days (gut feeling)
+    GREEDY_PAYBACK: 300, GREEDY_RUNWAY: 15, GREEDY_BURN_DAYS: 30 };            // greedy: buys only what pays for itself within this many days (gut feeling)
   const SCARE_TITLES = new Set(C.SCARES.map(x => x.title));
 
   function use(mem, s, key, what) {           // tally: which chapter's mechanic changed the planner's actions
@@ -387,7 +392,7 @@
     const span = endgame ? left : CFG.SPAN;
     const days = (endgame ? [0.12, 0.5, 0.85].map(f => day + Math.max(9, f * left)) : [day + 10, day + 55, day + 130])
       .map(d => Math.min(END - 1, Math.round(d)));
-    const termDay = endgame ? END - 15 : null, termW = endgame ? TERM_W * clamp((left - 10) / 90, 0, 1) : 0;
+    const termDay = endgame ? END - 15 : null, termW = endgame ? TERM_W * clamp((left - 10) / K.EARN_WINDOW, 0, 1) : 0;
     const launches = Sim.on(s, "gens") ? Sim.GEN_LAUNCH.filter(g => g > day) : [];   // the ch5 card lists them
     const items = {};
     for (const [k, it] of Object.entries(s.items)) {
@@ -568,6 +573,7 @@
     if (!exShop.length || s.cash < 250) return;
     const tank = s.racks.find(r => r.tank) || null;
     const converting = s.jobs.some(j => j.kind === "tank");
+    if (!tank && !converting && !emptyRacks(s, 1).length && END - s.day > 90) clearForPilot(s, mem);
     if (!tank && !converting) { const e = emptyRacks(s, 1)[0]; if (e) act(s, mem, { type: "tank", rack: e.id }, "disrupt", "tank for pilots"); }
     if (tank) {
       if (needsSwitch(s, tank)) act(s, mem, { type: "buy", item: "sw", rack: tank.id }, "disrupt", "tank switch");
@@ -582,6 +588,30 @@
     if (proven && !converting && tanks < 6 && s.cash > 400 && s.racks.filter(r => r.tank).every(r => Sim.usedU(s, r) >= 15)) {
       const e = emptyRacks(s, 1)[0]; if (e) act(s, mem, { type: "tank", rack: e.id }, "disrupt", "scale proven tech");
     }
+  }
+
+  /* D76: the pilots go on sale but every rack is full (a planner that reinvests its cash has no empty rack left when a
+     late ch17 unlocks): clear the rack whose loss costs least — its contracted output must fit in idle capacity of the same
+     market elsewhere, lowest resale first — so the next tick converts it to a tank. Tried once per game. */
+  function clearForPilot(s, mem) {
+    if (mem.pilotRoom != null) return;
+    const st = Sim.stats(s);
+    let best = null;
+    for (const r of s.racks) {
+      if (r.tank || r.pending.length || !r.devices.length || r.devices.some(d => d.leased)) continue;
+      const roles = r.devices.map(d => itemRole(s, d));
+      if (roles.includes("exotic")) continue;
+      const w = roles.includes("gpu") ? r.workload : "web";
+      const u = ((st.perRack[r.id] || {}).to || []).reduce((a, x) => a + x.u, 0);
+      if (u > (st.idle[w] || 0)) continue;
+      const val = r.devices.reduce((a, d) => a + Sim.resale(s, d), 0);
+      if (!best || val < best.val) best = { r, val, u, w };
+    }
+    if (!best) return;
+    mem.pilotRoom = s.day;
+    for (const d of best.r.devices.slice())
+      if (!act(s, mem, { type: "sell", rack: best.r.id, uid: d.uid }, "disrupt", `clear ${best.r.id} for a pilot tank (${best.w}, ${best.u.toFixed(1)}u moved, resale ${best.val.toFixed(0)})`)) break;
+    if (!best.r.devices.length && !best.r.pending.length) act(s, mem, { type: "tank", rack: best.r.id }, "disrupt", "tank for pilots");
   }
 
   // ch8 contracts: sign when the fixed price beats what the planner expects to earn on spot over the term.
@@ -629,6 +659,9 @@
      (summer heat, droughts and failures take output away), and it may buy up to 10 cards (30 for build-to-suit) if
      that pays and is affordable before delivery starts. */
   function contractsModule(s, mem, B, v0) {
+    // D76: cash set aside for an expansion signed with a deal is released once that deal's build window (60 d) has
+    // passed; it used to be released only by buyLoop purchases, so a reservation the buys never matched stayed forever
+    if (mem.committed && !(s.day - mem.expandFor <= CFG.COMMIT_DAYS)) mem.committed = 0;
     if (!Sim.contractsOn(s)) return;
     for (const o of s.offers.slice()) {
       if (mem.offerSeen.has(o.id)) continue;
@@ -974,6 +1007,11 @@
     disruptModule(s, mem);
     let v0 = value(s, B, Sim.shallowClone(s));
     contractsModule(s, mem, B, v0);
+    // D78: Expert (1-3 actions a sitting) spent its attention on tuning modes and workloads and reached the buy step
+    // with nothing left, so it banked cash for years (seed 11: $1-2.9M idle d700-1380). Idle cash is on screen: with
+    // more than EXPERT_IDLE_CASH in the bank it looks for investments before it tunes
+    let hurdle = null;
+    if (mem.h && s.cash > CFG.EXPERT_IDLE_CASH) { hurdle = memoryModule(s, mem); buyLoop(s, mem, B, hurdle, { grid: false, space: false }); v0 = value(s, B, Sim.shallowClone(s)); }
     investorModule(s, mem, B, st);
     reputationModule(s, mem);
     if (tick % 2 === 0) { facilityModule(s, mem, B, v0, st); policyModule(s, mem, B, st); }
@@ -1038,8 +1076,7 @@
     const spaceBound = !s.racks.some(r => !r.tank && K.RACK_U - Sim.usedU(s, r) >= 5);
     if ((powerBound || spaceBound) && tick % 2 === 0) for (let i = 0; i < (s.cash > 3000 ? 3 : 1); i++) if (!refit(s, mem, B)) break;
     // buy: best lookahead value per dollar (hurdle raised while HBM prices are spiked)
-    const hurdle = memoryModule(s, mem);
-    buyLoop(s, mem, B, hurdle, blocked);
+    if (hurdle == null) { hurdle = memoryModule(s, mem); buyLoop(s, mem, B, hurdle, blocked); }
     fabricModule(s, mem, B, value(s, B, Sim.shallowClone(s)));
     if (tick % 2 === 0) growthModule(s, mem, B, Sim.stats(s, { eq: true }), blocked);
   }
@@ -1230,5 +1267,5 @@
   }
 
   return { play, POLICIES, LABELS, HUMAN, greedy, planner, casual, expert, CFG, setDebug(v) { DEBUG = !!v; },
-    _internal: { belief, value, screen, gainOf, residual, residualDev, candidates, preview, prep, evalAt } };
+    _internal: { belief, value, screen, gainOf, residual, residualDev, candidates, preview, prep, evalAt, greedyReserve, contractsModule } };
 });

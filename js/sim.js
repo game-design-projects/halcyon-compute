@@ -55,11 +55,10 @@
     // a new offer is priced x max(GPU_FLOOR, min(1, (demand / H)^GPU_EPS)), H = units of that market you already hold.
     // Flat up to the market's (growing) demand, then cheaper; offers no longer stop when the market is "full".
     // GPU_ELASTIC 0 = the old open-demand wall (kept for balance comparisons)
-    GPU_ELASTIC: 0, GPU_EPS: 0.8, GPU_FLOOR: 0.3,
+    GPU_ELASTIC: 1, GPU_EPS: 0.8, GPU_FLOOR: 0.3,
     // D71: ANCHOR_STAYS 1 = the day-0 anchor customer never walks (0 = the v0.4.2 rule: it can walk after the grace).
-    // D71 and D72 (GPU_ELASTIC) ship OFF until the reference bots are rebalanced: with either on, the fixed-seed bots test
-    // flips (Expert bankrupt on seed 11 / the planner stops using ch17 on seed 12). See DECISIONS v0.4.6
-    ANCHOR_STAYS: 0,
+    // D71/D72 shipped off in v0.4.6-0.4.7; on by default since the bots were made robust to them (DECISIONS D80, D81)
+    ANCHOR_STAYS: 1,
     // once GPUs are unlocked, web customers arrive on their own clock (every WEB_EVERY +- OFFER_JITTER days) instead of
     // taking GPU offers' turns on the board: web never closes now, and it must not crowd out the GPU offer flow
     WEB_EVERY: 8, WEB_BOARD_MAX: 3,
@@ -89,6 +88,9 @@
     // ch14 investors
     ROUND_EVERY: 120, ROUND_EXPIRY: 20, BOARD_EVERY: 180, BOARD_GROWTH: 0.15, PITCH_GROWTH: 0.05, FIRED_SCORE: 0.5,
     BUYBACK_STEP: 0.01, EARN_MULT: 2, EARN_DAYS: 365,
+    // D75: the earnings term of the company value (and so the score) = mean daily profit over the trailing EARN_WINDOW days
+    // (365 = trailing twelve months; v0.4.7 used 90, which made the score swing x2-3 at contract boundaries)
+    EARN_WINDOW: 365,
     UNSELL_DAYS: 10, CANCEL_FEE: 0.1, CANCEL_FREE_DAYS: 1,   // v4 forgiveness: undo a sale; cancel a queued job
     // ch15 reputation
     REP_START: 60, PR_COST: 120, PR_GAIN: 8, PR_DECAY: 90, PR_BACKFIRE: 5, SCANDAL_DAYS: 45,
@@ -2226,7 +2228,7 @@
     const d = s.day;
     // bookkeeping: trailing revenue and profit windows
     s.revDays.push(+s.dayAcc.rev.toFixed(3)); if (s.revDays.length > 180) s.revDays.shift();
-    s.profitDays.push(+s.dayAcc.profit.toFixed(3)); if (s.profitDays.length > 90) s.profitDays.shift();
+    s.profitDays.push(+s.dayAcc.profit.toFixed(3)); while (s.profitDays.length > K.EARN_WINDOW) s.profitDays.shift();
     const dayRev = s.dayAcc.rev, missed = s.dayAcc.missed;
     s.dayAcc = { rev: 0, profit: 0, missed: {} };
     s.deprec = s.deprec.filter(x => x.until > d);

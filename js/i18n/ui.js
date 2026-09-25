@@ -55,7 +55,7 @@
   "tip.rep": ["Reputation {x}/100 (start 60): moves offers, demand and valuation", "声誉 {x}/100（初始 60）：影响报价、需求和估值"],
   "tip.carbon": ["Carbon {x} t CO2/day, {tot} t so far. Bar = green share ({g})", "碳排放 {x} 吨/天，累计 {tot} 吨。进度条 = 绿电占比（{g}）"],
   "tip.equity": ["You own {p} % of Halcyon", "你持有 Halcyon {p}% 股份"],
-  "tip.score": ["Score = net worth + 2 years of earnings", "得分 = 净资产 + 2 年收益"],
+  "tip.score": ["Score = net worth + 2× last year's profit", "得分 = 净资产 + 2× 近一年利润"],
   "tip.scoreVc": ["Score = your share × company value × reputation", "得分 = 你的股份 × 公司价值 × 声誉系数"],
   "tip.worth": ["net worth {x}", "净资产 {x}"], "tip.daysLeft": ["{d} days left", "还剩 {d} 天"],
   "skip.tip": ["Skip to the next event (N)", "快进到下个事件（N）"], "skip.on": ["Skipping…", "快进中…"],

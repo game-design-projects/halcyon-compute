@@ -1,0 +1,654 @@
+{
+  "generated": "2026-09-25T22:27:17.496Z",
+  "patch": null,
+  "method": "bots/run.js: Bots.play per seed 1..N, score = Sim.score (founder equity), worth = Sim.netWorth",
+  "timing": {
+    "plannerSecPerGame": 5.474666666666667,
+    "greedySecPerGame": 2.4974166666666666,
+    "workers": 8
+  },
+  "rows": [
+    {
+      "variant": "full",
+      "n": 12,
+      "idle": {
+        "score": 671.8139999999994,
+        "worth": 603.7299999999994,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 8924.253267729482,
+        "worth": 2631.9748238054012,
+        "bankrupt": 0,
+        "idleCashDays": 30,
+        "ms": 2497.4166666666665
+      },
+      "planner": {
+        "score": 47992.59708396188,
+        "worth": 13823.400800142836,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 452.0833333333333,
+        "idleCashDaysMax": 890,
+        "cashShare": 0.5265088501758063,
+        "own": 0.9578333333333333,
+        "ms": 5474.666666666667
+      },
+      "scoreGap": 39068.34381623241,
+      "scoreGapSd": 21929.59615979341,
+      "scoreGapPct": 437.7771746741587,
+      "relGapMedianPct": 384.844705659155,
+      "relGapMinPct": -43.501448484595606,
+      "plannerWins": 11,
+      "winsAt25": 11,
+      "worthGap": 11191.425976337434,
+      "worthGapPct": 425.2102214319998,
+      "plannerWinsWorth": 11,
+      "cashShare": {
+        "planner": 0.5265088501758063,
+        "greedy": 0.25376658251030476
+      },
+      "idleShareOfPlannerPct": 1.3998283919177725,
+      "ablatedChapterUse": null,
+      "contracts": {
+        "planner": {
+          "signed": 125.66666666666667,
+          "fulfilled": 90.58333333333333,
+          "failed": 21.25,
+          "cancelled": 0.75,
+          "sla": 1655.4984982252515,
+          "idle": 6148.530825269325,
+          "chapter": 15.833333333333334
+        },
+        "greedy": {
+          "signed": 119.16666666666667,
+          "fulfilled": 102.41666666666667,
+          "failed": 10.5,
+          "cancelled": 0.9166666666666666,
+          "sla": 1201.180932118339,
+          "idle": 3936.566612576938,
+          "chapter": 15.666666666666666
+        },
+        "idle": {
+          "signed": 0,
+          "fulfilled": 0,
+          "failed": 0,
+          "cancelled": 0,
+          "sla": 0,
+          "idle": 323.9999999999927,
+          "chapter": 0
+        },
+        "casual": {
+          "signed": 121.41666666666667,
+          "fulfilled": 101.25,
+          "failed": 11.25,
+          "cancelled": 0.16666666666666666,
+          "sla": 1040.7003162368728,
+          "idle": 5052.526596084786,
+          "chapter": 15.5
+        },
+        "expert": {
+          "signed": 59.333333333333336,
+          "fulfilled": 44.25,
+          "failed": 7.5,
+          "cancelled": 0.08333333333333333,
+          "sla": 925.6234785938044,
+          "idle": 8334.608798714378,
+          "chapter": 15.666666666666666
+        }
+      },
+      "human": {
+        "casual": {
+          "score": 13540.785261493118,
+          "min": 5906.3248122835685,
+          "max": 32485.838540837463,
+          "bankrupt": 0,
+          "fired": 0,
+          "ms": 1328.4166666666667
+        },
+        "expert": {
+          "score": 20352.286329577,
+          "min": 7628.675832583603,
+          "max": 40784.36234134685,
+          "bankrupt": 0,
+          "fired": 0,
+          "ms": 2185.1666666666665
+        },
+        "expertBeatsCasual": 8,
+        "casualBeatsIdle": 12
+      },
+      "perSeedHuman": [
+        {
+          "seed": 1,
+          "casual": 14590,
+          "expert": 40784,
+          "casualOver": "end",
+          "expertOver": "end"
+        },
+        {
+          "seed": 2,
+          "casual": 32486,
+          "expert": 28512,
+          "casualOver": "end",
+          "expertOver": "end"
+        },
+        {
+          "seed": 3,
+          "casual": 17077,
+          "expert": 21854,
+          "casualOver": "end",
+          "expertOver": "end"
+        },
+        {
+          "seed": 4,
+          "casual": 9378,
+          "expert": 8125,
+          "casualOver": "end",
+          "expertOver": "end"
+        },
+        {
+          "seed": 5,
+          "casual": 17011,
+          "expert": 15281,
+          "casualOver": "end",
+          "expertOver": "end"
+        },
+        {
+          "seed": 6,
+          "casual": 9030,
+          "expert": 27417,
+          "casualOver": "end",
+          "expertOver": "end"
+        },
+        {
+          "seed": 7,
+          "casual": 13283,
+          "expert": 33360,
+          "casualOver": "end",
+          "expertOver": "end"
+        },
+        {
+          "seed": 8,
+          "casual": 10894,
+          "expert": 17917,
+          "casualOver": "end",
+          "expertOver": "end"
+        },
+        {
+          "seed": 9,
+          "casual": 6378,
+          "expert": 11670,
+          "casualOver": "end",
+          "expertOver": "end"
+        },
+        {
+          "seed": 10,
+          "casual": 11466,
+          "expert": 16928,
+          "casualOver": "end",
+          "expertOver": "end"
+        },
+        {
+          "seed": 11,
+          "casual": 14989,
+          "expert": 7629,
+          "casualOver": "end",
+          "expertOver": "end"
+        },
+        {
+          "seed": 12,
+          "casual": 5906,
+          "expert": 14750,
+          "casualOver": "end",
+          "expertOver": "end"
+        }
+      ],
+      "coverage": {
+        "racks": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 147.3
+        },
+        "power": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 67.7
+        },
+        "gpu": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 182
+        },
+        "heat": {
+          "games": 11,
+          "decisions": 11,
+          "meanActions": 31.5
+        },
+        "gens": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 48.7
+        },
+        "ops": {
+          "games": 11,
+          "decisions": 11,
+          "meanActions": 8.9
+        },
+        "fabric": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 5.4
+        },
+        "contracts": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 7.1
+        },
+        "memory": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 19.4
+        },
+        "finance": {
+          "games": 11,
+          "decisions": 11,
+          "meanActions": 8.2
+        },
+        "facilities": {
+          "games": 11,
+          "decisions": 11,
+          "meanActions": 2.3
+        },
+        "energy": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 2.7
+        },
+        "environment": {
+          "games": 6,
+          "decisions": 6,
+          "meanActions": 1.4
+        },
+        "investors": {
+          "games": 9,
+          "decisions": 12,
+          "meanActions": 13.2
+        },
+        "reputation": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 1.8
+        },
+        "policy": {
+          "games": 11,
+          "decisions": 11,
+          "meanActions": 7.1
+        },
+        "disrupt": {
+          "games": 11,
+          "decisions": 11,
+          "meanActions": 11.7
+        }
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "planner": 45683,
+          "greedy": 10884,
+          "idle": 672,
+          "plannerWorth": 8329,
+          "greedyWorth": 3210,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.99,
+          "idleCashDays": 420,
+          "used": {
+            "racks": 143,
+            "power": 59,
+            "gpu": 222,
+            "gens": 54,
+            "fabric": 14,
+            "ops": 12,
+            "contracts": 8,
+            "memory": 12,
+            "facilities": 4,
+            "energy": 2,
+            "heat": 20,
+            "finance": 7,
+            "investors": 20,
+            "disrupt": 3,
+            "policy": 8,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 2,
+          "planner": 59034,
+          "greedy": 17523,
+          "idle": 672,
+          "plannerWorth": 19157,
+          "greedyWorth": 4816,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 1,
+          "idleCashDays": 890,
+          "used": {
+            "racks": 101,
+            "power": 76,
+            "gpu": 185,
+            "gens": 40,
+            "fabric": 1,
+            "contracts": 6,
+            "ops": 9,
+            "heat": 33,
+            "memory": 32,
+            "facilities": 2,
+            "energy": 3,
+            "finance": 22,
+            "disrupt": 33,
+            "policy": 10,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 3,
+          "planner": 66522,
+          "greedy": 3747,
+          "idle": 672,
+          "plannerWorth": 19384,
+          "greedyWorth": 1356,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.95,
+          "idleCashDays": 335,
+          "used": {
+            "racks": 176,
+            "power": 88,
+            "gpu": 193,
+            "gens": 44,
+            "fabric": 10,
+            "ops": 10,
+            "contracts": 6,
+            "heat": 37,
+            "memory": 20,
+            "facilities": 2,
+            "finance": 7,
+            "energy": 3,
+            "investors": 22,
+            "disrupt": 22,
+            "policy": 12,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 4,
+          "planner": 4510,
+          "greedy": 7982,
+          "idle": 672,
+          "plannerWorth": 1249,
+          "greedyWorth": 1909,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.85,
+          "idleCashDays": 280,
+          "used": {
+            "racks": 172,
+            "power": 42,
+            "gpu": 69,
+            "gens": 17,
+            "fabric": 1,
+            "contracts": 3,
+            "energy": 1,
+            "finance": 5,
+            "memory": 3,
+            "investors": 12,
+            "reputation": 1
+          }
+        },
+        {
+          "seed": 5,
+          "planner": 61145,
+          "greedy": 17225,
+          "idle": 672,
+          "plannerWorth": 20540,
+          "greedyWorth": 4757,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.91,
+          "idleCashDays": 335,
+          "used": {
+            "racks": 153,
+            "power": 59,
+            "gpu": 187,
+            "gens": 46,
+            "fabric": 2,
+            "contracts": 9,
+            "ops": 6,
+            "memory": 19,
+            "heat": 41,
+            "facilities": 3,
+            "energy": 3,
+            "finance": 6,
+            "investors": 8,
+            "disrupt": 20,
+            "reputation": 2,
+            "policy": 7
+          }
+        },
+        {
+          "seed": 6,
+          "planner": 74131,
+          "greedy": 13479,
+          "idle": 672,
+          "plannerWorth": 18316,
+          "greedyWorth": 4504,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.94,
+          "idleCashDays": 330,
+          "used": {
+            "racks": 146,
+            "power": 54,
+            "gpu": 263,
+            "gens": 82,
+            "fabric": 1,
+            "ops": 15,
+            "contracts": 10,
+            "heat": 65,
+            "memory": 27,
+            "facilities": 5,
+            "energy": 3,
+            "finance": 2,
+            "disrupt": 8,
+            "investors": 17,
+            "policy": 3,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 7,
+          "planner": 79089,
+          "greedy": 5119,
+          "idle": 672,
+          "plannerWorth": 19068,
+          "greedyWorth": 1362,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.99,
+          "idleCashDays": 460,
+          "used": {
+            "racks": 159,
+            "power": 79,
+            "gpu": 242,
+            "gens": 62,
+            "fabric": 1,
+            "ops": 15,
+            "finance": 8,
+            "memory": 20,
+            "contracts": 9,
+            "heat": 52,
+            "facilities": 4,
+            "energy": 3,
+            "environment": 6,
+            "investors": 16,
+            "disrupt": 16,
+            "policy": 9,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 8,
+          "planner": 36084,
+          "greedy": 4795,
+          "idle": 672,
+          "plannerWorth": 8484,
+          "greedyWorth": 1605,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 1,
+          "idleCashDays": 335,
+          "used": {
+            "racks": 160,
+            "power": 110,
+            "gpu": 211,
+            "gens": 62,
+            "fabric": 8,
+            "ops": 11,
+            "heat": 27,
+            "contracts": 6,
+            "memory": 38,
+            "facilities": 2,
+            "energy": 3,
+            "finance": 22,
+            "environment": 4,
+            "disrupt": 24,
+            "policy": 5,
+            "investors": 29,
+            "reputation": 1
+          }
+        },
+        {
+          "seed": 9,
+          "planner": 17105,
+          "greedy": 4483,
+          "idle": 672,
+          "plannerWorth": 3644,
+          "greedyWorth": 1618,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.99,
+          "idleCashDays": 595,
+          "used": {
+            "racks": 121,
+            "power": 41,
+            "gpu": 142,
+            "fabric": 1,
+            "gens": 24,
+            "contracts": 3,
+            "ops": 3,
+            "energy": 2,
+            "memory": 4,
+            "facilities": 1,
+            "heat": 1,
+            "finance": 9,
+            "investors": 12,
+            "environment": 2,
+            "disrupt": 3,
+            "reputation": 2,
+            "policy": 4
+          }
+        },
+        {
+          "seed": 10,
+          "planner": 27871,
+          "greedy": 8576,
+          "idle": 672,
+          "plannerWorth": 7272,
+          "greedyWorth": 2298,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 1,
+          "idleCashDays": 235,
+          "used": {
+            "racks": 142,
+            "power": 60,
+            "gpu": 149,
+            "gens": 36,
+            "fabric": 1,
+            "ops": 7,
+            "contracts": 2,
+            "energy": 3,
+            "facilities": 1,
+            "environment": 3,
+            "memory": 12,
+            "finance": 4,
+            "heat": 11,
+            "disrupt": 3,
+            "policy": 8,
+            "reputation": 1
+          }
+        },
+        {
+          "seed": 11,
+          "planner": 36747,
+          "greedy": 5640,
+          "idle": 672,
+          "plannerWorth": 14571,
+          "greedyWorth": 1863,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 1,
+          "idleCashDays": 870,
+          "used": {
+            "racks": 125,
+            "power": 69,
+            "gpu": 151,
+            "gens": 65,
+            "fabric": 9,
+            "contracts": 13,
+            "ops": 11,
+            "memory": 29,
+            "heat": 52,
+            "facilities": 2,
+            "energy": 3,
+            "disrupt": 4,
+            "environment": 1,
+            "policy": 10,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 12,
+          "planner": 67991,
+          "greedy": 7637,
+          "idle": 672,
+          "plannerWorth": 25868,
+          "greedyWorth": 2285,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.88,
+          "idleCashDays": 340,
+          "used": {
+            "racks": 170,
+            "power": 75,
+            "gpu": 170,
+            "gens": 52,
+            "fabric": 16,
+            "ops": 8,
+            "contracts": 10,
+            "memory": 17,
+            "facilities": 2,
+            "heat": 39,
+            "energy": 3,
+            "finance": 6,
+            "investors": 22,
+            "disrupt": 4,
+            "environment": 1,
+            "policy": 9,
+            "reputation": 2
+          }
+        }
+      ]
+    }
+  ]
+}
