@@ -27,6 +27,8 @@ jobs:
       - name: Unit, determinism and bot tests
         run: node --test test/*.test.js
       - name: Build web bundle
+        env:
+          TELEMETRY_URL: ${{ vars.TELEMETRY_URL }}   # repo variable; empty = telemetry stays local (export only)
         run: scripts/build-web.sh dist
       - name: Validate HTML5 bundle
         run: node scripts/check-html5.mjs dist

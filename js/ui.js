@@ -242,6 +242,8 @@
     seed = newSeed >>> 0;
     V.sandbox = !!opts.sandbox;
     S = Sim.newGame(seed, { sandbox: V.sandbox });
+    TELE.start(seed, { sandbox: V.sandbox });
+    V.teleSnap = -1;
     resetView();
     V.seenChapter = -1;
     if (V.sandbox) { V.seenChapter = S.chapter; showSandboxCard(); }
@@ -255,6 +257,9 @@
     const st = loadGame();
     if (!st) { toast("No saved game"); return; }
     S = st; seed = S.seed; V.sandbox = !!S.sandbox;
+    TELE.start(seed, { sandbox: V.sandbox, continued: true, day: S.day });
+    TELE.snap(S, Sim.score(S));
+    V.teleSnap = Math.floor(S.day / 10);
     resetView();
     V.seenChapter = S.chapter;
     setUrl();
@@ -279,10 +284,11 @@
   }
   function act(a) {
     const res = Sim.check(S, a);
-    if (!res.ok) { toast(res.msg); dlog("rejected", a, res.msg); SND("nope", null, 150); return false; }
+    if (!res.ok) { TELE.action(S.day, a, false, res.msg); toast(res.msg); dlog("rejected", a, res.msg); SND("nope", null, 150); return false; }
     const cash0 = S.cash;
     const wl = wlDefault(a);
-    if (wl) { Sim.apply(S, wl); dlog("workload default", wl); }
+    if (wl) { TELE.action(S.day, wl, true); Sim.apply(S, wl); dlog("workload default", wl); }
+    TELE.action(S.day, a, true);
     Sim.apply(S, a);
     V.cashSeen = S.cashSeq || 0;      // the player's own action explains its cash change and any event it caused (its toast says so)
     V.flowPrev = { cash: S.cash, flow: S.totals.flow || 0 };
@@ -349,7 +355,11 @@
     if (running()) {
       V.acc += dtSec * DAYS_PER_SEC * V.speed;
       const steps = Math.floor(V.acc / K.DT);
-      if (steps > 0) { V.acc -= steps * K.DT; Sim.advance(S, steps * K.DT); }
+      if (steps > 0) {
+        V.acc -= steps * K.DT; Sim.advance(S, steps * K.DT);
+        const tb = Math.floor(S.day / 10);
+        if (tb !== V.teleSnap) { V.teleSnap = tb; TELE.snap(S, Sim.score(S)); }
+      }
     }
     if (S) {
       const dragging = drag && drag.started;
@@ -381,6 +391,7 @@
       S.halls.map(h => h.cooling + h.crac).join(), S.policies.map(p => p.status + p.announced + p.signals.length).join(), !!S.outage, !!S.heatWave, !!S.drought, S.hbm.shortage].join("|");
   }
   function afterTick() {
+    TELE.tick();
     const k = newsKey();
     if (k !== V.newsKey) {
       const oldTop = V.newsKey; V.newsKey = k;
@@ -1285,6 +1296,7 @@
   /* ================= drawers ================= */
   const DRAWERS = { contracts: ["Contracts", "hand"], finance: ["Finance", "trend"], energy: ["Energy & facilities", "bolt"], affairs: ["Reputation & policy", "flag"] };
   function openDrawer(k) {
+    if (S) TELE.event(S.day, "drawer", { k, open: V.drawer !== k });
     if (V.drawer === k) { closeDrawer(); return; }
     V.drawer = k; closePop();
     $("drawer").classList.add("open"); $("drawer").setAttribute("aria-hidden", "false");
@@ -1691,6 +1703,7 @@
     if (V.chapQueue.length && !anyDialogOpen() && !V.menu) showChapter(V.chapQueue.shift(), true);
   }
   function showChapter(i, fresh) {
+    if (S) TELE.event(S.day, "chapter", { i, key: CH[i] && CH[i].key, fresh: !!fresh });
     const c = CH[i], m = CH_META[c.key] || { icons: [], col: "info", where: "" };
     const col = COL[m.col] || COL.info;
     $("ct").textContent = c.title;
@@ -1729,6 +1742,7 @@
 
   /* ================= end screen ================= */
   function showOver() {
+    try { TELE.snap(S, Sim.score(S)); TELE.end(S, Sim.summary(S)); } catch (e) { dlog("tele end", e); }
     const sm = Sim.summary(S), H = sm.hidden, NAME = { lattice: "Lattice", photon: "Photon" };
     $("ot").textContent = S.over === "bankrupt" ? "Bankrupt" : S.over === "fired" ? "The board fired you" : "Five years are up";
     $("osub").textContent = `seed ${seed}${S.sandbox ? " · sandbox" : ""}`;
@@ -1838,6 +1852,9 @@
   /* ================= main menu ================= */
   function showMenu(inGame) {
     V.menu = true;
+    show($("m-export"), !!TELE.log);
+    show($("m-tele"), !!TELE.endpoint);
+    $("m-tele-sub").textContent = TELE.enabled() ? "On: anonymous, no personal data. Click to turn off." : "Off. Click to turn on.";
     const m = readMeta(), live = inGame && S && !S.over;
     show($("m-continue"), !!m && !live);
     if (m) $("m-continue-sub").textContent = `${m.sandbox ? "Sandbox" : "Campaign"} · seed ${m.seed} · ${dateOf(m.day)} · score ${money(m.score)}`;
@@ -2092,7 +2109,7 @@
   document.addEventListener("pointercancel", () => endDrag(false));
 
   /* ================= clicks and keys ================= */
-  function setSpeed(v) { V.speed = v; if (v) V.lastSpeed = v; renderHUD(Sim.stats(S)); if (V.drawer) $("drawer-sub").textContent = v ? "game running" : "paused"; }
+  function setSpeed(v) { if (S && v !== V.speed) TELE.event(S.day, "speed", { v }); V.speed = v; if (v) V.lastSpeed = v; renderHUD(Sim.stats(S)); if (V.drawer) $("drawer-sub").textContent = v ? "game running" : "paused"; }
   function tapTarget(target) {   // tap-to-place: armed payload + tapped target
     const ev = evaluate(V.armed, target);
     if (!ev.res) return false;
@@ -2198,6 +2215,7 @@
   }
   /* sys: true = news (may be dropped when 3+ wait), "keep" = money or an offer (never dropped) */
   function toast(t, sys) {
+    if (S) TELE.event(S.day, "toast", { t: String(t).replace(/<[^>]+>/g, "").slice(0, 200), sys: sys || undefined });
     if (!sys) { showToast(t); return; }
     const keep = sys === "keep", at = keep ? toastQ.findIndex(x => !x.keep) : -1;   // money and offers go before any news
     if (at >= 0) toastQ.splice(at, 0, { t, keep }); else toastQ.push({ t, keep });
@@ -2279,5 +2297,18 @@
     },
     perf: V.perf,
   };
+  /* gameplay log export (telemetry.js). In an embed where downloads are blocked, fall back to the clipboard. */
+  async function exportLog() {
+    if (!TELE.log) { toast("Start a game first"); return; }
+    if (S) TELE.snap(S, Sim.score(S));
+    const name = TELE.exportFile();
+    if (name) { toast(`Log saved: ${name}`); return; }
+    toast(await TELE.copyToClipboard() ? "Download blocked here: log copied to the clipboard" : "Export failed: try fullscreen or the downloaded build");
+  }
+  $("exportbtn").addEventListener("click", exportLog);
+  $("m-export").addEventListener("click", exportLog);
+  $("o-export").addEventListener("click", exportLog);
+  $("m-tele").addEventListener("click", () => { TELE.setEnabled(!TELE.enabled()); showMenu(!!S && !S.over); });
+
   requestAnimationFrame(frame);
 })();

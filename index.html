@@ -43,6 +43,7 @@
   <symbol id="globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/></symbol>
   <symbol id="brain" viewBox="0 0 24 24"><path d="M9 4a3 3 0 0 0-3 3 3 3 0 0 0-2 5 3 3 0 0 0 2 5 3 3 0 0 0 6 1V5a3 3 0 0 0-3-1zM15 4a3 3 0 0 1 3 3 3 3 0 0 1 2 5 3 3 0 0 1-2 5 3 3 0 0 1-6 1"/></symbol>
   <symbol id="bubble" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
+  <symbol id="download" viewBox="0 0 24 24"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></symbol>
   <symbol id="help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.5 2.3c-.7.3-1 .8-1 1.5V14M12 17h.01"/></symbol>
   <symbol id="flag" viewBox="0 0 24 24"><path d="M5 21V4h11l-2 4 2 4H5"/></symbol>
   <symbol id="warn" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></symbol>
@@ -100,6 +101,7 @@
   </div>
   <button class="iconbtn" id="fsbtn" title="Fullscreen (F)" aria-pressed="false"><svg class="i"><use href="#expand"/></svg></button>
   <button class="iconbtn" id="mutebtn" title="Sound (M)"><svg class="i"><use href="#sound"/></svg></button>
+  <button class="iconbtn" id="exportbtn" title="Export gameplay log (JSON)"><svg class="i"><use href="#download"/></svg></button>
   <button class="iconbtn" id="helpbtn" title="Replay the current chapter card"><svg class="i"><use href="#help"/></svg></button>
   <div class="pop" id="pop" hidden></div>
 </header>
@@ -173,6 +175,8 @@
       <button class="mbtn" id="m-sandbox"><svg class="i"><use href="#layers"/></svg><span><b>Sandbox</b><small>Everything unlocked from day 0</small></span></button>
       <label class="seedrow"><svg class="i"><use href="#globe"/></svg><span>Seed</span><input id="m-seed" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="9" aria-label="Seed"><button class="btn" id="m-dice" title="Random seed" type="button"><svg class="i"><use href="#rocket"/></svg></button></label>
       <button class="mbtn ghostbtn" id="m-how"><svg class="i"><use href="#help"/></svg><span><b>How to play</b></span></button>
+      <button class="mbtn ghostbtn" id="m-export" hidden><svg class="i"><use href="#download"/></svg><span><b>Export gameplay log</b><small>JSON: seed + every action, replayable</small></span></button>
+      <button class="mbtn ghostbtn" id="m-tele" hidden><svg class="i"><use href="#globe"/></svg><span><b>Share anonymous gameplay data</b><small id="m-tele-sub"></small></span></button>
       <button class="mbtn ghostbtn" id="m-resume" hidden><svg class="i"><use href="#cross"/></svg><span><b>Back to the game</b></span></button>
     </div>
     <div class="howto" id="m-howto" hidden></div>
@@ -194,10 +198,12 @@
 <dialog id="over" class="overdlg" aria-labelledby="ot">
   <header><h2 id="ot"></h2><span style="color:var(--hud-ink-2)" id="osub"></span></header>
   <div class="body" id="obody"></div>
-  <footer style="gap:8px"><button class="btn" id="same-seed">Replay this seed</button><button class="end" id="new-game">Main menu</button></footer>
+  <footer style="gap:8px"><button class="btn" id="o-export"><svg class="i"><use href="#download"/></svg>Export log</button><button class="btn" id="same-seed">Replay this seed</button><button class="end" id="new-game">Main menu</button></footer>
 </dialog>
 </div>
 
+<script src="js/build.js"></script>
+<script src="js/telemetry.js"></script>
 <script src="js/content.js"></script>
 <script src="js/sim.js"></script>
 <script src="bots/bots.js"></script>

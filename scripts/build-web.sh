@@ -7,6 +7,9 @@ rm -rf "$OUT" && mkdir -p "$OUT/bots"
 cp index.html "$OUT/"
 cp -R css js "$OUT/"
 cp bots/bots.js "$OUT/bots/"
+# stamp the build id (tag or short SHA) and the optional telemetry endpoint into the bundle
+BUILD_ID="${GITHUB_REF_NAME:-$(git rev-parse --short HEAD 2>/dev/null || echo dev)}"
+printf 'window.HALCYON_BUILD = "%s";\nwindow.HALCYON_TELEMETRY_URL = "%s";\n' "$BUILD_ID" "${TELEMETRY_URL:-}" > "$OUT/js/build.js"
 # every local src/href in index.html must exist in the bundle
 missing=0
 for ref in $(grep -oE '(src|href)="[^"#]+"' index.html | sed -E 's/^(src|href)="//; s/"$//' | grep -vE '^(https?:|data:|mailto:)'); do
