@@ -1546,7 +1546,7 @@
     $("kt").textContent = c.title; $("ksub").textContent = c.sub || "";
     $("kbody").innerHTML = c.body; $("kfoot").innerHTML = c.foot || `<button class="end" data-close>Got it</button>`;
     $("card").dataset.key = c.key;
-    if (c.pause && V.speed) { V.speedBeforeCard = V.speed; setSpeed(0); }
+    if (c.pause && V.speed) setSpeed(0);   // warnings only: the game stays paused after "Got it" (DECISIONS D46)
     openDialog($("card"));
     SND(c.sound || "warn");
     dlog("card", c.key);
@@ -1822,7 +1822,7 @@
     };
     next();
   }
-  $("new-game").addEventListener("click", () => { $("over").close(); V.botRun++; showMenu(); });
+  $("new-game").addEventListener("click", () => { $("over").close(); V.botRun++; if (V.ghost) { V.ghost.stop(); V.ghost = null; } V.overRows = null; showMenu(); });
   $("same-seed").addEventListener("click", () => { $("over").close(); V.botRun++; start(seed, { sandbox: V.sandbox }); });
 
   /* ================= main menu ================= */

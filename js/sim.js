@@ -790,7 +790,7 @@
     }
   }
   /* a discrete cash change the player did not click (tax, auto-repair, a finished sale): {n, day, amt, kind, label} */
-  const CASH_LOG_MAX = 40;
+  const CASH_LOG_MAX = 120;   // ~a year of events at 8x between UI reads
   function ensureCashLog(s) {
     if (!s.cashEvents) s.cashEvents = [];
     if (s.cashSeq == null) s.cashSeq = 0;

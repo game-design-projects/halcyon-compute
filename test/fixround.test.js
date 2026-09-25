@@ -140,14 +140,14 @@ test("cash accounting: every change is continuous flow, a logged cash event, or 
   }
   assert.equal(s.over, "end", `played to the end (day ${s.day})`);
   const kinds = new Set(s.cashEvents.map(e => e.kind));
-  for (const k of ["tax", "repair", "sale"]) assert.ok(kinds.has(k) || s.cashSeq > 40, `saw a ${k} event`);
+  for (const k of ["tax", "repair", "sale"]) assert.ok(kinds.has(k) || s.cashSeq > 120, `saw a ${k} event`);
   assert.ok(worst < 0.01, `an unexplained cash jump of $${worst.toFixed(2)}k`);
 });
 
 test("cash events are capped (old saves without the log still step)", () => {
   const s = sb(3);
   for (let i = 0; i < 200; i++) Sim.logCash(s, -1, "other", "x");
-  assert.ok(s.cashEvents.length <= 40);
+  assert.ok(s.cashEvents.length <= 120);
   assert.equal(s.cashSeq, 200);
   const old = sb(4);
   delete old.cashEvents; delete old.cashSeq; delete old.totals.flow;
