@@ -1,65 +1,1131 @@
 {
-  "generated": "2026-09-24T23:59:56.588Z",
+  "generated": "2026-09-25T01:21:20.980Z",
+  "patch": null,
+  "method": "bots/run.js: Bots.play per seed 1..N, score = Sim.score (founder equity), worth = Sim.netWorth",
+  "timing": {
+    "plannerSecPerGame": 6.084740196078431,
+    "greedySecPerGame": 1.108078431372549,
+    "workers": 8
+  },
   "rows": [
     {
       "variant": "full",
       "n": 12,
-      "idle": 587,
-      "greedy": 16083,
-      "planner": 21912,
-      "gap": 5829,
-      "gapSd": 1389,
-      "plannerWins": 12
+      "idle": {
+        "score": 587.2891668285243,
+        "worth": 551.7155533766277,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 11608.71085339286,
+        "worth": 13288.675826650942,
+        "bankrupt": 0,
+        "idleCashDays": 1176.25,
+        "ms": 1723.0833333333333
+      },
+      "planner": {
+        "score": 120415.87669485177,
+        "worth": 58373.7474898065,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1256.25,
+        "idleCashDaysMax": 1335,
+        "cashShare": 0.6291914129938775,
+        "own": 0.9160333333333335,
+        "ms": 8543.916666666666
+      },
+      "scoreGap": 108807.16584145889,
+      "scoreGapSd": 31785.051766013206,
+      "scoreGapPct": 937.2889652915937,
+      "relGapMedianPct": 954.4519014114364,
+      "relGapMinPct": 543.0603064808995,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 45085.07166315556,
+      "worthGapPct": 339.2743735439444,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.48771738656754154,
+      "ablatedChapterUse": null,
+      "coverage": {
+        "racks": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 150.9
+        },
+        "power": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 65.6
+        },
+        "gpu": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 232.1
+        },
+        "heat": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 93
+        },
+        "gens": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 116.2
+        },
+        "ops": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 19.8
+        },
+        "fabric": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 1.4
+        },
+        "contracts": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 39.7
+        },
+        "memory": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 47.1
+        },
+        "finance": {
+          "games": 11,
+          "decisions": 11,
+          "meanActions": 33.6
+        },
+        "facilities": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 4.7
+        },
+        "energy": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 3
+        },
+        "environment": {
+          "games": 10,
+          "decisions": 10,
+          "meanActions": 1.7
+        },
+        "investors": {
+          "games": 11,
+          "decisions": 12,
+          "meanActions": 13.3
+        },
+        "reputation": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 1.9
+        },
+        "policy": {
+          "games": 11,
+          "decisions": 12,
+          "meanActions": 2
+        },
+        "disrupt": {
+          "games": 12,
+          "decisions": 12,
+          "meanActions": 50.5
+        }
+      },
+      "perSeed": [
+        {
+          "seed": 1,
+          "planner": 106804,
+          "greedy": 10008,
+          "idle": 515,
+          "plannerWorth": 57982,
+          "greedyWorth": 10946,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.9,
+          "idleCashDays": 1310,
+          "used": {
+            "racks": 143,
+            "gpu": 259,
+            "power": 57,
+            "heat": 110,
+            "fabric": 1,
+            "contracts": 38,
+            "ops": 20,
+            "memory": 45,
+            "gens": 91,
+            "facilities": 5,
+            "energy": 3,
+            "finance": 43,
+            "environment": 1,
+            "disrupt": 77,
+            "policy": 3,
+            "investors": 18,
+            "reputation": 1
+          }
+        },
+        {
+          "seed": 2,
+          "planner": 157520,
+          "greedy": 11878,
+          "idle": 622,
+          "plannerWorth": 67414,
+          "greedyWorth": 14236,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.92,
+          "idleCashDays": 1320,
+          "used": {
+            "racks": 173,
+            "gpu": 243,
+            "power": 81,
+            "fabric": 2,
+            "contracts": 47,
+            "heat": 100,
+            "ops": 11,
+            "gens": 143,
+            "memory": 30,
+            "facilities": 5,
+            "energy": 3,
+            "finance": 20,
+            "environment": 2,
+            "disrupt": 38,
+            "policy": 2,
+            "investors": 17,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 3,
+          "planner": 141882,
+          "greedy": 13033,
+          "idle": 582,
+          "plannerWorth": 79130,
+          "greedyWorth": 14380,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.9,
+          "idleCashDays": 1150,
+          "used": {
+            "racks": 184,
+            "gpu": 229,
+            "power": 70,
+            "heat": 108,
+            "fabric": 1,
+            "gens": 127,
+            "contracts": 47,
+            "ops": 28,
+            "memory": 65,
+            "finance": 14,
+            "facilities": 5,
+            "energy": 3,
+            "environment": 1,
+            "disrupt": 48,
+            "policy": 2,
+            "investors": 25,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 4,
+          "planner": 85424,
+          "greedy": 9087,
+          "idle": 572,
+          "plannerWorth": 55930,
+          "greedyWorth": 11227,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.88,
+          "idleCashDays": 1305,
+          "used": {
+            "racks": 117,
+            "gpu": 209,
+            "power": 76,
+            "heat": 59,
+            "fabric": 2,
+            "gens": 106,
+            "contracts": 38,
+            "ops": 28,
+            "finance": 45,
+            "memory": 61,
+            "facilities": 5,
+            "energy": 3,
+            "disrupt": 72,
+            "investors": 5,
+            "environment": 2,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 5,
+          "planner": 94264,
+          "greedy": 8771,
+          "idle": 461,
+          "plannerWorth": 53635,
+          "greedyWorth": 10964,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.99,
+          "idleCashDays": 1335,
+          "used": {
+            "racks": 131,
+            "gpu": 229,
+            "power": 63,
+            "fabric": 2,
+            "heat": 87,
+            "ops": 12,
+            "contracts": 33,
+            "gens": 102,
+            "finance": 50,
+            "memory": 50,
+            "facilities": 4,
+            "energy": 3,
+            "disrupt": 60,
+            "policy": 1,
+            "investors": 21,
+            "environment": 2,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 6,
+          "planner": 129787,
+          "greedy": 12794,
+          "idle": 648,
+          "plannerWorth": 85552,
+          "greedyWorth": 14193,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.83,
+          "idleCashDays": 1285,
+          "used": {
+            "racks": 158,
+            "gpu": 205,
+            "power": 61,
+            "heat": 72,
+            "fabric": 1,
+            "contracts": 41,
+            "ops": 27,
+            "gens": 99,
+            "memory": 33,
+            "facilities": 4,
+            "energy": 3,
+            "disrupt": 37,
+            "policy": 2,
+            "investors": 16,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 7,
+          "planner": 174863,
+          "greedy": 14308,
+          "idle": 588,
+          "plannerWorth": 71694,
+          "greedyWorth": 16313,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.89,
+          "idleCashDays": 1335,
+          "used": {
+            "racks": 109,
+            "gpu": 236,
+            "power": 46,
+            "fabric": 2,
+            "contracts": 37,
+            "heat": 87,
+            "ops": 21,
+            "gens": 206,
+            "memory": 37,
+            "finance": 10,
+            "facilities": 4,
+            "energy": 3,
+            "environment": 4,
+            "disrupt": 28,
+            "policy": 1,
+            "investors": 34,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 8,
+          "planner": 130238,
+          "greedy": 12503,
+          "idle": 703,
+          "plannerWorth": 46692,
+          "greedyWorth": 13829,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.92,
+          "idleCashDays": 1290,
+          "used": {
+            "racks": 161,
+            "gpu": 233,
+            "power": 69,
+            "fabric": 1,
+            "heat": 90,
+            "contracts": 42,
+            "ops": 23,
+            "memory": 43,
+            "gens": 98,
+            "finance": 43,
+            "facilities": 5,
+            "energy": 3,
+            "environment": 3,
+            "disrupt": 50,
+            "policy": 1,
+            "investors": 2,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 9,
+          "planner": 132863,
+          "greedy": 11368,
+          "idle": 527,
+          "plannerWorth": 58311,
+          "greedyWorth": 12697,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.9,
+          "idleCashDays": 1170,
+          "used": {
+            "racks": 174,
+            "gpu": 234,
+            "power": 89,
+            "heat": 80,
+            "fabric": 1,
+            "contracts": 43,
+            "gens": 111,
+            "ops": 16,
+            "finance": 54,
+            "memory": 62,
+            "facilities": 5,
+            "energy": 3,
+            "environment": 1,
+            "disrupt": 37,
+            "policy": 3,
+            "investors": 7,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 10,
+          "planner": 150987,
+          "greedy": 14581,
+          "idle": 677,
+          "plannerWorth": 56918,
+          "greedyWorth": 15243,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.92,
+          "idleCashDays": 1155,
+          "used": {
+            "racks": 174,
+            "gpu": 249,
+            "power": 58,
+            "heat": 135,
+            "fabric": 2,
+            "contracts": 35,
+            "ops": 23,
+            "gens": 131,
+            "memory": 57,
+            "finance": 54,
+            "facilities": 4,
+            "energy": 3,
+            "disrupt": 58,
+            "policy": 3,
+            "investors": 6,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 11,
+          "planner": 63706,
+          "greedy": 9054,
+          "idle": 531,
+          "plannerWorth": 31333,
+          "greedyWorth": 11023,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 0.94,
+          "idleCashDays": 1250,
+          "used": {
+            "racks": 155,
+            "gpu": 280,
+            "power": 51,
+            "heat": 104,
+            "fabric": 1,
+            "contracts": 39,
+            "gens": 100,
+            "ops": 16,
+            "memory": 38,
+            "facilities": 5,
+            "energy": 3,
+            "finance": 4,
+            "environment": 2,
+            "disrupt": 54,
+            "policy": 3,
+            "investors": 8,
+            "reputation": 2
+          }
+        },
+        {
+          "seed": 12,
+          "planner": 76650,
+          "greedy": 11920,
+          "idle": 624,
+          "plannerWorth": 35895,
+          "greedyWorth": 14415,
+          "over": "end",
+          "greedyOver": "end",
+          "own": 1,
+          "idleCashDays": 1170,
+          "used": {
+            "racks": 132,
+            "gpu": 179,
+            "power": 66,
+            "heat": 84,
+            "fabric": 1,
+            "gens": 80,
+            "contracts": 36,
+            "ops": 12,
+            "memory": 44,
+            "finance": 66,
+            "facilities": 5,
+            "energy": 3,
+            "environment": 2,
+            "disrupt": 47,
+            "policy": 3,
+            "reputation": 2
+          }
+        }
+      ]
     },
     {
       "variant": "no heat/seasons",
       "n": 12,
-      "idle": 587,
-      "greedy": 16852,
-      "planner": 21812,
-      "gap": 4960,
-      "gapSd": 1204,
-      "plannerWins": 12
+      "idle": {
+        "score": 587.2891668285243,
+        "worth": 551.7155533766277,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 12435.604062600049,
+        "worth": 14281.21642818131,
+        "bankrupt": 0,
+        "idleCashDays": 1182.9166666666667,
+        "ms": 1131.8333333333333
+      },
+      "planner": {
+        "score": 115533.95791087445,
+        "worth": 55085.08306359581,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1196.25,
+        "idleCashDaysMax": 1320,
+        "cashShare": 0.6204577349161507,
+        "own": 0.9407083333333333,
+        "ms": 7969.75
+      },
+      "scoreGap": 103098.3538482744,
+      "scoreGapSd": 35527.34690206181,
+      "scoreGapPct": 829.0578674689527,
+      "relGapMedianPct": 730.8174239013181,
+      "relGapMinPct": 493.92311750543803,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 40803.8666354145,
+      "worthGapPct": 285.7170244608555,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.5083260172576903,
+      "ablatedChapterUse": 0
     },
     {
       "variant": "no generations",
       "n": 12,
-      "idle": 587,
-      "greedy": 28332,
-      "planner": 38834,
-      "gap": 10502,
-      "gapSd": 3292,
-      "plannerWins": 12
+      "idle": {
+        "score": 595.3824036588662,
+        "worth": 556.7462117821384,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 77696.7919288597,
+        "worth": 55598.71190478886,
+        "bankrupt": 0,
+        "idleCashDays": 1216.25,
+        "ms": 981.0833333333334
+      },
+      "planner": {
+        "score": 231656.01431542638,
+        "worth": 125652.80547257666,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1345.4166666666667,
+        "idleCashDaysMax": 1365,
+        "cashShare": 0.6390021004174783,
+        "own": 0.9171999999999999,
+        "ms": 6960.666666666667
+      },
+      "scoreGap": 153959.2223865667,
+      "scoreGapSd": 13893.771793719838,
+      "scoreGapPct": 198.15389871892518,
+      "relGapMedianPct": 193.33436281176398,
+      "relGapMinPct": 148.8038816897978,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 70054.09356778776,
+      "worthGapPct": 125.9994902179628,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.2570114164392833,
+      "ablatedChapterUse": 12
+    },
+    {
+      "variant": "no operations",
+      "n": 12,
+      "idle": {
+        "score": 705.3941033360238,
+        "worth": 616.7584660725306,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 14123.072788298383,
+        "worth": 15827.25364204338,
+        "bankrupt": 0,
+        "idleCashDays": 1197.0833333333333,
+        "ms": 981.4166666666666
+      },
+      "planner": {
+        "score": 114720.92097426816,
+        "worth": 61818.797333315735,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1317.9166666666667,
+        "idleCashDaysMax": 1350,
+        "cashShare": 0.69220428135992,
+        "own": 0.8936666666666667,
+        "ms": 4686.916666666667
+      },
+      "scoreGap": 100597.8481859698,
+      "scoreGapSd": 32004.933978428213,
+      "scoreGapPct": 712.2943405723983,
+      "relGapMedianPct": 705.9830632399708,
+      "relGapMinPct": 349.88603327868367,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 45991.543691272345,
+      "worthGapPct": 290.58448630090066,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.6148783476853741,
+      "ablatedChapterUse": 0
+    },
+    {
+      "variant": "no fabric",
+      "n": 12,
+      "idle": {
+        "score": 587.2891668285243,
+        "worth": 551.7155533766277,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 19406.164636143712,
+        "worth": 20418.250902220534,
+        "bankrupt": 0,
+        "idleCashDays": 1219.5833333333333,
+        "ms": 1086.75
+      },
+      "planner": {
+        "score": 222690.79917935864,
+        "worth": 86327.62079905563,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1284.1666666666667,
+        "idleCashDaysMax": 1340,
+        "cashShare": 0.6716350959313454,
+        "own": 0.9050000000000001,
+        "ms": 6837.833333333333
+      },
+      "scoreGap": 203284.63454321495,
+      "scoreGapSd": 48151.52899982622,
+      "scoreGapPct": 1047.5260740836968,
+      "relGapMedianPct": 998.5426706377428,
+      "relGapMinPct": 839.1736243738954,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 65909.36989683508,
+      "worthGapPct": 322.7963561250356,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.26372403754117946,
+      "ablatedChapterUse": 0
+    },
+    {
+      "variant": "no contracts",
+      "n": 12,
+      "idle": {
+        "score": 588.6869497170034,
+        "worth": 552.1889926018542,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 10109.114537109757,
+        "worth": 11614.702012485233,
+        "bankrupt": 0,
+        "idleCashDays": 1158.75,
+        "ms": 1129.9166666666667
+      },
+      "planner": {
+        "score": 56018.3879730667,
+        "worth": 23321.435107422876,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1271.6666666666667,
+        "idleCashDaysMax": 1335,
+        "cashShare": 0.6791517200006808,
+        "own": 0.9144040000000001,
+        "ms": 4594.833333333333
+      },
+      "scoreGap": 45909.27343595694,
+      "scoreGapSd": 13525.487538258034,
+      "scoreGapPct": 454.13743476174534,
+      "relGapMedianPct": 413.026369664633,
+      "relGapMinPct": 257.1635273596675,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 11706.733094937641,
+      "worthGapPct": 100.79236714255329,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 1.0508816319384993,
+      "ablatedChapterUse": 0
+    },
+    {
+      "variant": "no memory market",
+      "n": 12,
+      "idle": {
+        "score": 587.7752325261314,
+        "worth": 553.1785591535928,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 11934.788137149875,
+        "worth": 13696.201347488319,
+        "bankrupt": 0,
+        "idleCashDays": 1181.6666666666667,
+        "ms": 1045.5833333333333
+      },
+      "planner": {
+        "score": 126361.1028381876,
+        "worth": 53028.17148584814,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1279.5833333333333,
+        "idleCashDaysMax": 1335,
+        "cashShare": 0.6408935224387121,
+        "own": 0.9136400000000001,
+        "ms": 6491.5
+      },
+      "scoreGap": 114426.31470103773,
+      "scoreGapSd": 31720.31502575855,
+      "scoreGapPct": 958.7628484569285,
+      "relGapMedianPct": 984.7535141404645,
+      "relGapMinPct": 460.77294728940404,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 39331.97013835982,
+      "worthGapPct": 287.1742984822045,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.46515519358738916,
+      "ablatedChapterUse": 0
+    },
+    {
+      "variant": "no finance",
+      "n": 12,
+      "idle": {
+        "score": 612.0429540590181,
+        "worth": 579.4840132695839,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 13823.576545390773,
+        "worth": 15830.770049385052,
+        "bankrupt": 0,
+        "idleCashDays": 1179.1666666666667,
+        "ms": 977.9166666666666
+      },
+      "planner": {
+        "score": 117093.9560345828,
+        "worth": 60944.325865260704,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1256.25,
+        "idleCashDaysMax": 1335,
+        "cashShare": 0.6556444212667892,
+        "own": 0.9091666666666668,
+        "ms": 6165.25
+      },
+      "scoreGap": 103270.37948919204,
+      "scoreGapSd": 19796.878363660162,
+      "scoreGapPct": 747.0597724843193,
+      "relGapMedianPct": 760.7259330192126,
+      "relGapMinPct": 531.0520580478469,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 45113.555815875654,
+      "worthGapPct": 284.9738558209182,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.522693890262155,
+      "ablatedChapterUse": 0
+    },
+    {
+      "variant": "no facilities",
+      "n": 12,
+      "idle": {
+        "score": 664.2881002463297,
+        "worth": 577.3027535986139,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 12707.833523084759,
+        "worth": 13467.830491486353,
+        "bankrupt": 0,
+        "idleCashDays": 1176.25,
+        "ms": 1102.3333333333333
+      },
+      "planner": {
+        "score": 103524.7506774667,
+        "worth": 53543.34631952064,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1256.25,
+        "idleCashDaysMax": 1335,
+        "cashShare": 0.6731547947415061,
+        "own": 0.8911116666666667,
+        "ms": 3829.25
+      },
+      "scoreGap": 90816.91715438194,
+      "scoreGapSd": 27237.812000622842,
+      "scoreGapPct": 714.6530286960874,
+      "relGapMedianPct": 720.8069041127615,
+      "relGapMinPct": 339.1987786937869,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 40075.51582803429,
+      "worthGapPct": 297.5647477399415,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.6416708042272246,
+      "ablatedChapterUse": 0
+    },
+    {
+      "variant": "no energy",
+      "n": 12,
+      "idle": {
+        "score": 629.3395889247934,
+        "worth": 598.8872886397827,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 12405.65699930351,
+        "worth": 14264.006776594912,
+        "bankrupt": 0,
+        "idleCashDays": 1176.25,
+        "ms": 1048.0833333333333
+      },
+      "planner": {
+        "score": 90060.30591745791,
+        "worth": 39360.580135122866,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1256.25,
+        "idleCashDaysMax": 1335,
+        "cashShare": 0.6281644315247147,
+        "own": 0.9648066666666667,
+        "ms": 6005.166666666667
+      },
+      "scoreGap": 77654.6489181544,
+      "scoreGapSd": 27621.384145911787,
+      "scoreGapPct": 625.9615989908004,
+      "relGapMedianPct": 655.5978468800615,
+      "relGapMinPct": 343.27662598965594,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 25096.573358527952,
+      "worthGapPct": 175.94336396213478,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.6987979693313453,
+      "ablatedChapterUse": 0
+    },
+    {
+      "variant": "no environment",
+      "n": 12,
+      "idle": {
+        "score": 507.5433929905765,
+        "worth": 499.1127038625775,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 11109.835167184465,
+        "worth": 12429.096505629555,
+        "bankrupt": 0,
+        "idleCashDays": 1176.25,
+        "ms": 1154.3333333333333
+      },
+      "planner": {
+        "score": 111677.18434327439,
+        "worth": 54232.2369484368,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1256.25,
+        "idleCashDaysMax": 1335,
+        "cashShare": 0.6359933409015384,
+        "own": 0.8982533333333333,
+        "ms": 6127.333333333333
+      },
+      "scoreGap": 100567.34917608993,
+      "scoreGapSd": 25621.01218043404,
+      "scoreGapPct": 905.2100923435793,
+      "relGapMedianPct": 933.8828238217413,
+      "relGapMinPct": 614.5141667142269,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 41803.14044280725,
+      "worthGapPct": 336.3328977602934,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.45447366530166516,
+      "ablatedChapterUse": 0
+    },
+    {
+      "variant": "no investors",
+      "n": 12,
+      "idle": {
+        "score": 588.0833283275603,
+        "worth": 552.5065321588648,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 11527.33768433469,
+        "worth": 13144.932626390071,
+        "bankrupt": 0,
+        "idleCashDays": 1176.25,
+        "ms": 1017.5833333333334
+      },
+      "planner": {
+        "score": 108504.13332589237,
+        "worth": 35224.78176010237,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1256.25,
+        "idleCashDaysMax": 1335,
+        "cashShare": 0.630313015144808,
+        "own": 1,
+        "ms": 6255.25
+      },
+      "scoreGap": 96976.79564155768,
+      "scoreGapSd": 35005.07004136322,
+      "scoreGapPct": 841.2766095448584,
+      "relGapMedianPct": 807.4687185520639,
+      "relGapMinPct": 440.80531834879355,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 22079.8491337123,
+      "worthGapPct": 167.97232638061823,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.5419916369095829,
+      "ablatedChapterUse": 0
+    },
+    {
+      "variant": "no reputation",
+      "n": 12,
+      "idle": {
+        "score": 660.3654915941634,
+        "worth": 552.5769360386078,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 13444.641136100703,
+        "worth": 13381.446793508112,
+        "bankrupt": 0,
+        "idleCashDays": 1176.25,
+        "ms": 1062
+      },
+      "planner": {
+        "score": 104221.43983296998,
+        "worth": 38816.98164755791,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1256.25,
+        "idleCashDaysMax": 1335,
+        "cashShare": 0.6341773147446195,
+        "own": 0.9936666666666668,
+        "ms": 6052.916666666667
+      },
+      "scoreGap": 90776.79869686929,
+      "scoreGapSd": 26138.7775888849,
+      "scoreGapPct": 675.18945115702,
+      "relGapMedianPct": 618.0717427857473,
+      "relGapMinPct": 533.9312917210923,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 25435.534854049783,
+      "worthGapPct": 190.0806037385255,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.6336177015520944,
+      "ablatedChapterUse": 0
+    },
+    {
+      "variant": "no policy",
+      "n": 12,
+      "idle": {
+        "score": 602.5653082773906,
+        "worth": 557.5978211725566,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 11692.440173996338,
+        "worth": 13427.395669111538,
+        "bankrupt": 0,
+        "idleCashDays": 1176.25,
+        "ms": 1095.5
+      },
+      "planner": {
+        "score": 116640.57153153891,
+        "worth": 45499.811253888176,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1256.25,
+        "idleCashDaysMax": 1335,
+        "cashShare": 0.6316221572636762,
+        "own": 0.9405,
+        "ms": 6034.25
+      },
+      "scoreGap": 104948.13135754254,
+      "scoreGapSd": 34903.31267348153,
+      "scoreGapPct": 897.5725323012067,
+      "relGapMedianPct": 900.1974319854561,
+      "relGapMinPct": 621.1913095300079,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 32072.415584776627,
+      "worthGapPct": 238.8580509216408,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.5166000992325904,
+      "ablatedChapterUse": 0
     },
     {
       "variant": "no disruption",
       "n": 12,
-      "idle": 587,
-      "greedy": 19936,
-      "planner": 23798,
-      "gap": 3862,
-      "gapSd": 1803,
-      "plannerWins": 12
+      "idle": {
+        "score": 586.469246889158,
+        "worth": 551.6637056179806,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 13224.292399057056,
+        "worth": 14684.109743486622,
+        "bankrupt": 0,
+        "idleCashDays": 1165,
+        "ms": 1109.5
+      },
+      "planner": {
+        "score": 149794.77073968673,
+        "worth": 65253.28130864901,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1249.1666666666667,
+        "idleCashDaysMax": 1345,
+        "cashShare": 0.6291743766619528,
+        "own": 0.9057400000000002,
+        "ms": 6968.916666666667
+      },
+      "scoreGap": 136570.4783406297,
+      "scoreGapSd": 35736.08119457392,
+      "scoreGapPct": 1032.724279072714,
+      "relGapMedianPct": 1024.1015892495361,
+      "relGapMinPct": 551.2075284189615,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 50569.171565162396,
+      "worthGapPct": 344.38023447484227,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.39151516704700184,
+      "ablatedChapterUse": 0
     },
     {
       "variant": "no network",
       "n": 12,
-      "idle": 587,
-      "greedy": 15661,
-      "planner": 21925,
-      "gap": 6264,
-      "gapSd": 1182,
-      "plannerWins": 12
+      "idle": {
+        "score": 634.4646195305555,
+        "worth": 577.6901547510703,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 12926.28934735842,
+        "worth": 14746.723443750649,
+        "bankrupt": 0,
+        "idleCashDays": 1177.5,
+        "ms": 1090.25
+      },
+      "planner": {
+        "score": 115210.65212540155,
+        "worth": 49539.691397786584,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1257.9166666666667,
+        "idleCashDaysMax": 1325,
+        "cashShare": 0.6386252425366999,
+        "own": 0.9295583333333335,
+        "ms": 6516.333333333333
+      },
+      "scoreGap": 102284.36277804313,
+      "scoreGapSd": 33806.26662089014,
+      "scoreGapPct": 791.2894414586632,
+      "relGapMedianPct": 761.3783703016551,
+      "relGapMinPct": 387.45011379686326,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 34792.96795403594,
+      "worthGapPct": 235.93693939368254,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 0.5506996165944532,
+      "ablatedChapterUse": null
     },
     {
       "variant": "no roofline",
       "n": 12,
-      "idle": 587,
-      "greedy": 9547,
-      "planner": 17525,
-      "gap": 7978,
-      "gapSd": 1609,
-      "plannerWins": 12
+      "idle": {
+        "score": 587.2891668285243,
+        "worth": 551.7155533766277,
+        "bankrupt": 0
+      },
+      "greedy": {
+        "score": 1589.2034839610694,
+        "worth": 1840.0415543878473,
+        "bankrupt": 4,
+        "idleCashDays": 942.0833333333334,
+        "ms": 1100.1666666666667
+      },
+      "planner": {
+        "score": 54633.98162282498,
+        "worth": 25559.336662920865,
+        "fired": 0,
+        "bankrupt": 0,
+        "idleCashDays": 1140,
+        "idleCashDaysMax": 1260,
+        "cashShare": 0.661118889032543,
+        "own": 0.9254000000000001,
+        "ms": 3400.5
+      },
+      "scoreGap": 53044.77813886392,
+      "scoreGapSd": 16844.49677929305,
+      "scoreGapPct": 3337.8216618711713,
+      "relGapMedianPct": 3861.266682473571,
+      "relGapMinPct": 1450.596091627016,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 23719.295108533017,
+      "worthGapPct": 1289.063013385263,
+      "plannerWinsWorth": 12,
+      "idleShareOfPlannerPct": 1.0749521623427987,
+      "ablatedChapterUse": 12
     }
   ]
 }

@@ -3,16 +3,39 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Bots = require("../bots/bots.js");
 
-// Depth smoke check: thinking ahead must beat myopic greed, and both must beat doing nothing.
-test("planner beats greedy beats idle (2 seeds)", () => {
+// Depth smoke check against the SPEC §6 balance targets (the full n>=12 check is `node bots/run.js --seeds 12`):
+// thinking ahead must beat myopic greed by >= 25 % on the game's score (founder equity value, SPEC §1),
+// greed must beat doing nothing, greedy never goes bankrupt and the planner is never fired.
+const games = {};
+for (const seed of [11, 12]) for (const p of ["idle", "greedy", "planner"]) games[`${seed}${p}`] = Bots.play(seed, p);
+
+test("planner beats greedy by >= 25 % and greedy beats idle (score, 2 seeds)", () => {
   for (const seed of [11, 12]) {
-    // v2: compared on the game's score (founder equity value, SPEC §1), not raw net worth
-    const idle = Bots.play(seed, "idle").score, greedy = Bots.play(seed, "greedy").score, planner = Bots.play(seed, "planner").score;
-    assert.ok(greedy > idle * 5, `seed ${seed}: greedy ${greedy} vs idle ${idle}`);
-    assert.ok(planner > greedy * 1.1, `seed ${seed}: planner ${planner} vs greedy ${greedy}`);
+    const idle = games[`${seed}idle`], greedy = games[`${seed}greedy`], planner = games[`${seed}planner`];
+    assert.ok(greedy.score > idle.score * 5, `seed ${seed}: greedy ${greedy.score} vs idle ${idle.score}`);
+    assert.ok(idle.score < planner.score * 0.05, `seed ${seed}: idle ${idle.score} should be < 5 % of planner ${planner.score}`);
+    assert.ok(planner.score > greedy.score * 1.25, `seed ${seed}: planner ${planner.score} vs greedy ${greedy.score}`);
+  }
+});
+
+test("greedy is never bankrupt, the planner is never fired, idle survives", () => {
+  for (const seed of [11, 12]) {
+    assert.equal(games[`${seed}greedy`].over, "end", `seed ${seed} greedy`);
+    assert.equal(games[`${seed}planner`].over, "end", `seed ${seed} planner`);
+    assert.equal(games[`${seed}idle`].over, "end", `seed ${seed} idle`);
+  }
+});
+
+test("the planner's actions are changed by most chapters' mechanics (SPEC §6, logged per game)", () => {
+  for (const seed of [11, 12]) {
+    const used = games[`${seed}planner`].used;
+    const n = Object.keys(used).filter(k => used[k] > 0).length;
+    assert.ok(n >= 14, `seed ${seed}: only ${n} chapters changed the planner's actions: ${JSON.stringify(used)}`);
+    for (const k of ["ops", "fabric", "contracts", "facilities", "energy", "disrupt"]) assert.ok(used[k] > 0, `seed ${seed}: ${k} unused`);
   }
 });
 
 test("bots are deterministic", () => {
-  assert.equal(Bots.play(3, "planner").worth, Bots.play(3, "planner").worth);
+  assert.equal(Bots.play(11, "planner").worth, games["11planner"].worth);
+  assert.equal(Bots.play(11, "greedy").worth, games["11greedy"].worth);
 });

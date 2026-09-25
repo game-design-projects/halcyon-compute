@@ -72,32 +72,67 @@ force, and compresses the game state usefully.
 
 Two scripted players share the simulation core (`bots/bots.js`), so we can measure how much thinking pays:
 
-- **Greedy** buys whatever raises income *right now* the most per dollar. It ignores seasons, launches
-  and vendor risk, never sells, and never pilots. It is the gut-feeling player.
-- **Planner** plays heuristics 1–9 above: it looks 8–150 days ahead with its current beliefs.
+- **Greedy** buys whatever raises income *right now* the most per dollar (≤ 200-day payback). It ignores seasons,
+  launches, vendor risk and contracts, never sells, hedges or pilots. It does the obvious chores (transit for its
+  traffic, auto-repair, one more technician when repairs pile up). It is the gut-feeling player.
+- **Planner** plays the heuristics above across all 17 chapters with one value function: change in daily profit
+  over a lookahead (150 days, or the rest of the game in the last 420), plus the final-quarter profit × 730 that the
+  score counts, plus resale using the public launch calendar, minus the reputation cost of SLA misses. On top: it
+  signs contracts it can serve (buying the capacity when that pays), builds grid 700 kW + Hall 2 when demand outruns
+  the floor, buys UPS/solar/PPA, switches cooling for droughts, reads scare follow-ups, pilots exotic cards, reads
+  the demand-disruption signal, and takes a VC round only when the board can no longer fire it. It sees only public
+  state, news and its own pilots (never the seed's hidden truths).
 
-`node bots/run.js --seeds 12 --ablate`. **n = 12 seeds per row, one planner implementation.** The gap
-is only a *lower bound* on depth, since a better planner would open it further. These are weak signals, not proof.
+`node bots/run.js --seeds 12 --ablate` (reports/depth.json). **n = 12 seeds (1–12) per row, one planner
+implementation, score = founder equity value (SPEC §1).** The gap is a *lower bound* on depth: a better planner would
+open it further, and a better greedy would close it. Weak signals, not proof.
 
-| Variant | Greedy (mean $k) | Planner (mean $k) | Gap (planner − greedy) | Planner wins |
-|---|---|---|---|---|
-| Full game | 16,083 | 21,912 | +5,829 ± 1,389 (**+36 %**) | 12/12 |
-| No heat / seasons | 16,852 | 21,812 | +29 % | 12/12 |
-| No generations | 28,332 | 38,834 | +37 % | 12/12 |
-| No disruption | 19,936 | 23,798 | **+19 %** | 12/12 |
-| No network | 15,661 | 21,925 | +40 % | 12/12 |
-| No roofline (both cards made identical) | 9,547 | 17,525 | +84 % | 12/12 |
+| Variant | Greedy score (mean $k) | Planner score | Relative gap (mean / median / min) | Planner wins | Note |
+|---|---|---|---|---|---|
+| **Full game** | 11,609 | 120,416 | **+937 %** / +954 % / +543 % | 12/12 | net worth gap +339 % |
+| No heat/seasons | 12,436 | 115,534 | +829 % | 12/12 | |
+| No generations | 77,697 | 231,656 | +198 % | 12/12 | confounded: prices never fall, so greedy's never-sell strategy stops losing |
+| No operations | 14,123 | 114,721 | +712 % | 12/12 | |
+| No fabric (spines, frontier, transit) | 19,406 | 222,691 | +1,048 % | 12/12 | confounded: removes transit, a big late cost |
+| **No contracts** | 10,109 | 56,018 | **+454 %** | 12/12 | the largest single drop |
+| No memory market | 11,935 | 126,361 | +959 % | 12/12 | |
+| No finance | 13,824 | 117,094 | +747 % | 12/12 | |
+| No facilities | 12,708 | 103,525 | +715 % | 12/12 | |
+| No energy | 12,406 | 90,060 | +626 % | 12/12 | |
+| No environment | 11,110 | 111,677 | +905 % | 12/12 | |
+| No investors | 11,527 | 108,504 | +841 % | 12/12 | |
+| No reputation | 13,445 | 104,221 | +675 % | 12/12 | |
+| No policy | 11,692 | 116,641 | +898 % | 12/12 | |
+| No disruption | 13,224 | 149,795 | +1,033 % | 12/12 | |
+| No network | 12,926 | 115,211 | +791 % | 12/12 | |
+| No roofline (identical cards) | 1,589 | 54,634 | +3,338 % | 12/12 | confounded: both families become poor at inference; greedy bankrupt 4/12 |
+
+Balance targets (SPEC §6) on the full game, n = 12: idle survives on every seed and ends at 0.5 % of the
+planner's score; greedy is never bankrupt; the planner is never fired (0 in every row above); planner beats greedy on
+12/12 seeds by at least +543 %. Every chapter changed the planner's actions in most games (games out of 12): racks,
+power, GPUs, heat, generations, operations, fabric, contracts, memory, facilities, energy, reputation, disruption 12;
+finance, investors, policy 11 (investors and policy still made an explicit decision, a decline or "don't lobby",
+in the 12th); environment 10 (the other two seeds had no drought after chapter 13, so there was nothing to decide).
+Timing: planner ≈3.5 s per game, greedy ≈0.6 s (single thread, n = 6 seeds).
 
 What this suggests (tentatively):
-- **Disruption carries the most depth** here: removing it roughly halves the relative gap (36 % → 19 %).
-- **Heat adds some** depth (36 % → 29 %).
-- **Network adds none.** It is a rule both bots follow, not a decision, so it is a cut candidate if the
-  scope needs trimming.
-- **The generations and roofline ablations are confounded.** "No generations" removes the price drops, so
-  everyone gets richer. The "identical cards" ablation changed the economy too: both cards became poor at
-  inference. These rows need cleaner ablations before we conclude anything. **Don't cut either mechanic on
-  the strength of these numbers.**
-- Idle play (never touching anything) ends at about $0.6M, so the actions matter a lot.
+- **Contracts carry the most depth**: removing them roughly halves the relative gap (+937 % → +454 %). They are the
+  planner's main sink (it builds capacity for them) and its hedge before launches.
+- **Energy, reputation, operations, facilities and finance each carry some** (gap falls to +626…+747 %); heat,
+  investors, network, policy and environment a little (+791…+905 %). Differences of this size are within one
+  standard deviation of the per-seed gap (±32M), so the ordering is a hypothesis, not a result.
+- **Removing disruption, fabric or the memory market does not shrink the gap** (it grows slightly). For disruption
+  and memory that means the planner's gain from them (pilots, dumping the doomed vendor, reading scares) is smaller than
+  what the rest of the game offers; fabric is confounded (transit is a large late cost for both bots). **Don't cut
+  any of them on this evidence**; the next test is a cleaner ablation (e.g. fabric without the transit cost) and
+  playtests.
+- **Generations and roofline ablations are confounded** (they change the whole economy), as before.
+- **The size of the gap is itself a caveat.** Most of it comes from the endgame: the planner builds run-rate for the
+  score's earnings multiple and replaces old cards, while greedy never sells and ends running loss-making old
+  hardware. A human in between these two is the interesting case, which only playtests can show.
+- **Not met: idle cash.** Both bots hold more than $2M for ~3.4 years (planner 1,256 days on average). The planner
+  reinvests almost everything it can, but markets are demand-bound and the floor caps at two halls. No constants-only
+  change we tried fixed it without bankrupting greedy (`.claude/state/diagnosis-idle-cash.md`).
 
 The end screen of every game replays the same seed with both bots, so each playtester sees how they
 compare with gut-feeling play and with thinking-ahead play.
