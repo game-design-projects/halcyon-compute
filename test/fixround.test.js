@@ -154,3 +154,36 @@ test("cash events are capped (old saves without the log still step)", () => {
   Sim.advance(old, 100);
   assert.ok(Array.isArray(old.cashEvents) && old.totals.flow != null);
 });
+
+/* ============ P0-3 pace ghost runner ============ */
+test("pace ghost: bots advance in whole days up to the player's day, never ahead, and match a full bot game", () => {
+  const Bots = require("../bots/bots.js"), Pace = require("../js/pace.js");
+  const R = Pace.createRunner(Sim, Bots);
+  R.init(11, false, 0);
+  R.to(120.75);
+  while (R.busy()) R.work(50);
+  let rows = R.rows().rows;
+  assert.equal(rows.greedy.day, 120);
+  assert.equal(rows.planner.day, 120, "floor of the player's day");
+  R.to(90);                                   // the target never moves backwards
+  R.work(50);
+  assert.equal(R.rows().rows.greedy.day, 120);
+  // same seed + same settings: identical to a fresh bot game stopped at the same day
+  const s = Sim.newGame(11), mem = {};
+  while (s.day < 120) { Bots.POLICIES.greedy(s, mem); Sim.advance(s, 1); }
+  assert.equal(rows.greedy.score, Sim.score(s));
+  R.finish();
+  while (R.busy()) R.work(1000);
+  rows = R.rows().rows;
+  assert.equal(rows.greedy.score, Bots.play(11, "greedy").score, "finishing gives the end-screen score");
+  assert.ok(rows.planner.over);
+});
+
+test("pace ghost: sandbox games ghost sandbox bots", () => {
+  const Bots = require("../bots/bots.js"), Pace = require("../js/pace.js");
+  const R = Pace.createRunner(Sim, Bots, ["greedy"]);
+  R.init(4, true, 30);
+  while (R.busy()) R.work(50);
+  assert.equal(R.state("greedy").sandbox, true);
+  assert.equal(R.rows().rows.greedy.day, 30);
+});

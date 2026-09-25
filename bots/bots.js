@@ -15,7 +15,7 @@
 (function (root, factory) {
   const Bots = factory(typeof module === "object" && module.exports ? require("../js/sim.js") : root.Sim);
   if (typeof module === "object" && module.exports) module.exports = Bots;
-  else root.Bots = Bots;
+  else { root.Bots = Bots; (root.__factories = root.__factories || {}).bots = factory; }
 })(typeof globalThis !== "undefined" ? globalThis : this, function (Sim) {
   "use strict";
   const K = Sim.K, C = Sim.CONTENT, END = K.END_DAY;

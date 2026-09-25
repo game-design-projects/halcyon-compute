@@ -8,7 +8,7 @@
   const isNode = typeof module === "object" && module.exports;
   const Sim = factory(isNode ? require("./content.js") : root.SimContent);
   if (isNode) module.exports = Sim;
-  else root.Sim = Sim;
+  else { root.Sim = Sim; (root.__factories = root.__factories || {}).sim = factory; }
 })(typeof globalThis !== "undefined" ? globalThis : this, function (C) {
   "use strict";
   const { WORKLOADS, INTENSITY, NET_NEED, MODES, MARKET, GEN_LAUNCH, GEN_DROP, BASE_ITEMS, SHOP_ORDER, CHAPTERS } = C;

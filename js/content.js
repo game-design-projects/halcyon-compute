@@ -5,7 +5,7 @@
 (function (root, factory) {
   const C = factory();
   if (typeof module === "object" && module.exports) module.exports = C;
-  else root.SimContent = C;
+  else { root.SimContent = C; (root.__factories = root.__factories || {}).content = factory; }   // factory: js/pace.js builds its worker from it
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
 

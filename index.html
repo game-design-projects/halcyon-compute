@@ -92,9 +92,10 @@
   <div class="chip click" id="h-carbon" data-drawer="energy" hidden></div>
   <div class="chip click" id="h-equity" data-drawer="finance" hidden></div>
   <div class="chip" id="h-score"></div>
+  <div class="chip pace" id="h-pace" hidden title="Pace: two bots play your seed alongside you, up to today"></div>
   <span class="spacer"></span>
   <div class="drawer-btns" id="drawer-btns">
-    <button class="iconbtn" data-drawer="contracts" id="db-contracts" title="Contracts" hidden><svg class="i"><use href="#hand"/></svg><span class="dot" hidden></span></button>
+    <button class="iconbtn labeled" data-drawer="contracts" id="db-contracts" title="Contracts: offers, active contracts, track record" hidden><svg class="i"><use href="#hand"/></svg><span class="lbl">Contracts</span><span class="dot" hidden></span></button>
     <button class="iconbtn" data-drawer="finance" id="db-finance" title="Finance: quarter results, debt, leases, investors"><svg class="i"><use href="#trend"/></svg><span class="dot" hidden></span></button>
     <button class="iconbtn" data-drawer="energy" id="db-energy" title="Energy, facilities and environment" hidden><svg class="i"><use href="#bolt"/></svg><span class="dot" hidden></span></button>
     <button class="iconbtn" data-drawer="affairs" id="db-affairs" title="Reputation and policy" hidden><svg class="i"><use href="#flag"/></svg><span class="dot" hidden></span></button>
@@ -109,6 +110,7 @@
 <div class="game">
   <section class="floor-wrap">
     <div class="goal" id="goal"></div>
+    <div class="offerstrip" id="offerstrip" hidden aria-live="polite"></div>
     <div class="floorbar"><div class="halltabs" id="halltabs" role="group" aria-label="Hall"></div><div class="modes" role="group" aria-label="Map mode" id="modes"></div></div>
     <div class="legend" id="legend"></div>
     <div class="floor-scroll"><div class="floor" id="floor"></div></div>
@@ -171,6 +173,12 @@
   <footer><button class="end" data-close>Got it</button></footer>
 </dialog>
 
+<dialog id="card" class="chap cardlg" aria-labelledby="kt">
+  <header><h2 id="kt"></h2><span style="color:var(--hud-ink-2)" id="ksub"></span></header>
+  <div class="body" id="kbody"></div>
+  <footer id="kfoot" style="gap:8px"></footer>
+</dialog>
+
 <dialog id="over" class="overdlg" aria-labelledby="ot">
   <header><h2 id="ot"></h2><span style="color:var(--hud-ink-2)" id="osub"></span></header>
   <div class="body" id="obody"></div>
@@ -180,6 +188,7 @@
 <script src="js/content.js"></script>
 <script src="js/sim.js"></script>
 <script src="bots/bots.js"></script>
+<script src="js/pace.js"></script>
 <script src="js/fx.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/ui.js"></script>
