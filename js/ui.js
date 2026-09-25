@@ -1519,7 +1519,7 @@
     const list = S.news.filter(n => V.newsCat === "all" || (n.cat || "general") === V.newsCat).slice(0, 14);
     $("newsfeed").innerHTML = list.map(n => {
       const [c, ic] = TONE[n.tone] || TONE.info;
-      return `<div class="ev${S.day - n.day < 20 ? " fresh" : ""}" title="${esc(n.body || "")}"><span class="av" style="background:${c}">${icon(n.icon || ic)}</span><span><strong>${esc(n.title)}</strong><span>${esc(n.body || "")}</span><span class="when" style="display:block">${dateOf(n.day)}${n.cat && NEWS_CAT[n.cat] ? ` · ${NEWS_CAT[n.cat][1]}` : ""}</span></span></div>`;
+      return `<div class="ev${S.day - n.day < 20 ? " fresh" : ""}" data-news="${esc(n.cat || "general")}" title="${esc(n.body || "")}"><span class="av" style="background:${c}">${icon(n.icon || ic)}</span><span><strong>${esc(n.title)}</strong><span>${esc(n.body || "")}</span><span class="when" style="display:block">${dateOf(n.day)}${n.cat && NEWS_CAT[n.cat] ? ` · ${NEWS_CAT[n.cat][1]}` : ""}</span></span></div>`;
     }).join("") || `<div class="sub">Nothing here yet.</div>`;
   }
 
@@ -2115,7 +2115,7 @@
   function openKeys() {
     const K2 = [["Space", "key.space"], ["1 2 3 4", "key.speed"], ["N", "key.skip"], ["V", "key.v"], ["M", "key.m"], ["F", "key.f"], ["R", "key.r"],
       ["Ctrl/⌘ C", "key.copy"], ["Ctrl/⌘ V", "key.paste"], ["Ctrl/⌘ D", "key.dup"], ["Ctrl/⌘ Z", "key.undo"], ["A", "key.alerts"], ["O", "key.settings"],
-      ["Esc", "key.esc"], ["?", "key.help"], ["Shift", "key.shift"], ["Shift", "key.shiftClick"], ["🖱 R", "key.right"]];
+      ["Esc", "key.esc"], ["?", "key.help"], ["Shift", "key.shift"], ["Shift", "key.shiftClick"], ["Right-click", "key.right"]];
     $("ky-t").textContent = L("keys.title");
     $("ky-body").innerHTML = `<div class="keys">${K2.map(([k, t]) => `<div><kbd>${esc(k)}</kbd><span>${esc(L(t))}</span></div>`).join("")}</div>`;
     $("ky-foot").innerHTML = S ? `<button class="btn" id="ky-chap">${icon("help")}${esc(L("keys.chapter"))}</button><button class="end" data-close>OK</button>` : `<button class="end" data-close>OK</button>`;
@@ -2132,7 +2132,11 @@
     if (window.SFX) { SFX.setVolume("master", SET.master); SFX.setVolume("sfx", SET.sfx); SFX.setVolume("hum", SET.hum); }
     if (FXON()) FX.setReduced(SET.reduced);
     document.documentElement.toggleAttribute("data-cb", !!SET.cb);
-    if (window.Stage && Stage.setScale) Stage.setScale(SET.scale || 1);
+    if (window.Stage && Stage.setScale && Stage.z && (V.scaleSet !== (SET.scale || 1))) {
+      V.scaleSet = SET.scale || 1;
+      Stage.setScale(V.scaleSet);
+      try { window.dispatchEvent(new Event("resize")); } catch (e) { /* old browsers */ }   // the fx canvas re-reads the zoom
+    }
     loadColors();
     dlog("[settings] apply", why || "", JSON.stringify(SET));
   }
@@ -2834,6 +2838,25 @@
     }
   }
 
+  /* clicking a news item jumps to where it matters: a rack it names, else the drawer / tab / element of its category */
+  const NEWS_JUMP = { contracts: "board", market: "tab:markets", hardware: "tray", vendor: "tab:bench", memory: "tray", ops: "alerts",
+    finance: "drawer:finance", investors: "drawer:finance", energy: "drawer:energy", facilities: "drawer:energy", environment: "drawer:energy",
+    press: "drawer:affairs", policy: "drawer:affairs", reputation: "drawer:affairs" };
+  function newsJump(el) {
+    // "… failed in A3": a rack named after in/from/to (card names like "Kestrel C2" must not match)
+    const txt = el.innerText + " " + (el.title || ""), m = /\b(?:in|from|to) ([A-HJ][1-6])\b/.exec(txt);
+    const rid = m && rack(m[1]) ? m[1] : null;
+    TELE.event(S.day, "newsJump", { cat: el.dataset.news, rack: rid });
+    if (rid) { jumpTo(rid); return; }
+    const to = NEWS_JUMP[el.dataset.news] || "";
+    if (to === "board") pulse($("offerstrip"), "fx-attn", 1200);
+    else if (to === "tray") pulse($("tray"), "fx-hint", 1200);
+    else if (to === "alerts") openPop("alerts", $("alertbtn"));
+    else if (to.startsWith("tab:")) setTab(to.slice(4));
+    else if (to.startsWith("drawer:") && $("db-" + to.slice(7)) && !$("db-" + to.slice(7)).hidden) { if (V.drawer !== to.slice(7)) openDrawer(to.slice(7)); }
+    else wobble(el);
+  }
+
   /* ================= alerts tray (HUD bell) ================= */
   const ALERT_ICON = { nosw: "unplug", fail: "cross", hot: "flame", sla: "warn", idle: "power", runway: "coin" };
   function renderAlerts(st) {
@@ -2978,6 +3001,8 @@
     if (pp) { V.ppaKw = Math.max(K.PPA_STEP, Math.min(K.PPA_MAX, V.ppaKw + (+pp.dataset.ppa) * K.PPA_STEP)); renderAll(); return; }
     const tb = t.closest("[data-tab]");
     if (tb) { setTab(tb.dataset.tab); return; }
+    const nw = t.closest("#newsfeed [data-news]");
+    if (nw) { newsJump(nw); return; }
     const nc = t.closest("[data-newscat]");
     if (nc) { V.newsCat = nc.dataset.newscat; renderNews(); return; }
     // tap-to-place targets

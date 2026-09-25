@@ -1076,3 +1076,22 @@ kbd { font: 600 12px var(--sans); background: var(--page); border: 1px solid var
 .rack .earn { top: 10px; }
 .rack.front-top .links { top: 5px; }
 .rack .leasetag { left: auto; right: 6px; top: 22px; }
+/* v0.4: the catalog header stays one line (sold chips push the hint into an ellipsis, never onto a second line) */
+.tray-title { flex-wrap: nowrap; align-items: center; min-width: 0; }
+.tray-title .tthint { flex: 1 1 0; }
+.tray-title .soldbar { flex: none; }
+.tray-title .tools { flex: none; flex-wrap: nowrap; }
+/* HUD: tighter icon buttons so the score and pace chips keep their numbers late in the game */
+.hud .iconbtn { padding: 6px; }
+.hud .iconbtn svg.i { width: 17px; height: 17px; }
+.hud .drawer-btns { gap: 4px; }
+.hud { gap: 7px; }
+/* short racks (late game: banners + board + hall tabs squeeze the floor): drop the secondary labels, keep id, flags, links */
+.rack:not(.empty) { container-type: size; }
+@container (max-height: 52px) {
+  .rack .earn, .rack .free, .rack.idle::before { display: none; }
+  .rack .prog { height: 16px; margin-top: -8px; font-size: 11px; }
+  .rack .id { bottom: 3px; font-size: 13px; }
+  .rack .flags { top: 9px; }
+}
+#newsfeed .ev { cursor: pointer; }
