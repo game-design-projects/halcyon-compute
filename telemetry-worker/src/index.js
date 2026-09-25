@@ -21,9 +21,10 @@ export default {
       catch { return json({ error: "bad json" }, 400); }
       if (!isId(b.session) || !Number.isInteger(b.seq) || b.seq < 0 || b.seq > 100000 || !Array.isArray(b.items) || b.items.length > 5000)
         return json({ error: "bad batch" }, 400);
-      await env.DB.prepare("INSERT OR IGNORE INTO batches (session, seq, player, seed, build, items) VALUES (?, ?, ?, ?, ?, ?)")
+      const meta = b.meta && typeof b.meta === "object" ? JSON.stringify(b.meta).slice(0, 4000) : null;
+      await env.DB.prepare("INSERT OR IGNORE INTO batches (session, seq, player, seed, build, items, meta) VALUES (?, ?, ?, ?, ?, ?, ?)")
         .bind(b.session, b.seq, isId(b.player) ? b.player : null, Number.isInteger(b.seed) ? b.seed : null,
-          String(b.build || "").slice(0, 64), JSON.stringify(b.items))
+          String(b.build || "").slice(0, 64), JSON.stringify(b.items), meta)
         .run();
       return json({ ok: true });
     }
@@ -32,17 +33,20 @@ export default {
       if (!env.ADMIN_TOKEN || req.headers.get("authorization") !== `Bearer ${env.ADMIN_TOKEN}`) return json({ error: "unauthorized" }, 401);
       if (url.pathname === "/v1/sessions") {
         const { results } = await env.DB.prepare(
-          "SELECT session, player, seed, build, MIN(received_at) AS first, MAX(received_at) AS last, COUNT(*) AS batches FROM batches GROUP BY session ORDER BY last DESC LIMIT 200").all();
+          "SELECT session, player, seed, build, MIN(received_at) AS first, MAX(received_at) AS last, COUNT(*) AS batches, MAX(seq) + 1 - COUNT(*) AS missing FROM batches GROUP BY session ORDER BY last DESC LIMIT 200").all();
         return json(results);
       }
       const m = url.pathname.match(/^\/v1\/session\/([A-Za-z0-9-]{8,64})$/);
       if (m) {
-        const { results } = await env.DB.prepare("SELECT seq, player, seed, build, items FROM batches WHERE session = ? ORDER BY seq").bind(m[1]).all();
+        const { results } = await env.DB.prepare("SELECT seq, player, seed, build, items, meta FROM batches WHERE session = ? ORDER BY seq").bind(m[1]).all();
         if (!results.length) return json({ error: "not found" }, 404);
         const items = results.flatMap(r => JSON.parse(r.items));
-        const meta = (items.find(i => i.k === "session") || {}).meta || {};
+        const rowMeta = results.find(r => r.meta);
+        const meta = (items.find(i => i.k === "session") || {}).meta || (rowMeta ? JSON.parse(rowMeta.meta) : {});
+        const seqs = results.map(r => r.seq), maxSeq = Math.max(...seqs), missing = [];
+        for (let i = 0; i <= maxSeq; i++) if (!seqs.includes(i)) missing.push(i);
         return json(Object.assign({}, meta, {
-          session: m[1], seed: results[0].seed, build: results[0].build,
+          session: m[1], seed: results[0].seed, build: results[0].build, missingBatches: missing,
           actions: items.filter(i => i.k === "act" || i.k === "rej"),
           events: items.filter(i => i.k === "ev"),
           snaps: items.filter(i => i.k === "snap"),

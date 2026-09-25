@@ -78,18 +78,70 @@
     async copyToClipboard() {
       try { await navigator.clipboard.writeText(TELE.exportJSON()); return true; } catch (e) { return false; }
     },
+    /* Reliable delivery: items are cut into numbered batches (≤ 48 KB each, so they also fit sendBeacon/keepalive),
+       kept in a pending queue (mirrored to localStorage) and removed only after the Worker answers 2xx. Every batch
+       carries the session meta, so a lost first batch can't orphan a session. The Worker ignores duplicates
+       (session, seq), so resending is safe. */
     flush(final) {
-      if (!endpoint || !enabled() || !log || !outbox.length) return;
-      const body = JSON.stringify({ v: LOG_V, session: log.session, player, seed: log.seed, build: log.build, seq: seq++, items: outbox.splice(0, 2000) });
+      if (!endpoint || !enabled() || !log) return;
+      while (outbox.length) {
+        const items = [];
+        let size = 0;
+        while (outbox.length && (items.length === 0 || size + JSON.stringify(outbox[0]).length < BATCH_BYTES)) {
+          const it = outbox.shift(); size += JSON.stringify(it).length; items.push(it);
+        }
+        pending.push({ session: log.session, body: JSON.stringify({ v: LOG_V, session: log.session, player, seed: log.seed, build: log.build, seq: seq++, meta: metaOf(log), items }) });
+      }
+      savePending();
       lastSend = performance.now();
-      try {
-        if (final && navigator.sendBeacon) { navigator.sendBeacon(endpoint, new Blob([body], { type: "text/plain" })); return; }
-        fetch(endpoint, { method: "POST", body, headers: { "content-type": "text/plain" }, keepalive: body.length < 60000, mode: "cors" })
-          .then(r => dlog("sent", r.status)).catch(e => dlog("send failed", e.message));
-      } catch (e) { dlog("send error", e.message); }
+      sendPending(final);
     },
-    tick() { if (endpoint && enabled() && outbox.length && performance.now() - lastSend > BATCH_MS) TELE.flush(false); },
+    tick() {
+      if (!endpoint || !enabled()) return;
+      const now = performance.now();
+      if (outbox.length && now - lastSend > BATCH_MS) TELE.flush(false);
+      else if (pending.length && !inflight && now - lastTry > backoff) sendPending(false);
+    },
+    get pendingCount() { return pending.length; },
   };
+  const BATCH_BYTES = 48000, PKEY = "halcyon.tele.pending", PMAX = 400;
+  let pending = [], inflight = false, lastTry = 0, backoff = 5000;
+  try { pending = JSON.parse(store.get(PKEY) || "[]"); if (!Array.isArray(pending)) pending = []; } catch (e) { pending = []; }
+  function metaOf(l) {
+    const m = {};
+    for (const k of ["v", "build", "session", "player", "startedAt", "seed", "sandbox", "continued", "startDay", "lang", "screen", "viewport", "ua", "embedded"]) m[k] = l[k];
+    return m;
+  }
+  function savePending() {
+    if (pending.length > PMAX) pending.splice(0, pending.length - PMAX);           // bounded; oldest go first
+    let json = JSON.stringify(pending);
+    while (json.length > 3e6 && pending.length) { pending.shift(); json = JSON.stringify(pending); }
+    store.set(PKEY, json);
+  }
+  function sendPending(final) {
+    if (!pending.length || (inflight && !final)) return;
+    lastTry = performance.now();
+    if (final && navigator.sendBeacon) {                // page is going away: best effort, keep what the browser refuses
+      const keep = [];
+      for (const p of pending) { let ok = false; try { ok = navigator.sendBeacon(endpoint, new Blob([p.body], { type: "text/plain" })); } catch (e) { ok = false; } if (!ok) keep.push(p); }
+      // a queued beacon is not proof of delivery, but the Worker dedups by (session, seq), so keep a copy for next load
+      store.set(PKEY, JSON.stringify(keep.length ? keep : pending));
+      return;
+    }
+    const p = pending[0];
+    inflight = true;
+    fetch(endpoint, { method: "POST", body: p.body, headers: { "content-type": "text/plain" }, keepalive: p.body.length < 60000, mode: "cors" })
+      .then(r => {
+        inflight = false;
+        if (r.ok || r.status === 400 || r.status === 413) {         // delivered, or permanently rejected: drop it
+          if (!r.ok) dlog("batch rejected", r.status);
+          pending.shift(); savePending(); backoff = 5000;
+          if (pending.length) sendPending(false);
+        } else { backoff = Math.min(300000, backoff * 2); dlog("send failed", r.status, "retry in", backoff); }
+      })
+      .catch(e => { inflight = false; backoff = Math.min(300000, backoff * 2); dlog("send failed", e.message, "retry in", backoff); });
+  }
+  if (pending.length) setTimeout(() => { if (endpoint && enabled()) sendPending(false); }, 3000);   // leftovers from a previous visit
   addEventListener("pagehide", () => TELE.flush(true));
   addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") TELE.flush(true); });
   window.addEventListener("error", e => push("ev", { d: null, t: "jsError", data: { msg: String(e.message).slice(0, 300), src: (e.filename || "").split("/").pop(), line: e.lineno } }));

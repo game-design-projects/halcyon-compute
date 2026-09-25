@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS batches (
   build TEXT,
   received_at TEXT NOT NULL DEFAULT (datetime('now')),
   items TEXT NOT NULL,              -- JSON array of telemetry items
+  meta TEXT,                        -- session meta, sent with every batch since v0.4.3
   PRIMARY KEY (session, seq)
 );
 CREATE INDEX IF NOT EXISTS batches_received ON batches (received_at);
