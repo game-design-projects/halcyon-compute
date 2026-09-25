@@ -5,6 +5,12 @@ Versions are milestones of the week-3 project; there are no tagged releases.
 
 ## [Unreleased]
 
+## [0.4.2] - 2026-09-25 (hotfix)
+
+### Fixed
+- Auto-pause no longer fires on every new contract offer (player feedback). By default it pauses only on cash < 0, plus a
+  one-time pause for the very first offer; old settings are migrated.
+
 ### Changed
 - **Auto-pause is quiet by default** (player telemetry: ~20 pauses in 6 minutes, 19 of them on new offers; "每次出新的合同都自动
   暂停"). New offers, failures and SLA misses no longer pause unless you turn them on in Settings; only cash below 0 pauses
