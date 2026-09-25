@@ -9,12 +9,14 @@ which "disruptive" startup is real before you bet on it.
 **Design write-up (characteristics, heuristics, depth evidence): [DESIGN.md](./DESIGN.md)**
 
 ## Play
-Open `index.html` in a browser. It is plain HTML/CSS/JS and also works from `file://`. Or serve it:
+Open `index.html` in a browser. **English and 简体中文**: switch any time with the **中 / EN** button in the top bar,
+the toggle on the main menu or in Settings, or the **L** key; the game keeps running and nothing restarts. The first
+visit follows your browser language; `?lang=zh` or `?lang=en` forces one. It is plain HTML/CSS/JS and also works from `file://`. Or serve it:
 ```bash
 python3 -m http.server 8765   # then http://localhost:8765/
 ```
 - **Controls** (press **?** in game for the list): Space pauses; 1-4 set 1x/2x/4x/8x; **N** skips to the next event;
-  V cycles map modes; M mutes; F toggles fullscreen; **A** opens the alerts tray; **O** opens settings and saves;
+  V cycles map modes; **L** switches 中文 / English; M mutes; F toggles fullscreen; **A** opens the alerts tray; **O** opens settings and saves;
   **R** repeats your last order on the hovered rack; **Ctrl/⌘+C / V / D** copy, paste and duplicate a rack blueprint;
   **Ctrl/⌘+Z** undoes; Esc closes or cancels; right-click cancels a drag.
 - Mouse: drag a catalog card onto a rack to buy it (**Shift+drag** fills the rack); drag a part inside the rack panel's
@@ -33,7 +35,7 @@ python3 -m http.server 8765   # then http://localhost:8765/
 
 ## Develop
 ```bash
-node --test test/*.test.js           # 138 tests: sim rules, determinism, bots, pace ghost, stage fit, UI logic
+node --test test/*.test.js           # 149 tests: sim rules, determinism, bots, pace ghost, stage fit, UI logic, i18n
 node bots/run.js --seeds 12 --ablate # depth report -> reports/depth.json
 ```
 
@@ -42,7 +44,7 @@ node bots/run.js --seeds 12 --ablate # depth report -> reports/depth.json
 | `js/sim.js` | Deterministic simulation core (seeded, 0.25-day substeps, no DOM). Loads in the browser and in Node |
 | `js/ui.js` | Rendering, drag and drop, dialogs. Contains no game rules |
 | `js/qol.js` | Pure UI logic (deliverability, blueprints, fill, undo, alerts); tested in Node |
-| `js/strings.js` | `L(key, params)`: every new UI string (English now; the i18n pass plugs in here) |
+| `js/i18n.js` + `js/i18n/*.js` | `L(key, params)` = `I18N.t`: English + 简体中文 dictionaries (`{ key: [en, zh] }`), language choice, dates. The sim emits language-neutral keys; the UI translates them ([docs/I18N.md](./docs/I18N.md)) |
 | `js/stage.js` | Fixed 1920×1080 game screen: scale-to-fit with CSS `zoom`, letterbox, fullscreen |
 | `bots/bots.js` | Greedy and planner reference players, used for depth measurement and the end-screen comparison |
 | `bots/run.js` | Ablation runner |

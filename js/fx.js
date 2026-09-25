@@ -151,7 +151,7 @@
     const key = `${text}|${size}|${color}|${DPR}|${Z}`;
     let sp = spriteCache.get(key);
     if (sp) return sp;
-    const k = DPR * Z * 1.15, font = `600 ${size}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+    const k = DPR * Z * 1.15, font = `600 ${size}px "Barlow Condensed", "Arial Narrow", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif`;   // CJK fallback (I4)
     let c = null;
     try { c = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(4, 4) : document.createElement("canvas"); } catch (e) { return null; }
     const g = c.getContext("2d");

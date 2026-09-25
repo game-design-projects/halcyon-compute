@@ -5,6 +5,33 @@ Versions are milestones of the week-3 project; there are no tagged releases.
 
 ## [Unreleased]
 
+### Added (UI pass B: English + 简体中文, and a text diet)
+- **简体中文** alongside English, for everything on screen: HUD, menus, how-to, chapter cards, the order board,
+  drawers, catalog, rack panel, alerts, tooltips and aria-labels, news, customers' offers, VC / policy / press texts,
+  toasts and floating labels, settings, the keyboard overlay, confirm states and the end screen (lessons, behind the
+  curtain). Switch any time with the **中 / EN** HUD button, the main-menu toggle, Settings → Language or the **L** key:
+  the game re-renders in place and never restarts. First visit: `?lang=` > saved choice > browser language. `<html lang>`
+  follows; every font stack falls back to system CJK fonts (PingFang SC / Hiragino / Noto Sans SC / YaHei); zh dates read
+  `第3年 10月11日`. A missing key falls back to English and logs `[i18n] missing zh: …` under `?debug=1`.
+- The sim stays language-neutral: `Sim.check()` results now carry `k` (key), `p` (params) and `code` (the rejection class
+  used by the "no" feedback) next to the unchanged English `msg`; news items carry `k`/`p`; cash events carry `p`. Old
+  saves without keys show their English text.
+- **Teach once:** until your first order, a ghost card glides from the catalog onto a rack (replaces the standing
+  "Drag onto a rack…" caption; never shown again).
+
+### Changed (text diet: "太多的文字我已经看麻了")
+- Visible words on the main screen mid-game cut from **291 to 141 (−52 %)** in English (words with letters 254 → 111,
+  −56 %); Chinese shows 80 characters + names and numbers in the same state (docs/I18N.md "Measurement").
+- Chapter cards: 3 bullets with an icon each (≤ 8 words / ≤ 12 characters); "where to find it" moved behind an ⓘ toggle.
+  The goal bar shows the chapter and the next milestone only (≤ 6 words); the long tips are gone.
+- News: title only, the body is the tooltip. Toasts: ≤ 5 words + a number (cash events read "Tax −$40k").
+- Icons instead of words: power-mode buttons, map modes, inactive info tabs, aisles, room units, the grid column, the
+  cooling mode, spine slots, rack status lines, drawer "paused" state; units and explanations moved to tooltips. Contract
+  pills show the customer only (days and units in the tooltip); empty racks drop their id and free-U labels.
+- One-time cards (memory scare, proposed law, VC round, cash warnings) are 2–3 icon bullets.
+- The end screen keeps its lessons, one line each, built from the loss keys (the worst period is the tooltip).
+- `js/strings.js` is replaced by `js/i18n.js` + `js/i18n/ui.js` + `js/i18n/content.js`.
+
 ### Added (UI pass A: the v4 contracts core on screen, forgiveness, QOL, "show, don't tell")
 - **Order board** above the floor from day 0 (was hidden until chapter 8): each offer shows its kind (web, inference,
   training job, frontier job, build-to-suit), terms (units × days and start; jobs: work, pay, deadline; fit-out),

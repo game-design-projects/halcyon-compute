@@ -5,7 +5,7 @@
   --panel: #F7F8F9; --line: #C3C9D0; --ink: #1D242C; --ink-2: #5F6B78;
   --tile: #CDD2D8; --tile-line: #BAC1C9; --cold: #C4D5E6; --hot: #E2D3C6; --rack: #2D333A;
   --pow-c: #E2A91C; --ok-c: #36A267; --bad-c: #E0532F; --sel: #FFD24A;
-  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --display: "Barlow Condensed", "Arial Narrow", "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
   /* game palette (read by js/ui.js via getComputedStyle; keep as #rrggbb hex) */
   --c-web: #3F8F76; --c-train: #4A6FB8; --c-infer: #7B61C9; --c-net: #6D7784; --c-cool: #4F9BB8; --c-tank: #B0548C;
   --c-mem: #9A7BD6; --c-frontier: #D98A1F; --c-contract: #2F8FA0; --c-good: #36A267; --c-bad: #C2452D; --c-warn: #E0A43A;
@@ -16,7 +16,7 @@
   --c-haz-lo: #36A267; --c-haz-mid: #E0A43A; --c-haz-hi: #C2452D; --c-lease: #2F8FA0; --c-fail: #E0402A;
   --hud-good: #7FE0A8; --hud-bad: #FF8466; --on-accent: #1E252D; --white: #FFFFFF; --shade: rgba(10,14,20,.55);
   --banner-bad: #7A2618; --banner-warn: #6B4A10; --banner-info: #1F4A63; --banner-ink: #FFF3E8;
-  --sans: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --sans: "Barlow", "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Noto Sans SC", "Microsoft YaHei", sans-serif;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -1096,3 +1096,37 @@ kbd { font: 600 12px var(--sans); background: var(--page); border: 1px solid var
 }
 #newsfeed .ev { cursor: pointer; }
 .tray-title .badge-short { color: var(--white); }
+
+/* ================= UI pass B: i18n (docs/I18N.md) + text diet ================= */
+/* CJK: Barlow has no CJK glyphs; the stacks fall back to system CJK fonts (I4). Chinese runs a touch lighter and without
+   the condensed display face's letter-spacing. */
+html.lang-zh .pausedtag, html.lang-zh .item .badge { letter-spacing: 0; }
+html.lang-zh .end, html.lang-zh .pop h3, html.lang-zh .goal b { font-weight: 600; }
+/* language toggles: HUD button (中 / EN), the menu and the settings row */
+.iconbtn.langbtn { font: 700 14px/1 var(--sans); min-width: 34px; letter-spacing: 0; }
+.langtog { display: inline-flex; border: 1px solid var(--line); border-radius: 5px; overflow: hidden; }
+.langtog button { border: 0; background: var(--page); padding: 4px 10px; cursor: pointer; font: 600 13px var(--sans); }
+.langtog button + button { border-left: 1px solid var(--line); }
+.langtog button[aria-pressed="true"] { background: var(--hud); color: var(--hud-ink); }
+.menuhead .mlang { margin-left: auto; align-self: flex-start; }
+/* power-mode buttons are icons (their names are tooltips); the active one keeps a short label */
+.seg button .mlab { display: none; }
+.seg button[aria-pressed="true"] .mlab { display: block; }
+/* aisles and room units: icons only */
+.aisle { justify-content: flex-start; }
+.crac span { font-weight: 700; }
+/* chapter card: "where to find it" behind an ⓘ toggle */
+.chap details.where { display: block; border-top: 1px solid var(--line); padding-top: 6px; }
+.chap details.where summary { cursor: pointer; list-style: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; color: var(--ink-2); border: 1px solid var(--line); }
+.chap details.where summary::-webkit-details-marker { display: none; }
+.chap details.where[open] summary { background: var(--hud); color: var(--hud-ink); }
+.chap details.where > span { display: block; margin-top: 6px; }
+/* teach once: a ghost card glides from the catalog onto a rack until the first order (replaces the standing caption) */
+.teach { position: absolute; left: 0; top: 0; z-index: 40; pointer-events: none; display: flex; align-items: center; gap: 2px; filter: drop-shadow(0 3px 6px rgba(0,0,0,.35)); }
+.teach .av { width: 30px; height: 30px; border-radius: 6px; display: grid; place-items: center; color: #fff; outline: 2px dashed var(--sel); outline-offset: 2px; }
+.teach .av svg.i { width: 18px; height: 18px; }
+.teach > svg.i { width: 22px; height: 22px; color: var(--sel); margin-left: -6px; margin-top: 18px; }
+.tray-title h2 svg.i { width: 18px; height: 18px; vertical-align: -3px; }
+/* text diet: map modes and inactive info tabs are icons (names in tooltips); the active tab keeps its label */
+.modes button .mlab { display: none; }
+.tabs button[aria-selected="false"] > span:not(.dot) { display: none; }

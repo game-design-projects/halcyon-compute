@@ -243,12 +243,12 @@
       if (c.mech && s.mech[c.mech] === false) return;
       if (sb || i === 0) add(0, "chapter", { idx: i });
     });
-    add(0, "news", { title: "Welcome to Halcyon Compute", body: core(s) ? "Two web racks, one customer and $400k. Sign offers on the order board to grow." : "Two racks of web servers and $400k. Grow it.", tone: "info" });
+    add(0, "news", { title: "Welcome to Halcyon Compute", body: core(s) ? "Two web racks, one customer and $400k. Sign offers on the order board to grow." : "Two racks of web servers and $400k. Grow it.", tone: "info", ...kp(core(s) ? "n.welcome" : "n.welcomeFlat") });
     if (s.mech.gens) {
       const RUMOR = ["", "", "Kestrel C2 and Heron M2 rumored", "Third-generation cards rumored", "Fourth-generation cards rumored", "Fifth-generation cards rumored"];
       GEN_LAUNCH.forEach((d, i) => {
         const g = i + 2;
-        add(d - 60 + j(), "news", { title: RUMOR[g], body: `Kestrel C${g} and Heron M${g} expected in about two months.`, tone: "info", cat: "hardware" });
+        add(d - 60 + j(), "news", { title: RUMOR[g], body: `Kestrel C${g} and Heron M${g} expected in about two months.`, tone: "info", cat: "hardware", ...kp("n.rumor", { g }) });
         add(d, "launch", { gen: g });
       });
     }
@@ -257,10 +257,10 @@
       const st = startOf("memory") + 40, shocks = [];
       for (let t = st + R() * 120; t < K.END_DAY - 90; t += 220 + R() * 160) shocks.push(Math.round(t));
       for (const d of shocks) {
-        const lead = 20 + Math.round(R() * 20), sc = C.SCARES[Math.floor(R() * C.SCARES.length)];
+        const lead = 20 + Math.round(R() * 20), si = Math.floor(R() * C.SCARES.length), sc = C.SCARES[si];
         const dur = 45 + Math.round(R() * 45), peak = +(1.6 + R() * 0.4).toFixed(2);
-        add(d - lead, "news", { group: "memory", title: sc.title, body: sc.body, tone: "bad", cat: "memory", icon: "layers" });
-        add(d - lead + 10, "news", { group: "memory", title: C.SCARE_FOLLOW.real.title, body: C.SCARE_FOLLOW.real.body, tone: "info", cat: "memory" });
+        add(d - lead, "news", { group: "memory", title: sc.title, body: sc.body, tone: "bad", cat: "memory", icon: "layers", ...kp("n.scare" + si) });
+        add(d - lead + 10, "news", { group: "memory", title: C.SCARE_FOLLOW.real.title, body: C.SCARE_FOLLOW.real.body, tone: "info", cat: "memory", ...kp("n.scareReal") });
         add(d, "hbmShock", { group: "memory", until: d + dur, peak });
         add(d + dur, "hbmEnd", { group: "memory" });
         s.hidden.scares.push({ day: d - lead, real: true });
@@ -269,9 +269,9 @@
       for (let i = 0; i < nFalse; i++) {
         const d = Math.round(st + R() * (K.END_DAY - st - 60));
         if (shocks.some(x => Math.abs(x - d) < 60)) continue;
-        const sc = C.SCARES[Math.floor(R() * C.SCARES.length)];
-        add(d, "news", { group: "memory", title: sc.title, body: sc.body, tone: "bad", cat: "memory", icon: "layers" });
-        add(d + 10, "news", { group: "memory", title: C.SCARE_FOLLOW.fake.title, body: C.SCARE_FOLLOW.fake.body, tone: "info", cat: "memory" });
+        const si = Math.floor(R() * C.SCARES.length), sc = C.SCARES[si];
+        add(d, "news", { group: "memory", title: sc.title, body: sc.body, tone: "bad", cat: "memory", icon: "layers", ...kp("n.scare" + si) });
+        add(d + 10, "news", { group: "memory", title: C.SCARE_FOLLOW.fake.title, body: C.SCARE_FOLLOW.fake.body, tone: "info", cat: "memory", ...kp("n.scareFake") });
         s.hidden.scares.push({ day: d, real: false });
       }
     }
@@ -285,7 +285,7 @@
           const d = Math.round(y * 360 + 150 + R() * 90), dur = 5 + Math.round(R() * 5), mult = +(2 + R()).toFixed(2);
           if (d - 5 < st || d + dur > K.END_DAY) continue;
           waves.push([d, d + dur]);
-          add(d - 5, "news", { group: "energy", title: "Heat wave forecast next week", body: "Grid operator warns of price spikes.", tone: "bad", cat: "energy", icon: "temp" });
+          add(d - 5, "news", { group: "energy", title: "Heat wave forecast next week", body: "Grid operator warns of price spikes.", tone: "bad", cat: "energy", icon: "temp", ...kp("n.heatFore") });
           add(d, "heatWave", { group: "energy", until: d + dur, mult });
         }
       }
@@ -309,7 +309,7 @@
       for (let y = 0; y * 360 < K.END_DAY; y++) {
         const roll = R(), d = Math.round(y * 360 + 160 + R() * 60), dur = 30 + Math.round(R() * 30);
         if (roll > 0.6 || d - 12 < st || d > K.END_DAY) continue;
-        add(d - 12, "news", { group: "environment", title: "Drought watch issued", body: "Water utility may cap industrial use this summer.", tone: "bad", cat: "environment", icon: "drop" });
+        add(d - 12, "news", { group: "environment", title: "Drought watch issued", body: "Water utility may cap industrial use this summer.", tone: "bad", cat: "environment", icon: "drop", ...kp("n.droughtWatch") });
         add(d, "drought", { group: "environment", until: d + dur });
       }
     }
@@ -317,30 +317,30 @@
     // ---- ch17 disruption (re-timed v1 chapter 6)
     if (s.mech.disrupt) {
       const D = 1290;
-      add(1200, "news", { group: "disrupt", title: "Two startups demo new accelerators", body: "Lattice (inference ASIC) and Photon (optical training). Both need immersion tanks.", tone: "info", cat: "vendor" });
+      add(1200, "news", { group: "disrupt", title: "Two startups demo new accelerators", body: "Lattice (inference ASIC) and Photon (optical training). Both need immersion tanks.", tone: "info", cat: "vendor", ...kp("n.startups") });
       add(D, "exoticLaunch", { model: 0 });
-      add(1380 + j(), "news", { group: "disrupt", title: `${NAME[Rx]} signs a hyperscaler deal`, body: "Undisclosed volume.", tone: "good", vendor: Rx, cat: "vendor" });
-      add(1350 + j(), "news", { group: "disrupt", title: `${NAME[Fx]} pushes its next ship date`, body: "\"A short delay to raise yields.\"", tone: "info", vendor: Fx, cat: "vendor" });
+      add(1380 + j(), "news", { group: "disrupt", title: `${NAME[Rx]} signs a hyperscaler deal`, body: "Undisclosed volume.", tone: "good", vendor: Rx, cat: "vendor", ...kp("n.hyperDeal", { v: NAME[Rx] }) });
+      add(1350 + j(), "news", { group: "disrupt", title: `${NAME[Fx]} pushes its next ship date`, body: "\"A short delay to raise yields.\"", tone: "info", vendor: Fx, cat: "vendor", ...kp("n.shipDelay", { v: NAME[Fx] }) });
       add(1440, "exoticLaunch", { model: 1 });
       add(1450, "incumbentCut", { group: "disrupt" });
-      add(1425 + j(), "news", { group: "disrupt", title: `${NAME[Fx]} lead architect departs`, body: "Joins a competitor.", tone: "bad", vendor: Fx, cat: "vendor" });
-      add(1500, "vendorDeath", { vendor: Fx, title: `${NAME[Fx]} winds down`, body: "Installed units lose firmware support and stop working." });
+      add(1425 + j(), "news", { group: "disrupt", title: `${NAME[Fx]} lead architect departs`, body: "Joins a competitor.", tone: "bad", vendor: Fx, cat: "vendor", ...kp("n.architect", { v: NAME[Fx] }) });
+      add(1500, "vendorDeath", { vendor: Fx, title: `${NAME[Fx]} winds down`, body: "Installed units lose firmware support and stop working.", ...kp("n.windDown", { v: NAME[Fx] }) });
       add(1590, "exoticLaunch", { model: 2 });
       add(1330, "pitch", { group: "disrupt" });
       if (s.hidden.nanofabDies) {
-        add(1420 + j(), "news", { group: "disrupt", title: "Nanofab sells its only fab", body: "No successor product announced.", tone: "bad", vendor: "nanofab", cat: "vendor" });
+        add(1420 + j(), "news", { group: "disrupt", title: "Nanofab sells its only fab", body: "No successor product announced.", tone: "bad", vendor: "nanofab", cat: "vendor", ...kp("n.nanoSells") });
         add(1500, "firesale", { group: "disrupt" });
-        add(1560, "vendorDeath", { vendor: "nanofab", title: "Nanofab exits the memory business", body: "PM-900 firmware is withdrawn. Racks holding one run at 60 % until it is pulled." });
+        add(1560, "vendorDeath", { vendor: "nanofab", title: "Nanofab exits the memory business", body: "PM-900 firmware is withdrawn. Racks holding one run at 60 % until it is pulled.", ...kp("n.nanoExit") });
       } else {
-        add(1420 + j(), "news", { group: "disrupt", title: "Nanofab posts a record quarter", body: "PM-900 volume up 40 %.", tone: "good", vendor: "nanofab", cat: "vendor" });
+        add(1420 + j(), "news", { group: "disrupt", title: "Nanofab posts a record quarter", body: "PM-900 volume up 40 %.", tone: "good", vendor: "nanofab", cat: "vendor", ...kp("n.nanoRecord") });
       }
       for (let d = 1200; d <= K.END_DAY; d += K.BENCH_EVERY) add(d, "bench", {});
       // M65 demand disruption: a preprint, then either independent reproduction (real) or failure to replicate
       const dd = 1400 + Math.round((R() - 0.5) * 20);
-      add(dd - 30, "news", { group: "disrupt", title: "Preprint claims 3x cheaper inference", body: "\"Algorithmic breakthrough\" circulates among AI labs.", tone: "info", cat: "market" });
+      add(dd - 30, "news", { group: "disrupt", title: "Preprint claims 3x cheaper inference", body: "\"Algorithmic breakthrough\" circulates among AI labs.", tone: "info", cat: "market", ...kp("n.preprint") });
       add(dd - 15, "news", s.hidden.demandCut
-        ? { group: "disrupt", title: "Breakthrough reproduced by independent labs", body: "Several labs confirm the speedup.", tone: "bad", cat: "market" }
-        : { group: "disrupt", title: "Breakthrough results fail to replicate", body: "Independent labs cannot reproduce the numbers.", tone: "good", cat: "market" });
+        ? { group: "disrupt", title: "Breakthrough reproduced by independent labs", body: "Several labs confirm the speedup.", tone: "bad", cat: "market", ...kp("n.reproduced") }
+        : { group: "disrupt", title: "Breakthrough results fail to replicate", body: "Independent labs cannot reproduce the numbers.", tone: "good", cat: "market", ...kp("n.noReplicate") });
       add(dd, "demandShock", { group: "disrupt" });
     }
     E.sort((a, b) => a.day - b.day);
@@ -377,6 +377,9 @@
     addEvents(s, E.filter(e => e.day <= K.END_DAY));
     log(s, `policies scheduled from d${st}`);
   }
+  /* i18n (docs/I18N.md I2): `kp(key, params)` tags a news item / event with a language-neutral key the UI translates
+     (`<key>.t` = title, `<key>.b` = body). Param values starting with "@" are themselves keys. Never read by the rules. */
+  const kp = (k, p) => (p ? { k, p } : { k });
   function pushNews(s, n) { s.news.unshift(Object.assign({ day: Math.floor(s.day), tone: "info", cat: "general" }, n)); if (s.news.length > 60) s.news.pop(); }
 
   function onChapter(s, key) {
@@ -400,7 +403,7 @@
       case "chapter":
         s.chapter = Math.max(s.chapter, e.idx); onChapter(s, CHAPTERS[e.idx].key);
         log(s, `chapter ${CHAPTERS[e.idx].key}`); break;
-      case "news": pushNews(s, { title: e.title, body: e.body, tone: e.tone, vendor: e.vendor, cat: e.cat || "general", icon: e.icon }); break;
+      case "news": pushNews(s, Object.assign({ title: e.title, body: e.body, tone: e.tone, vendor: e.vendor, cat: e.cat || "general", icon: e.icon }, e.k ? kp(e.k, e.p) : null)); break;
       case "launch": {
         const g = e.gen;
         for (const it of Object.values(s.items)) {
@@ -408,7 +411,7 @@
         }
         updatePrices(s);
         for (const w of WORKLOADS) s.market.mult[w] *= GEN_DROP[w];
-        pushNews(s, { title: `Generation ${g} ships`, body: "Rivals upgrade, so compute prices drop. Older cards resell for less; last gen is on sale.", tone: "bad", icon: "chip", cat: "hardware" });
+        pushNews(s, { title: `Generation ${g} ships`, body: "Rivals upgrade, so compute prices drop. Older cards resell for less; last gen is on sale.", tone: "bad", icon: "chip", cat: "hardware", ...kp("n.genShips", { g }) });
         log(s, `gen ${g} launch`); break;
       }
       case "exoticLaunch": {
@@ -423,23 +426,23 @@
         }
         if (m === 1) s.market.mult[s.items[real === "lattice" ? "lat1" : "pho1"].only] *= 0.8;
         if (m === 2) s.market.mult[s.items[real === "lattice" ? "lat1" : "pho1"].only] *= 0.85;
-        if (names.length && on(s, "disrupt")) pushNews(s, { title: `${names.join(" and ")} on sale`, body: m === 0 ? "Pilot quantities. Needs an immersion tank rack." : "Vendor claims a big jump in performance per watt.", tone: "info", icon: "rocket", cat: "vendor" });
+        if (names.length && on(s, "disrupt")) pushNews(s, { title: `${names.join(" and ")} on sale`, body: m === 0 ? "Pilot quantities. Needs an immersion tank rack." : "Vendor claims a big jump in performance per watt.", tone: "info", icon: "rocket", cat: "vendor", ...kp(m === 0 ? "n.exotic0" : "n.exotic1", { names: names.join(" + ") }) });
         log(s, `exotic model ${m} launch`);
         break;
       }
       case "pitch":
-        pushNews(s, { title: "PM-900, 30 % off", body: "Nanofab: \"Adds 25 % memory bandwidth to every GPU in the rack. Fixes your HBM bottleneck.\"", tone: "pitch", vendor: "nanofab", icon: "tag", cat: "vendor" });
+        pushNews(s, { title: "PM-900, 30 % off", body: "Nanofab: \"Adds 25 % memory bandwidth to every GPU in the rack. Fixes your HBM bottleneck.\"", tone: "pitch", vendor: "nanofab", icon: "tag", cat: "vendor", ...kp("n.pitch") });
         break;
       case "firesale":
         s.items.pm9.price = s.items.pm9.base = Math.round(BASE_ITEMS.pm9.price * PM9_FIRESALE);
-        pushNews(s, { title: "PM-900 now 60 % off", body: "\"Limited-time inventory clearance.\"", tone: "pitch", vendor: "nanofab", icon: "tag", cat: "vendor" });
+        pushNews(s, { title: "PM-900 now 60 % off", body: "\"Limited-time inventory clearance.\"", tone: "pitch", vendor: "nanofab", icon: "tag", cat: "vendor", ...kp("n.firesale") });
         break;
       case "vendorDeath": {
         let lost = 0;
         for (const d of allOwnedDevices(s)) if (s.items[d.type].vendor === e.vendor && !d.leased) lost += resale(s, d);
         s.vendors[e.vendor].dead = true;
         addLoss(s, "bricked", lost);
-        pushNews(s, { title: e.title, body: e.body, tone: "bad", vendor: e.vendor, cat: "vendor" });
+        pushNews(s, Object.assign({ title: e.title, body: e.body, tone: "bad", vendor: e.vendor, cat: "vendor" }, e.k ? kp(e.k, e.p) : null));
         log(s, `vendor ${e.vendor} dead, wrote off ${lost.toFixed(1)}`); break;
       }
       case "bench": {
@@ -456,55 +459,55 @@
         s.market.gpuCut = K.INCUMBENT_CUT;
         for (const it of Object.values(s.items)) if (it.role === "gpu") it.base = Math.round(it.base * K.INCUMBENT_CUT);
         updatePrices(s);
-        pushNews(s, { title: "Kestrel and Heron cut prices 25 %", body: "The incumbents respond to the startups.", tone: "good", icon: "tag", cat: "hardware" });
+        pushNews(s, { title: "Kestrel and Heron cut prices 25 %", body: "The incumbents respond to the startups.", tone: "good", icon: "tag", cat: "hardware", ...kp("n.cut") });
         log(s, "incumbent price cut"); break;
       }
       case "demandShock": {    // M65
         if (s.hidden.demandCut) {
           s.market.dmult.infer *= K.DEMAND_CUT;
           for (const c of s.contracts.filter(x => x.bts && x.w === "infer"))    // build-to-suit customers need far less too
-            pushNews(s, { title: `${c.cust} cancels its build-to-suit deal`, body: "They need far less compute now. No penalty; the fit-out is sunk.", tone: "bad", cat: "contracts" });
+            pushNews(s, { title: `${c.cust} cancels its build-to-suit deal`, body: "They need far less compute now. No penalty; the fit-out is sunk.", tone: "bad", cat: "contracts", ...kp("n.btsCancel", { c: c.cust }) });
           s.contracts = s.contracts.filter(x => !(x.bts && x.w === "infer"));
-          pushNews(s, { title: "Inference demand drops 35 %", body: "Labs ship the new algorithm; they need far less compute.", tone: "bad", cat: "market" });
-        } else pushNews(s, { title: "Inference demand steady", body: "The hyped paper changed nothing.", tone: "info", cat: "market" });
+          pushNews(s, { title: "Inference demand drops 35 %", body: "Labs ship the new algorithm; they need far less compute.", tone: "bad", cat: "market", ...kp("n.demandDrop") });
+        } else pushNews(s, { title: "Inference demand steady", body: "The hyped paper changed nothing.", tone: "info", cat: "market", ...kp("n.demandSteady") });
         log(s, `demand shock real=${s.hidden.demandCut}`); break;
       }
       case "hbmShock":
         Object.assign(s.hbm, { target: e.peak, shortage: true, until: e.until });
-        pushNews(s, { title: "HBM shortage: GPU lead times triple", body: `GPU shipping now ${K.SHORT_SHIP_DAYS} days. Prices climbing.`, tone: "bad", cat: "memory", icon: "layers" });
+        pushNews(s, { title: "HBM shortage: GPU lead times triple", body: `GPU shipping now ${K.SHORT_SHIP_DAYS} days. Prices climbing.`, tone: "bad", cat: "memory", icon: "layers", ...kp("n.hbmShort", { d: K.SHORT_SHIP_DAYS }) });
         log(s, `hbm shock peak=${e.peak} until=${e.until}`); break;
       case "hbmEnd":
         Object.assign(s.hbm, { target: 1, shortage: false });
-        pushNews(s, { title: "HBM supply normalizes", body: "GPU lead times back to normal.", tone: "good", cat: "memory" });
+        pushNews(s, { title: "HBM supply normalizes", body: "GPU lead times back to normal.", tone: "good", cat: "memory", ...kp("n.hbmEnd") });
         log(s, "hbm shock end"); break;
       case "heatWave":
         s.heatWave = { start: s.day, until: e.until, mult: e.mult }; s.prog.heatWaves++;
-        pushNews(s, { title: "Heat wave: spot power spikes", body: `Prices x${e.mult} until it breaks.`, tone: "bad", cat: "energy", icon: "temp" });
+        pushNews(s, { title: "Heat wave: spot power spikes", body: `Prices x${e.mult} until it breaks.`, tone: "bad", cat: "energy", icon: "temp", ...kp("n.heatWave", { x: e.mult }) });
         log(s, `heat wave x${e.mult} until ${e.until}`); break;
       case "outage": {
         s.outage = { start: s.day, until: e.until }; s.prog.outages++;
-        if (s.ups) pushNews(s, { title: "Grid outage: generator running", body: "UPS carried the load. Diesel is burning.", tone: "info", cat: "facilities", icon: "bolt" });
+        if (s.ups) pushNews(s, { title: "Grid outage: generator running", body: "UPS carried the load. Diesel is burning.", tone: "info", cat: "facilities", icon: "bolt", ...kp("n.outageUps") });
         else {
-          pushNews(s, { title: "Grid outage: everything is down", body: "No backup power. Output stops until the grid returns.", tone: "bad", cat: "facilities", icon: "bolt" });
+          pushNews(s, { title: "Grid outage: everything is down", body: "No backup power. Output stops until the grid returns.", tone: "bad", cat: "facilities", icon: "bolt", ...kp("n.outage") });
           if (on(s, "reputation")) { repHit(s, K.REP_OUTAGE); press(s, "outage", 4); }
         }
         log(s, `outage until ${e.until} ups=${s.ups}`); break;
       }
       case "drought":
         s.drought = { start: s.day, until: e.until };
-        pushNews(s, { title: "Drought: water use capped", body: "Evaporative cooling loses 40 % capacity.", tone: "bad", cat: "environment", icon: "drop" });
+        pushNews(s, { title: "Drought: water use capped", body: "Evaporative cooling loses 40 % capacity.", tone: "bad", cat: "environment", icon: "drop", ...kp("n.drought") });
         log(s, `drought until ${e.until}`); break;
       case "policyAnnounce": {
         const p = policyById(s, e.pid); p.announced = true;
-        pushNews(s, { title: `Proposed: ${p.title}`, body: `${p.body} Vote on day ${p.vote}.`, tone: "info", cat: "policy", icon: "flag" });
+        pushNews(s, { title: `Proposed: ${p.title}`, body: `${p.body} Vote on day ${p.vote}.`, tone: "info", cat: "policy", icon: "flag", ...kp("n.polPropose", { pol: "@pol." + p.kind, vote: p.vote }) });
         log(s, `policy ${p.id} announced, vote ${p.vote}`); break;
       }
       case "policySignal": {   // indirect signal: positive with probability p0 (more positives = likelier to pass)
         const p = policyById(s, e.pid), h = s.hidden.policy[p.id];
         const up = nextRand(s) < h.p0, pool = C.POLICY_SIGNALS[up ? "up" : "down"];
-        const title = pool[Math.floor(nextRand(s) * pool.length)];
+        const si = Math.floor(nextRand(s) * pool.length), title = pool[si];
         p.signals.push({ day: Math.floor(s.day), up });
-        pushNews(s, { title: `${p.title}: ${title}`, body: "", tone: "info", cat: "policy", icon: up ? "trend" : "warn" });
+        pushNews(s, { title: `${p.title}: ${title}`, body: "", tone: "info", cat: "policy", icon: up ? "trend" : "warn", ...kp("n.polSignal", { pol: "@pol." + p.kind, sig: `@sig.${up ? "up" : "down"}${si}` }) });
         log(s, `policy ${p.id} signal ${up ? "up" : "down"}`); break;
       }
       case "policyVote": policyVote(s, policyById(s, e.pid)); break;
@@ -920,9 +923,10 @@
       log(s, "migrated save to v4");
     }
   }
-  function logCash(s, amt, kind, label) {
+  /* `p` (optional) = language-neutral params for the UI (e.g. { c: customer, it: item name }); `label` stays English */
+  function logCash(s, amt, kind, label, p) {
     ensureCashLog(s);
-    s.cashEvents.push({ n: ++s.cashSeq, day: round2(s.day), amt: round2(amt), kind, label });
+    s.cashEvents.push(Object.assign({ n: ++s.cashSeq, day: round2(s.day), amt: round2(amt), kind, label }, p ? { p } : null));
     s.totals.events = (s.totals.events || 0) + amt;      // cumulative: money conservation over a whole game
     if (s.cashEvents.length > CASH_LOG_MAX) s.cashEvents.shift();
     if (DEBUG && Math.abs(amt) >= 10) console.debug(`[sim d${s.day.toFixed(2)}] cash ${amt >= 0 ? "+" : ""}${amt.toFixed(1)} ${kind}: ${label}`);
@@ -933,7 +937,7 @@
     const p = C.PRESS[kind];
     repHit(s, hit != null ? hit : K.PRESS_HIT);
     s.scandalUntil = s.day + K.SCANDAL_DAYS;
-    pushNews(s, { title: p.title, body: p.body, tone: "bad", cat: "press", icon: "news" });
+    pushNews(s, { title: p.title, body: p.body, tone: "bad", cat: "press", icon: "news", ...kp("n.press." + kind) });
     log(s, `press: ${kind}, rep ${repOf(s).toFixed(1)}`);
   }
 
@@ -960,12 +964,12 @@
 
   function fits(s, r, it, mode) {
     const mm = mode || r.mode, m = MODES[mm === "off" ? "std" : mm];   // a parked rack is budgeted as if it ran Standard
-    if (it.tank && !r.tank) return "Needs an immersion tank rack";
-    if (r.tank && !it.tank && it.role !== "net") return "Tank racks only take exotic cards and switches";
+    if (it.tank && !r.tank) return fit("Needs an immersion tank rack", "c.needTank");
+    if (r.tank && !it.tank && it.role !== "net") return fit("Tank racks only take exotic cards and switches", "c.tankOnly");
     const free = K.RACK_U - usedU(s, r);
-    if (free < it.u) return `Needs ${it.u}U, ${free}U free`;
-    if (rackKwAll(s, r) + it.kw * m.kw > K.RACK_KW + 1e-9) return `Rack limit ${K.RACK_KW} kW`;
-    if (gridKwAll(s) + it.kw * m.kw > s.gridKw + 1e-9) return `Grid limit ${s.gridKw} kW`;
+    if (free < it.u) return fit(`Needs ${it.u}U, ${free}U free`, "c.needU", { u: it.u, free });
+    if (rackKwAll(s, r) + it.kw * m.kw > K.RACK_KW + 1e-9) return fit(`Rack limit ${K.RACK_KW} kW`, "c.rackKw", { kw: K.RACK_KW });
+    if (gridKwAll(s) + it.kw * m.kw > s.gridKw + 1e-9) return fit(`Grid limit ${s.gridKw} kW`, "c.grid", { kw: s.gridKw });
     return null;
   }
   function findDev(r, uid) { return r.devices.findIndex(d => d.uid === uid); }
@@ -975,7 +979,14 @@
     borrow: "finance", repay: "finance", lease: "finance", returnLease: "finance", buildHall: "facilities", ups: "facilities", crac: "facilities",
     ppa: "energy", solar: "energy", cooling: "environment", acceptRound: "investors", declineRound: "investors", buyback: "investors",
     pr: "reputation", lobby: "policy" };
-  const no = msg => ({ ok: false, msg });
+  /* check() results: `msg` = the English text (bots, logs and tests match on it); `k` + `p` = a language-neutral key and
+     params the UI translates (docs/I18N.md I2); `code` = the rejection class for show-not-tell feedback */
+  const CHK_CODE = { "c.needs": "cash", "c.fitoutCash": "cash", "c.cash": "cash", "c.needU": "space", "c.rackKw": "kw", "c.rackDraw": "kw",
+    "c.grid": "grid", "c.shelfFull": "shelf" };
+  const no = (msg, k, p) => (msg && typeof msg === "object" ? no(msg.msg, msg.k, msg.p) : { ok: false, msg, k, p, code: CHK_CODE[k] || "other" });
+  const yes = (msg, k, p) => ({ ok: true, msg, k, p });
+  const fit = (msg, k, p) => ({ msg, k, p });
+  const needs = x => no(`Needs $${x}k`, "c.needs", { x });
   const gridNext = s => s.gridTier === 0 ? { kw: K.GRID_KW_UP, cost: K.GRID_COST, days: K.GRID_DAYS }
     : s.gridTier === 1 && on(s, "facilities") ? { kw: K.GRID_KW_UP2, cost: K.GRID_COST2, days: K.GRID_DAYS2 }
     : s.gridTier === 2 && on(s, "facilities") ? { kw: K.GRID_KW_UP3, cost: K.GRID_COST3, days: K.GRID_DAYS3 } : null;
@@ -1001,244 +1012,245 @@
   function roundCost(s) { return Math.max(1, K.BUYBACK_STEP * companyValue(s)); }
 
   function check(s, a) {
-    if (s.over) return no("Game over");
-    if (!a || !a.type) return no("Unknown action");
-    if (GATE[a.type] && !on(s, GATE[a.type])) return no(`Unlocks in chapter ${CH_IDX[GATE[a.type]] + 1}`);
+    if (s.over) return no("Game over", "c.over");
+    if (!a || !a.type) return no("Unknown action", "c.unknown");
+    if (GATE[a.type] && !on(s, GATE[a.type])) return no(`Unlocks in chapter ${CH_IDX[GATE[a.type]] + 1}`, "c.locked", { n: CH_IDX[GATE[a.type]] + 1 });
     const r = a.rack != null ? rackById(s, a.rack) : null;
-    if (RACK_ACTIONS.has(a.type) && !r) return no("No such rack");
+    if (RACK_ACTIONS.has(a.type) && !r) return no("No such rack", "c.noRack");
     switch (a.type) {
       case "buy": case "lease": {
         const it = s.items[a.item];
-        if (!it || !isAvail(s, it)) return no("Not on sale");
-        if (a.type === "lease" && it.role !== "gpu") return no("Only GPUs can be leased");
-        if (exportBlocked(s, it)) return no(`Export quota used (${K.EXPORT_QUOTA}/quarter)`);
-        if (a.type === "buy" && s.cash < it.price) return no(`Needs $${it.price}k`);
+        if (!it || !isAvail(s, it)) return no("Not on sale", "c.notSale");
+        if (a.type === "lease" && it.role !== "gpu") return no("Only GPUs can be leased", "c.leaseGpu");
+        if (exportBlocked(s, it)) return no(`Export quota used (${K.EXPORT_QUOTA}/quarter)`, "c.quota", { n: K.EXPORT_QUOTA });
+        if (a.type === "buy" && s.cash < it.price) return needs(it.price);
         const f = fits(s, r, it); if (f) return no(f);
         const days = shipDays(s, it) + K.INSTALL_DAYS;
-        return { ok: true, msg: a.type === "buy" ? `$${it.price}k, online in ${days} days` : `Lease $${round2(it.price * K.LEASE_RATE)}k/day, online in ${days} days` };
+        return a.type === "buy" ? yes(`$${it.price}k, online in ${days} days`, "c.buy", { x: it.price, d: days })
+          : yes(`Lease $${round2(it.price * K.LEASE_RATE)}k/day, online in ${days} days`, "c.lease", { x: round2(it.price * K.LEASE_RATE), d: days });
       }
       case "cancelOrder": {   // coyote time: undo a purchase while it is still on the truck
         const j = orderJob(s, a.uid);
-        if (!j) return no("No such order");
-        if (j.phase !== "ship") return no("Already shipped: sell it instead");
-        return { ok: true, msg: j.kind === "buy" ? `Order cancelled: $${round2(j.paid)}k refunded` : "Lease cancelled" };
+        if (!j) return no("No such order", "c.noOrder");
+        if (j.phase !== "ship") return no("Already shipped: sell it instead", "c.shipped");
+        return j.kind === "buy" ? yes(`Order cancelled: $${round2(j.paid)}k refunded`, "c.orderCancel", { x: round2(j.paid) }) : yes("Lease cancelled", "c.leaseCancel");
       }
       case "move": {
-        const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack");
-        if (a.to === a.rack) return no("Already here");
-        const to = rackById(s, a.to); if (!to) return no("No such rack");
-        if (hasJob(s, a.uid)) return no("A job is pending on it");
+        const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack", "c.notIn");
+        if (a.to === a.rack) return no("Already here", "c.here");
+        const to = rackById(s, a.to); if (!to) return no("No such rack", "c.noRack");
+        if (hasJob(s, a.uid)) return no("A job is pending on it", "c.busy");
         const f = fits(s, to, itemOf(s, r.devices[i])); if (f) return no(f);
-        return { ok: true, msg: `Move, ${K.MOVE_DAYS} day` };
+        return yes(`Move, ${K.MOVE_DAYS} day`, "c.move", { d: K.MOVE_DAYS });
       }
       case "sell": {
-        const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack");
-        if (r.devices[i].leased) return no("Leased: return it instead");
-        if (hasJob(s, a.uid)) return no("A job is pending on it");
-        return { ok: true, msg: `Sell for $${Math.round(resale(s, r.devices[i]))}k` };
+        const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack", "c.notIn");
+        if (r.devices[i].leased) return no("Leased: return it instead", "c.leasedSell");
+        if (hasJob(s, a.uid)) return no("A job is pending on it", "c.busy");
+        return yes(`Sell for $${Math.round(resale(s, r.devices[i]))}k`, "c.sell", { x: Math.round(resale(s, r.devices[i])) });
       }
       case "mode": {
-        if (!MODES[a.mode]) return no("Bad mode");
+        if (!MODES[a.mode]) return no("Bad mode", "c.bad");
         const k = devKw(s, { mode: a.mode }, r.devices.concat(r.pending));
-        if (k > K.RACK_KW + 1e-9) return no(`Rack would draw ${k.toFixed(1)} kW (limit ${K.RACK_KW})`);
-        if (gridKwAll(s) - rackKwAll(s, r) + k > s.gridKw + 1e-9) return no(`Grid limit ${s.gridKw} kW`);
-        return { ok: true, msg: MODES[a.mode].label };
+        if (k > K.RACK_KW + 1e-9) return no(`Rack would draw ${k.toFixed(1)} kW (limit ${K.RACK_KW})`, "c.rackDraw", { kw: k.toFixed(1), max: K.RACK_KW });
+        if (gridKwAll(s) - rackKwAll(s, r) + k > s.gridKw + 1e-9) return no(`Grid limit ${s.gridKw} kW`, "c.grid", { kw: s.gridKw });
+        return yes(MODES[a.mode].label, "mode." + a.mode);
       }
-      case "workload": return WORKLOADS.includes(a.workload) ? { ok: true, msg: a.workload } : no("Bad workload");
+      case "workload": return WORKLOADS.includes(a.workload) ? yes(a.workload, "wl." + a.workload) : no("Bad workload", "c.bad");
       case "tank": {
-        if (r.tank) return no("Already a tank");
-        if (r.devices.length || r.pending.length) return no("Empty the rack first");
-        if (s.jobs.some(j => j.kind === "tank" && j.rack === r.id)) return no("Already converting");
-        if (s.cash < K.TANK_COST) return no(`Needs $${K.TANK_COST}k`);
-        return { ok: true, msg: `Convert to immersion tank, $${K.TANK_COST}k, ${K.TANK_DAYS} days` };
+        if (r.tank) return no("Already a tank", "c.already");
+        if (r.devices.length || r.pending.length) return no("Empty the rack first", "c.emptyFirst");
+        if (s.jobs.some(j => j.kind === "tank" && j.rack === r.id)) return no("Already converting", "c.underway");
+        if (s.cash < K.TANK_COST) return needs(K.TANK_COST);
+        return yes(`Convert to immersion tank, $${K.TANK_COST}k, ${K.TANK_DAYS} days`, "c.tank", { x: K.TANK_COST, d: K.TANK_DAYS });
       }
       case "grid": {
         const g = gridNext(s);
-        if (!g) return no(s.gridTier >= 3 ? "Grid fully upgraded" : "Next upgrade unlocks in chapter 11");
-        if (s.jobs.some(j => j.kind === "grid")) return no("Upgrade under way");
-        if (g.kw === K.GRID_KW_UP3 && !hall3Started(s)) return no("Needs Hall 3 (built or under construction)");
-        if (s.cash < g.cost) return no(`Needs $${g.cost}k`);
-        return { ok: true, msg: `Grid to ${g.kw} kW, $${g.cost}k, ${g.days} days` };
+        if (!g) return s.gridTier >= 3 ? no("Grid fully upgraded", "c.gridMax") : no("Next upgrade unlocks in chapter 11", "c.locked", { n: 11 });
+        if (s.jobs.some(j => j.kind === "grid")) return no("Upgrade under way", "c.underway");
+        if (g.kw === K.GRID_KW_UP3 && !hall3Started(s)) return no("Needs Hall 3 (built or under construction)", "c.needHall3");
+        if (s.cash < g.cost) return needs(g.cost);
+        return yes(`Grid to ${g.kw} kW, $${g.cost}k, ${g.days} days`, "c.gridUp", { kw: g.kw, x: g.cost, d: g.days });
       }
       // ---- ch6 operations
       case "hire":
-        if (s.techs + s.hires.length >= K.TECH_MAX) return no(`At most ${K.TECH_MAX} technicians`);
-        return { ok: true, msg: `Hire: arrives in ${K.HIRE_DAYS} days, $${K.SALARY}k/day` };
+        if (s.techs + s.hires.length >= K.TECH_MAX) return no(`At most ${K.TECH_MAX} technicians`, "c.techMax", { n: K.TECH_MAX });
+        return yes(`Hire: arrives in ${K.HIRE_DAYS} days, $${K.SALARY}k/day`, "c.hire", { d: K.HIRE_DAYS, x: K.SALARY });
       case "fire":
-        if (s.techs <= K.TECH_MIN) return no("Keep at least one technician");
-        return { ok: true, msg: `Fire: severance $${round2(K.FIRE_PAY_DAYS * K.SALARY)}k` };
-      case "repairPolicy": return { ok: true, msg: a.on ? "Auto-repair on" : "Auto-repair off" };
+        if (s.techs <= K.TECH_MIN) return no("Keep at least one technician", "c.techMin");
+        return yes(`Fire: severance $${round2(K.FIRE_PAY_DAYS * K.SALARY)}k`, "c.fire", { x: round2(K.FIRE_PAY_DAYS * K.SALARY) });
+      case "repairPolicy": return a.on ? yes("Auto-repair on", "c.autoRepOn") : yes("Auto-repair off", "c.autoRepOff");
       case "repair": {
         const f = findAnywhere(s, a.uid);
-        if (!f || f.where === "pending") return no("No such part");
-        if (!f.d.failed) return no("Not broken");
-        if (hasJob(s, a.uid)) return no("Already queued");
-        if (f.r && a.useSpare !== false && spareFor(s, f.d)) return { ok: true, msg: `Swap in a spare, ${K.SWAP_DAYS} day` };
+        if (!f || f.where === "pending") return no("No such part", "c.gone");
+        if (!f.d.failed) return no("Not broken", "c.notBroken");
+        if (hasJob(s, a.uid)) return no("Already queued", "c.underway");
+        if (f.r && a.useSpare !== false && spareFor(s, f.d)) return yes(`Swap in a spare, ${K.SWAP_DAYS} day`, "c.swap", { d: K.SWAP_DAYS });
         const c = repairCost(s, f.d);
-        if (s.cash < c) return no(`Needs $${c}k`);
-        return { ok: true, msg: `Repair $${c}k: parts ${repairParts(s, f.d)} days + ${K.REPAIR_DAYS} day` };
+        if (s.cash < c) return needs(c);
+        return yes(`Repair $${c}k: parts ${repairParts(s, f.d)} days + ${K.REPAIR_DAYS} day`, "c.repair", { x: c, d: repairParts(s, f.d) + K.REPAIR_DAYS });
       }
       case "store": {
-        const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack");
-        if (r.devices[i].leased) return no("Leased cards can't be shelved");
-        if (hasJob(s, a.uid)) return no("A job is pending on it");
-        if (shelfLoad(s) >= K.SHELF) return no(`Shelf full (${K.SHELF})`);
-        return { ok: true, msg: `To the shelf, ${K.MOVE_DAYS} day` };
+        const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack", "c.notIn");
+        if (r.devices[i].leased) return no("Leased cards can't be shelved", "c.leasedShelf");
+        if (hasJob(s, a.uid)) return no("A job is pending on it", "c.busy");
+        if (shelfLoad(s) >= K.SHELF) return no(`Shelf full (${K.SHELF})`, "c.shelfFull", { n: K.SHELF });
+        return yes(`To the shelf, ${K.MOVE_DAYS} day`, "c.store", { d: K.MOVE_DAYS });
       }
       case "unstore": {
-        const d = s.shelf.find(x => x.uid === a.uid); if (!d) return no("Not on the shelf");
-        if (d.failed) return no("Repair it first");
+        const d = s.shelf.find(x => x.uid === a.uid); if (!d) return no("Not on the shelf", "c.gone");
+        if (d.failed) return no("Repair it first", "c.repairFirst");
         const f = fits(s, r, itemOf(s, d)); if (f) return no(f);
-        return { ok: true, msg: `Install from shelf, ${K.INSTALL_DAYS} days` };
+        return yes(`Install from shelf, ${K.INSTALL_DAYS} days`, "c.unstore", { d: K.INSTALL_DAYS });
       }
       // ---- ch7 fabric
       case "spine": {
         const h = hallOf(s, a.hall);
-        if (!h || !h.built) return no("No such hall");
-        if (!(a.row >= 0 && a.row < K.ROWS)) return no("No such row");
+        if (!h || !h.built) return no("No such hall", "c.noHall");
+        if (!(a.row >= 0 && a.row < K.ROWS)) return no("No such row", "c.bad");
         const key = `${a.hall}-${a.row}`;
-        if (s.spines[key] || s.jobs.some(j => j.kind === "spine" && j.key === key)) return no("Row already has a spine");
-        if (s.cash < K.SPINE_COST) return no(`Needs $${K.SPINE_COST}k`);
-        if (gridKwAll(s) + K.SPINE_KW > s.gridKw + 1e-9) return no(`Grid limit ${s.gridKw} kW`);
-        return { ok: true, msg: `Row spine $${K.SPINE_COST}k, ${K.SPINE_DAYS} days, ${K.SPINE_KW} kW` };
+        if (s.spines[key] || s.jobs.some(j => j.kind === "spine" && j.key === key)) return no("Row already has a spine", "c.already");
+        if (s.cash < K.SPINE_COST) return needs(K.SPINE_COST);
+        if (gridKwAll(s) + K.SPINE_KW > s.gridKw + 1e-9) return no(`Grid limit ${s.gridKw} kW`, "c.grid", { kw: s.gridKw });
+        return yes(`Row spine $${K.SPINE_COST}k, ${K.SPINE_DAYS} days, ${K.SPINE_KW} kW`, "c.spine", { x: K.SPINE_COST, d: K.SPINE_DAYS, kw: K.SPINE_KW });
       }
       case "transit": {
         const dlt = Math.round(a.delta || 0);
-        if (!dlt) return no("No change");
+        if (!dlt) return no("No change", "c.bad");
         const tgt = transitTarget(s) + dlt;
-        if (tgt < 0) return no("Transit can't go below zero");
-        if (tgt > K.TRANSIT_MAX) return no(`At most ${K.TRANSIT_MAX} units`);
-        return { ok: true, msg: `Transit ${tgt} units ($${round2(tgt * K.TRANSIT_COST)}k/day) in ${K.TRANSIT_DAYS} days` };
+        if (tgt < 0) return no("Transit can't go below zero", "c.bad");
+        if (tgt > K.TRANSIT_MAX) return no(`At most ${K.TRANSIT_MAX} units`, "c.maxUnits", { n: K.TRANSIT_MAX });
+        return yes(`Transit ${tgt} units ($${round2(tgt * K.TRANSIT_COST)}k/day) in ${K.TRANSIT_DAYS} days`, "c.transit", { n: tgt, x: round2(tgt * K.TRANSIT_COST), d: K.TRANSIT_DAYS });
       }
       // ---- ch8 contracts
       case "signContract": {
-        if (!core(s)) return no("Contracts are switched off in this game");
-        const o = s.offers.find(x => x.id === a.id); if (!o) return no("Offer gone");
-        if (o.foreign && s.policyFx.exportCtl) return no("Customer barred by export controls");
-        if (o.bts && s.cash < o.fitout) return no(`Fit-out needs $${o.fitout}k`);
-        return { ok: true, msg: o.bts ? `Build-to-suit: $${o.fitout}k fit-out now, ${o.units} ${o.w} units from day ${Math.round(s.day + o.lead)} for ${o.days} days at $${round2(o.price)}k`
-          : isJob(o) ? `Sign: ${o.work} unit-days of ${o.kind === "frontier" ? "frontier " : ""}training by day ${Math.round(s.day + o.days)}, $${Math.round(o.pay)}k on completion`
-          : `Sign: ${o.units} ${o.w} units a day for ${o.days} days from day ${Math.round(s.day + (o.lead || 0))} at $${round2(o.price)}k` };
+        if (!core(s)) return no("Contracts are switched off in this game", "c.noContracts");
+        const o = s.offers.find(x => x.id === a.id); if (!o) return no("Offer gone", "c.gone");
+        if (o.foreign && s.policyFx.exportCtl) return no("Customer barred by export controls", "c.barred");
+        if (o.bts && s.cash < o.fitout) return no(`Fit-out needs $${o.fitout}k`, "c.fitoutCash", { x: o.fitout });
+        return o.bts ? yes(`Build-to-suit: $${o.fitout}k fit-out now, ${o.units} ${o.w} units from day ${Math.round(s.day + o.lead)} for ${o.days} days at $${round2(o.price)}k`, "c.signBts", { x: o.fitout, u: o.units, d: o.days })
+          : isJob(o) ? yes(`Sign: ${o.work} unit-days of ${o.kind === "frontier" ? "frontier " : ""}training by day ${Math.round(s.day + o.days)}, $${Math.round(o.pay)}k on completion`, "c.signJob", { w: o.work, d: o.days, x: Math.round(o.pay) })
+          : yes(`Sign: ${o.units} ${o.w} units a day for ${o.days} days from day ${Math.round(s.day + (o.lead || 0))} at $${round2(o.price)}k`, "c.signServe", { u: o.units, d: o.days });
       }
-      case "declineContract": return s.offers.some(x => x.id === a.id) ? { ok: true, msg: "Decline" } : no("Offer gone");
+      case "declineContract": return s.offers.some(x => x.id === a.id) ? yes("Decline", "c.decline") : no("Offer gone", "c.gone");
       case "reorder": {   // cosmetic: a device's slot in the rack elevation (no rule depends on it)
-        const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack");
-        if (!Number.isFinite(+a.index)) return no("Bad position");
-        return { ok: true, msg: "Moved in the rack" };
+        const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack", "c.notIn");
+        if (!Number.isFinite(+a.index)) return no("Bad position", "c.bad");
+        return yes("Moved in the rack", "c.reorder");
       }
       case "cancelJob": return cancelJobCheck(s, a);
       case "policy": return policyCheck(s, a);
       case "undoSell": case "buyBack": {
         const x = (s.recentlySold || []).find(y => y.uid === a.uid);
-        if (!x) return no("Not recently sold");
-        if (s.cash < x.value) return no(`Needs $${round2(x.value)}k`);
+        if (!x) return no("Not recently sold", "c.gone");
+        if (s.cash < x.value) return needs(round2(x.value));
         const dest = undoSellDest(s, x, a.rack);
-        if (!dest.ok) return no(dest.msg);
-        return { ok: true, msg: `Buy it back for $${round2(x.value)}k (${dest.rack ? "install in " + dest.rack : "to the shelf"})` };
+        if (!dest.ok) return no(dest.msg, dest.k, dest.p);
+        return yes(`Buy it back for $${round2(x.value)}k (${dest.rack ? "install in " + dest.rack : "to the shelf"})`, dest.rack ? "c.buyBackRack" : "c.buyBackShelf", { x: round2(x.value), r: dest.rack });
       }
       // ---- ch9 memory
       case "forward": {
         const it = s.items[a.item];
-        if (!it || !isAvail(s, it) || it.role !== "gpu") return no("Only GPUs on sale can be ordered forward");
-        if (exportBlocked(s, it)) return no(`Export quota used (${K.EXPORT_QUOTA}/quarter)`);
-        if (s.cash < it.price) return no(`Needs $${it.price}k`);
-        if (shelfLoad(s) >= K.SHELF) return no(`Shelf full (${K.SHELF})`);
-        return { ok: true, msg: `$${it.price}k now, to the shelf in ${K.FORWARD_DAYS} days` };
+        if (!it || !isAvail(s, it) || it.role !== "gpu") return no("Only GPUs on sale can be ordered forward", "c.fwdGpu");
+        if (exportBlocked(s, it)) return no(`Export quota used (${K.EXPORT_QUOTA}/quarter)`, "c.quota", { n: K.EXPORT_QUOTA });
+        if (s.cash < it.price) return needs(it.price);
+        if (shelfLoad(s) >= K.SHELF) return no(`Shelf full (${K.SHELF})`, "c.shelfFull", { n: K.SHELF });
+        return yes(`$${it.price}k now, to the shelf in ${K.FORWARD_DAYS} days`, "c.forward", { x: it.price, d: K.FORWARD_DAYS });
       }
       // ---- ch10 finance
       case "borrow": {
         const amt = a.amount || K.LOAN_STEP;
-        if (amt <= 0 || amt % K.LOAN_STEP) return no(`Borrow in $${K.LOAN_STEP}k steps`);
+        if (amt <= 0 || amt % K.LOAN_STEP) return no(`Borrow in $${K.LOAN_STEP}k steps`, "c.bad");
         const lim = Math.max(0, K.LOAN_LTV * netWorth(s));
-        if (s.debt + amt > lim + 1e-9) return no(`Credit line $${Math.round(lim)}k (40 % of net worth)`);
-        return { ok: true, msg: `Borrow $${amt}k at ${K.INTEREST * 100} %/yr` };
+        if (s.debt + amt > lim + 1e-9) return no(`Credit line $${Math.round(lim)}k (40 % of net worth)`, "c.creditLine", { x: Math.round(lim) });
+        return yes(`Borrow $${amt}k at ${K.INTEREST * 100} %/yr`, "c.borrow", { x: amt, r: K.INTEREST * 100 });
       }
       case "repay": {
         const amt = a.amount || K.LOAN_STEP;
-        if (s.debt <= 0) return no("No debt");
-        if (amt <= 0) return no("Bad amount");
-        if (s.cash < Math.min(amt, s.debt)) return no("Not enough cash");
-        return { ok: true, msg: `Repay $${Math.min(amt, s.debt)}k` };
+        if (s.debt <= 0) return no("No debt", "c.noDebt");
+        if (amt <= 0) return no("Bad amount", "c.bad");
+        if (s.cash < Math.min(amt, s.debt)) return no("Not enough cash", "c.cash");
+        return yes(`Repay $${Math.min(amt, s.debt)}k`, "c.repay", { x: Math.min(amt, s.debt) });
       }
       case "returnLease": {
-        const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack");
-        if (!r.devices[i].leased) return no("Not leased");
-        if (hasJob(s, a.uid)) return no("A job is pending on it");
-        return { ok: true, msg: `Return, ${K.SELL_DAYS} day` };
+        const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack", "c.notIn");
+        if (!r.devices[i].leased) return no("Not leased", "c.bad");
+        if (hasJob(s, a.uid)) return no("A job is pending on it", "c.busy");
+        return yes(`Return, ${K.SELL_DAYS} day`, "c.return", { d: K.SELL_DAYS });
       }
       // ---- ch11 facilities
       case "buildHall": {
-        if (s.jobs.some(j => j.kind === "buildHall")) return no("A hall is already under construction");
+        if (s.jobs.some(j => j.kind === "buildHall")) return no("A hall is already under construction", "c.underway");
         const n = a.hall != null ? a.hall : nextHall(s);
-        if (n == null) return no("All halls built");
+        if (n == null) return no("All halls built", "c.already");
         const h = hallOf(s, n);
-        if (!h || n < 2) return no("No such hall");
-        if (h.built) return no(`Hall ${n} already built`);
-        if (!hallOf(s, n - 1).built) return no(`Build Hall ${n - 1} first`);
+        if (!h || n < 2) return no("No such hall", "c.noHall");
+        if (h.built) return no(`Hall ${n} already built`, "c.already");
+        if (!hallOf(s, n - 1).built) return no(`Build Hall ${n - 1} first`, "c.hallFirst", { n: n - 1 });
         const hc = hallCost(n);
-        if (s.cash < hc.cost) return no(`Needs $${hc.cost}k`);
-        return { ok: true, msg: `Hall ${n}: $${hc.cost}k, ${hc.days} days` };
+        if (s.cash < hc.cost) return needs(hc.cost);
+        return yes(`Hall ${n}: $${hc.cost}k, ${hc.days} days`, "c.hall", { n, x: hc.cost, d: hc.days });
       }
       case "ups":
-        if (s.ups || s.jobs.some(j => j.kind === "ups")) return no("Already have backup");
-        if (s.cash < K.UPS_COST) return no(`Needs $${K.UPS_COST}k`);
-        return { ok: true, msg: `UPS + generator: $${K.UPS_COST}k, ${K.UPS_DAYS} days` };
+        if (s.ups || s.jobs.some(j => j.kind === "ups")) return no("Already have backup", "c.already");
+        if (s.cash < K.UPS_COST) return needs(K.UPS_COST);
+        return yes(`UPS + generator: $${K.UPS_COST}k, ${K.UPS_DAYS} days`, "c.ups", { x: K.UPS_COST, d: K.UPS_DAYS });
       case "crac": {
         const h = hallOf(s, a.hall);
-        if (!h || !h.built) return no("No such hall");
-        if (h.crac || s.jobs.some(j => j.kind === "crac" && j.hall === a.hall)) return no("Already upgraded");
-        if (s.cash < K.CRAC_COST) return no(`Needs $${K.CRAC_COST}k`);
-        return { ok: true, msg: `CRAC +${K.CRAC_KW} kW: $${K.CRAC_COST}k, ${K.CRAC_DAYS} days` };
+        if (!h || !h.built) return no("No such hall", "c.noHall");
+        if (h.crac || s.jobs.some(j => j.kind === "crac" && j.hall === a.hall)) return no("Already upgraded", "c.already");
+        if (s.cash < K.CRAC_COST) return needs(K.CRAC_COST);
+        return yes(`CRAC +${K.CRAC_KW} kW: $${K.CRAC_COST}k, ${K.CRAC_DAYS} days`, "c.crac", { kw: K.CRAC_KW, x: K.CRAC_COST, d: K.CRAC_DAYS });
       }
       // ---- ch12 energy
       case "ppa": {
-        if (s.ppa && s.day < s.ppa.end) return no("A PPA is running");
-        if (!(a.kw > 0) || a.kw % K.PPA_STEP || a.kw > K.PPA_MAX) return no(`PPA in ${K.PPA_STEP} kW steps up to ${K.PPA_MAX}`);
+        if (s.ppa && s.day < s.ppa.end) return no("A PPA is running", "c.already");
+        if (!(a.kw > 0) || a.kw % K.PPA_STEP || a.kw > K.PPA_MAX) return no(`PPA in ${K.PPA_STEP} kW steps up to ${K.PPA_MAX}`, "c.bad");
         const q = ppaQuote(s);
-        return { ok: true, msg: `PPA ${a.kw} kW at $${q}k/kW-day for ${K.PPA_DAYS} days ($${round2(a.kw * q)}k/day)` };
+        return yes(`PPA ${a.kw} kW at $${q}k/kW-day for ${K.PPA_DAYS} days ($${round2(a.kw * q)}k/day)`, "c.ppa", { kw: a.kw, d: K.PPA_DAYS, x: round2(a.kw * q) });
       }
       case "solar":
-        if (s.solar || s.jobs.some(j => j.kind === "solar")) return no("Already have solar");
-        if (s.cash < K.SOLAR_COST) return no(`Needs $${K.SOLAR_COST}k`);
-        return { ok: true, msg: `Solar + battery: $${K.SOLAR_COST}k, ${K.SOLAR_DAYS} days` };
+        if (s.solar || s.jobs.some(j => j.kind === "solar")) return no("Already have solar", "c.already");
+        if (s.cash < K.SOLAR_COST) return needs(K.SOLAR_COST);
+        return yes(`Solar + battery: $${K.SOLAR_COST}k, ${K.SOLAR_DAYS} days`, "c.solar", { x: K.SOLAR_COST, d: K.SOLAR_DAYS });
       // ---- ch13 environment
       case "cooling": {
         const h = hallOf(s, a.hall);
-        if (!h || !h.built) return no("No such hall");
-        if (!K.PUE[a.mode]) return no("Bad mode");
-        if (h.cooling === a.mode) return no("Already");
-        if (s.jobs.some(j => j.kind === "cooling" && j.hall === a.hall)) return no("Changeover under way");
-        if (s.cash < K.COOL_SWITCH_COST) return no(`Needs $${K.COOL_SWITCH_COST}k`);
-        return { ok: true, msg: `Switch to ${a.mode}: $${K.COOL_SWITCH_COST}k, ${K.COOL_SWITCH_DAYS} days` };
+        if (!h || !h.built) return no("No such hall", "c.noHall");
+        if (!K.PUE[a.mode]) return no("Bad mode", "c.bad");
+        if (h.cooling === a.mode) return no("Already", "c.already");
+        if (s.jobs.some(j => j.kind === "cooling" && j.hall === a.hall)) return no("Changeover under way", "c.underway");
+        if (s.cash < K.COOL_SWITCH_COST) return needs(K.COOL_SWITCH_COST);
+        return yes(`Switch to ${a.mode}: $${K.COOL_SWITCH_COST}k, ${K.COOL_SWITCH_DAYS} days`, "c.cooling", { m: "@cool." + a.mode, x: K.COOL_SWITCH_COST, d: K.COOL_SWITCH_DAYS });
       }
       // ---- ch14 investors
       case "acceptRound": case "declineRound": {
         const o = s.roundOffer;
-        if (!o || o.id !== a.id) return no("Offer gone");
-        return { ok: true, msg: a.type === "acceptRound" ? `Take $${Math.round(o.amount)}k for ${Math.round(o.pct * 100)} %` : "Decline" };
+        if (!o || o.id !== a.id) return no("Offer gone", "c.gone");
+        return a.type === "acceptRound" ? yes(`Take $${Math.round(o.amount)}k for ${Math.round(o.pct * 100)} %`, "c.take", { x: Math.round(o.amount), p: Math.round(o.pct * 100) }) : yes("Decline", "c.decline");
       }
       case "buyback": {
-        if (s.equity.own >= 1 - 1e-9) return no("You own everything");
+        if (s.equity.own >= 1 - 1e-9) return no("You own everything", "c.already");
         const c = roundCost(s);
-        if (s.cash < c) return no(`Needs $${Math.round(c)}k`);
-        return { ok: true, msg: `Buy back 1 % for $${Math.round(c)}k` };
+        if (s.cash < c) return needs(Math.round(c));
+        return yes(`Buy back 1 % for $${Math.round(c)}k`, "c.buyback", { x: Math.round(c) });
       }
       // ---- ch15 reputation
       case "pr":
-        if (s.cash < K.PR_COST) return no(`Needs $${K.PR_COST}k`);
-        return { ok: true, msg: `PR campaign: $${K.PR_COST}k, +${K.PR_GAIN} reputation fading over ${K.PR_DECAY} days` };
+        if (s.cash < K.PR_COST) return needs(K.PR_COST);
+        return yes(`PR campaign: $${K.PR_COST}k, +${K.PR_GAIN} reputation fading over ${K.PR_DECAY} days`, "c.pr", { x: K.PR_COST, n: K.PR_GAIN, d: K.PR_DECAY });
       // ---- ch16 policy
       case "lobby": {
         const p = policyById(s, a.policy);
-        if (!p || !p.announced) return no("No such proposal");
-        if (p.status !== "proposed") return no("Already voted");
-        if (p.lobbied) return no("Already lobbied");
-        if (a.dir !== 1 && a.dir !== -1) return no("Pick a direction");
-        if (s.cash < K.LOBBY_COST) return no(`Needs $${K.LOBBY_COST}k`);
-        return { ok: true, msg: `Lobby ${a.dir > 0 ? "for" : "against"}: $${K.LOBBY_COST}k` };
+        if (!p || !p.announced) return no("No such proposal", "c.gone");
+        if (p.status !== "proposed") return no("Already voted", "c.voted");
+        if (p.lobbied) return no("Already lobbied", "c.already");
+        if (a.dir !== 1 && a.dir !== -1) return no("Pick a direction", "c.bad");
+        if (s.cash < K.LOBBY_COST) return needs(K.LOBBY_COST);
+        return yes(`Lobby ${a.dir > 0 ? "for" : "against"}: $${K.LOBBY_COST}k`, a.dir > 0 ? "c.lobbyFor" : "c.lobbyAgainst", { x: K.LOBBY_COST });
       }
     }
-    return no("Unknown action");
+    return no("Unknown action", "c.unknown");
   }
   const transitTarget = s => s.transit + s.transitOrders.reduce((a, o) => a + o.delta, 0);
   function spareFor(s, d) { return s.shelf.find(x => x.type === d.type && !x.failed && !x.leased) || null; }
@@ -1259,17 +1271,17 @@
   /* ================= v4 automation policies ================= */
   const POLICY_KEYS = new Set(["autoSwap", "keepSpares", "autoRenew"]);
   function policyCheck(s, a) {
-    if (!POLICY_KEYS.has(a.key)) return no("Unknown policy");
-    if (a.key !== "autoRenew" && !on(s, "ops")) return no(`Unlocks in chapter ${CH_IDX.ops + 1}`);
-    if (a.key === "autoRenew" && !core(s)) return no("Contracts are switched off in this game");
+    if (!POLICY_KEYS.has(a.key)) return no("Unknown policy", "c.unknown");
+    if (a.key !== "autoRenew" && !on(s, "ops")) return no(`Unlocks in chapter ${CH_IDX.ops + 1}`, "c.locked", { n: CH_IDX.ops + 1 });
+    if (a.key === "autoRenew" && !core(s)) return no("Contracts are switched off in this game", "c.noContracts");
     if (a.key === "keepSpares") {
       const it = s.items[a.item];
-      if (!it || it.role === "exotic" || it.key === "pm9") return no("Pick a card or part");
+      if (!it || it.role === "exotic" || it.key === "pm9") return no("Pick a card or part", "c.bad");
       const n = Math.round(+a.n);
-      if (!(n >= 0 && n <= K.SHELF)) return no(`0 to ${K.SHELF} spares`);
-      return { ok: true, msg: n ? `Keep ${n} ${it.name} on the shelf (auto-order at list price)` : `Stop keeping ${it.name} spares` };
+      if (!(n >= 0 && n <= K.SHELF)) return no(`0 to ${K.SHELF} spares`, "c.bad");
+      return n ? yes(`Keep ${n} ${it.name} on the shelf (auto-order at list price)`, "c.keep", { n, it: "@it." + a.item }) : yes(`Stop keeping ${it.name} spares`, "c.keepOff", { it: "@it." + a.item });
     }
-    return { ok: true, msg: `${a.key === "autoSwap" ? "Auto-swap spares" : "Auto-renew contracts"} ${a.on ? "on" : "off"}` };
+    return yes(`${a.key === "autoSwap" ? "Auto-swap spares" : "Auto-renew contracts"} ${a.on ? "on" : "off"}`, (a.key === "autoSwap" ? "pol.autoSwap" : "board.autoRenew"));
   }
   function policyApply(s, a) {
     if (a.key === "keepSpares") { const n = Math.round(+a.n); if (n > 0) s.policy.keepSpares[a.item] = n; else delete s.policy.keepSpares[a.item]; }
@@ -1290,7 +1302,7 @@
         if (s.policyFx.exportCtl && it.role === "gpu" && it.gen === currentGen(s)) { s.exportUsed++; job.exportQ = Math.floor(s.day / 90); }
         if (it.role === "gpu") { s.prog.gpuOrders++; job.gpu = true; }
         s.jobs.push(job); have++;
-        logCash(s, -it.price, "restock", `Auto-ordered a spare ${it.name}`);
+        logCash(s, -it.price, "restock", `Auto-ordered a spare ${it.name}`, { it: "@it." + k });
         log(s, `restock ${k} (${have}/${n})`);
       }
     }
@@ -1364,28 +1376,28 @@
     if (fitsBack(s, rackById(s, j.rack), j.dev, counted)) return "rack";
     return shelfFree(s, j.dev) ? "shelf" : null;
   }
-  const okMsg = msg => ({ ok: true, msg });
   function cancelJobCheck(s, a) {
     const j = s.jobs.find(x => x.id === a.id);
-    if (!j) return no("No such job");
+    if (!j) return no("No such job", "c.gone");
     const k = j.kind;
-    if ((k === "buy" || k === "lease") && j.phase === "ship") return okMsg(k === "buy" ? `Order cancelled: $${round2(j.paid)}k refunded` : "Lease cancelled");
+    if ((k === "buy" || k === "lease") && j.phase === "ship") return k === "buy" ? yes(`Order cancelled: $${round2(j.paid)}k refunded`, "c.orderCancel", { x: round2(j.paid) }) : yes("Lease cancelled", "c.leaseCancel");
     if (k === "buy" || k === "undoSell") {
-      if (!on(s, "ops")) return no("Already delivered: sell it instead (the spares shelf opens in chapter 6)");
-      if (shelfLoad(s) >= K.SHELF) return no(`Already delivered and the shelf is full (${K.SHELF})`);
-      return okMsg("Already delivered: it goes to the spares shelf (no refund)");
+      if (!on(s, "ops")) return no("Already delivered: sell it instead (the spares shelf opens in chapter 6)", "c.delivered");
+      if (shelfLoad(s) >= K.SHELF) return no(`Already delivered and the shelf is full (${K.SHELF})`, "c.shelfFull", { n: K.SHELF });
+      return yes("Already delivered: it goes to the spares shelf (no refund)", "c.toShelfNoRefund");
     }
-    if (k === "lease") return okMsg("Lease handed back before install");
+    if (k === "lease") return yes("Lease handed back before install", "c.leaseCancel");
     if (k === "move" || k === "sell" || k === "store" || k === "returnLease") {
       const dest = backDest(s, j);
-      if (!dest) return no("No room to put it back (rack full and no shelf space)");
-      return okMsg(k === "sell" ? `Keep it: sale cancelled, back to ${dest === "rack" ? j.rack : "the shelf"}` : `Back to ${dest === "rack" ? j.rack : "the shelf"}`);
+      if (!dest) return no("No room to put it back (rack full and no shelf space)", "c.noRoom");
+      const where = dest === "rack" ? j.rack : "the shelf", p = { r: dest === "rack" ? j.rack : "@w.shelf" };
+      return k === "sell" ? yes(`Keep it: sale cancelled, back to ${where}`, "c.keepIt", p) : yes(`Back to ${where}`, "c.backTo", p);
     }
-    if (k === "unstore") return okMsg("Back to the shelf");
-    if (k === "swap") return okMsg("Spare goes back to the shelf");
-    if (k === "repair") return okMsg(j.phase === "work" ? "Stop the repair (parts already used, no refund)" : `Cancel the repair: $${round2(j.cost || 0)}k refunded`);
-    if (CANCEL_BUILDS.has(k)) return okMsg(`Cancel: $${round2(buildRefund(s, j))}k of $${round2(j.paid || 0)}k back`);
-    return no("This job can't be cancelled");
+    if (k === "unstore") return yes("Back to the shelf", "c.backTo", { r: "@w.shelf" });
+    if (k === "swap") return yes("Spare goes back to the shelf", "c.backTo", { r: "@w.shelf" });
+    if (k === "repair") return j.phase === "work" ? yes("Stop the repair (parts already used, no refund)", "c.stopRepair") : yes(`Cancel the repair: $${round2(j.cost || 0)}k refunded`, "c.refund", { x: round2(j.cost || 0) });
+    if (CANCEL_BUILDS.has(k)) return yes(`Cancel: $${round2(buildRefund(s, j))}k of $${round2(j.paid || 0)}k back`, "c.cancelBuild", { x: round2(buildRefund(s, j)), of: round2(j.paid || 0) });
+    return no("This job can't be cancelled", "c.bad");
   }
   function cancelJobApply(s, a) {
     const j = s.jobs.find(x => x.id === a.id), k = j.kind;
@@ -1430,13 +1442,13 @@
     if (rk) return { ok: true, rack: rk };
     if (on(s, "ops") && shelfLoad(s) < K.SHELF) return { ok: true, rack: null };
     const r = rackId != null ? rackById(s, rackId) : rackById(s, x.rack);
-    return { ok: false, msg: r ? (fits(s, r, it) || "No room") + " (and no shelf space)" : "No room to put it" };
+    return { ok: false, msg: r ? ((fits(s, r, it) || { msg: "No room" }).msg) + " (and no shelf space)" : "No room to put it", k: "c.noRoom" };
   }
   function undoSellApply(s, a) {
     const i = s.recentlySold.findIndex(y => y.uid === a.uid), x = s.recentlySold[i], dest = undoSellDest(s, x, a.rack);
     s.recentlySold.splice(i, 1);
     s.cash -= x.value; s.totals.resale -= x.value;
-    logCash(s, -x.value, "unsell", `Bought back ${itemOf(s, x.dev).name} for $${round2(x.value)}k`);
+    logCash(s, -x.value, "unsell", `Bought back ${itemOf(s, x.dev).name} for $${round2(x.value)}k`, { it: "@it." + x.dev.type });
     if (dest.rack) {
       rackById(s, dest.rack).pending.push(x.dev);
       s.jobs.push({ id: s.nextId++, kind: "undoSell", rack: dest.rack, dev: x.dev, to: dest.rack, phase: "wait", left: K.INSTALL_DAYS, total: K.INSTALL_DAYS });
@@ -1574,7 +1586,7 @@
         if (!s.board) {
           const base = trailingRevenue(s, K.BOARD_EVERY);
           s.board = { start: s.day, end: s.day + K.BOARD_EVERY, target: base * (1 + K.BOARD_GROWTH), rev: 0, misses: 0, history: [] };
-          pushNews(s, { title: "The board sets a revenue target", body: `$${Math.round(s.board.target)}k over the next ${K.BOARD_EVERY} days.`, tone: "info", cat: "investors", icon: "flag" });
+          pushNews(s, { title: "The board sets a revenue target", body: `$${Math.round(s.board.target)}k over the next ${K.BOARD_EVERY} days.`, tone: "info", cat: "investors", icon: "flag", ...kp("n.boardTarget", { x: Math.round(s.board.target), d: K.BOARD_EVERY }) });
         }
         break;
       }
@@ -1588,7 +1600,7 @@
         spend(s, K.PR_COST, "opex", "other");
         if (s.day < s.scandalUntil && nextRand(s) < 0.5) {
           repHit(s, K.PR_BACKFIRE);
-          pushNews(s, { title: "PR campaign backfires", body: "Reporters call it spin in the middle of a scandal.", tone: "bad", cat: "press", icon: "news" });
+          pushNews(s, { title: "PR campaign backfires", body: "Reporters call it spin in the middle of a scandal.", tone: "bad", cat: "press", icon: "news", ...kp("n.prBackfire") });
           log(s, "pr backfired");
         } else s.prBoosts.push({ amt: K.PR_GAIN, day: s.day });
         break;
@@ -1626,7 +1638,7 @@
     const c = repairCost(s, f.d);
     if (s.cash < c) return false;
     spend(s, c, "opex", "repairs");
-    logCash(s, -c, "repair", `Repair: ${itemOf(s, f.d).name}${f.r ? " in " + f.r.id : " on the shelf"}`);
+    logCash(s, -c, "repair", `Repair: ${itemOf(s, f.d).name}${f.r ? " in " + f.r.id : " on the shelf"}`, { it: "@it." + f.d.type });
     const parts = repairParts(s, f.d);
     s.jobs.push({ id: s.nextId++, kind: "repair", rack: f.r ? f.r.id : null, uid, phase: "parts", left: parts, total: parts, work: K.REPAIR_DAYS, cost: c, day0: s.day });
     log(s, `repair ${f.d.type} ${uid} $${c}k`);
@@ -1646,14 +1658,14 @@
       if (j.dev.inst == null) j.dev.inst = s.day;
       r.devices.push(j.dev);
     } else if (k === "sell") {
-      s.cash += j.value; s.totals.resale += j.value; logCash(s, j.value, "sale", `Sold ${itemOf(s, j.dev).name}${j.rack ? " from " + j.rack : ""}`);
+      s.cash += j.value; s.totals.resale += j.value; logCash(s, j.value, "sale", `Sold ${itemOf(s, j.dev).name}${j.rack ? " from " + j.rack : ""}`, { it: "@it." + j.dev.type });
       // coyote time: the buyer holds it for K.UNSELL_DAYS; undoSell returns it for exactly the sale price
       (s.recentlySold = s.recentlySold || []).push({ uid: j.dev.uid, type: j.dev.type, dev: j.dev, value: j.value, rack: j.rack, day: s.day, until: s.day + K.UNSELL_DAYS });
     }
     else if (k === "tank") rackById(s, j.rack).tank = true;
     else if (k === "grid") {
       s.gridTier++; s.gridUp = true; s.gridKw = j.kw || K.GRID_KW_UP;
-      pushNews(s, { title: "Grid upgrade live", body: `${s.gridKw} kW available.`, tone: "good", icon: "bolt", cat: "facilities" });
+      pushNews(s, { title: "Grid upgrade live", body: `${s.gridKw} kW available.`, tone: "good", icon: "bolt", cat: "facilities", ...kp("n.gridLive", { kw: s.gridKw }) });
     }
     else if (k === "store" || k === "forward" || k === "restock") s.shelf.push(j.dev);
     else if (k === "swap") {
@@ -1670,7 +1682,7 @@
       const n = j.hall || 2;
       ensureHalls(s);
       s.halls[n - 1].built = true; s.halls[n - 1].roomT = s.roomT; addHallRacks(s, n);
-      pushNews(s, { title: `Hall ${n} is open`, body: "18 more racks. Same grid.", tone: "good", cat: "facilities" });
+      pushNews(s, { title: `Hall ${n} is open`, body: "18 more racks. Same grid.", tone: "good", cat: "facilities", ...kp("n.hallOpen", { n }) });
     }
     else if (k === "ups") s.ups = true;
     else if (k === "solar") s.solar = true;
@@ -1698,7 +1710,7 @@
           d.failed = true; d.failDay = s.day;
           log(s, `failure ${it.name} uid=${d.uid} in ${r.id} inlet=${inlet.toFixed(1)}`);
           if (it.role === "gpu" || it.role === "exotic" || it.role === "net")
-            pushNews(s, { title: `${it.name} failed in ${r.id}`, body: s.repairAuto ? "Repair queued." : "Auto-repair is off.", tone: "bad", cat: "ops", icon: "wrench" });
+            pushNews(s, { title: `${it.name} failed in ${r.id}`, body: s.repairAuto ? "Repair queued." : "Auto-repair is off.", tone: "bad", cat: "ops", icon: "wrench", ...kp(s.repairAuto ? "n.failed" : "n.failedManual", { it: "@it." + d.type, r: r.id }) });
           if (s.repairAuto) queueRepair(s, d.uid, true);
           else if (s.policy && s.policy.autoSwap && spareFor(s, d)) queueRepair(s, d.uid, true);
         }
@@ -1835,7 +1847,7 @@
         price: +price.toFixed(4), sla: kind === "web" ? K.SLA_WEB : K.SLA_INFER, penalty: +(price * K.PENALTY_MULT).toFixed(4) });
     }
     s.offers.push(o);
-    pushNews(s, { title: `Offer: ${cust.name}`, body: offerText(o), tone: "info", cat: "contracts", icon: "doc" });
+    pushNews(s, { title: `Offer: ${cust.name}`, body: offerText(o), tone: "info", cat: "contracts", icon: "doc", ...kp(isJob(o) ? "n.offerJob" : "n.offer", { c: cust.name, w: "@wl." + o.w, u: o.units, d: o.days, x: Math.round(o.pay || 0), work: o.work || 0 }) });
     log(s, `offer ${o.id} ${kind} ${o.units}u x${o.days}d p=${o.price} idx=${o.spot} cap=${pick.cap.toFixed(1)} free=${pick.free.toFixed(1)} afford=${pick.afford.toFixed(1)} stretch=${stretch}`);
     return o;
   }
@@ -1864,7 +1876,7 @@
       sla: c.sla, penalty: +(price * (c.bts ? K.BTS_PENALTY_MULT : K.PENALTY_MULT)).toFixed(4), expires: c.end, ttl, stretch: false };
     if (c.bts) Object.assign(o, { bts: true, fitout: 0 });      // the fit-out is already built
     s.offers.push(o);
-    pushNews(s, { title: `Renewal offer: ${c.cust}`, body: `Same ${o.units} ${o.w} units for another ${o.days} days at $${round2(o.price)}k (was $${round2(c.price)}k).`, tone: "info", cat: "contracts", icon: "doc" });
+    pushNews(s, { title: `Renewal offer: ${c.cust}`, body: `Same ${o.units} ${o.w} units for another ${o.days} days at $${round2(o.price)}k (was $${round2(c.price)}k).`, tone: "info", cat: "contracts", icon: "doc", ...kp("n.renewal", { c: c.cust, u: o.units, d: o.days, x: Math.round(o.price * 1000), was: Math.round(c.price * 1000) }) });
     log(s, `renewal offer ${o.id} for ${c.id} p=${o.price} (was ${c.price})`);
     return o;
   }
@@ -1882,7 +1894,7 @@
       fitout: Math.round(units * K.BTS_FIT_PER_UNIT), price: +price.toFixed(4), spot: +mk[w].price.toFixed(4), repAdj: +(1 + 0.2 * rf).toFixed(4),
       sla: K.BTS_SLA, penalty: +(price * K.BTS_PENALTY_MULT).toFixed(4), expires: s.day + K.BTS_EXPIRY, ttl: K.BTS_EXPIRY };
     s.offers.push(o);
-    pushNews(s, { title: `Build-to-suit request: ${cust.name}`, body: `${units} ${w} units x ${days} days at $${round2(price)}k from day ${Math.round(s.day + o.lead)}. Fit-out $${o.fitout}k up front, SLA ${Math.round(o.sla * 100)} %.`, tone: "info", cat: "contracts", icon: "building" });
+    pushNews(s, { title: `Build-to-suit request: ${cust.name}`, body: `${units} ${w} units x ${days} days at $${round2(price)}k from day ${Math.round(s.day + o.lead)}. Fit-out $${o.fitout}k up front, SLA ${Math.round(o.sla * 100)} %.`, tone: "info", cat: "contracts", icon: "building", ...kp("n.bts", { c: cust.name, u: units, w: "@wl." + w, d: days, x: o.fitout }) });
     log(s, `bts offer ${o.id} ${w} ${units}u ${days}d p=${o.price} fit=${o.fitout}`);
   }
   /* daily: contract streaks and reputation, endings, cancellations, expiring offers, new offers */
@@ -1909,7 +1921,7 @@
         const i = s.offers.indexOf(o), res = check(s, { type: "signContract", id: o.id });
         if (i >= 0 && res.ok) {
           signOffer(s, o);
-          logCash(s, 0, "renew", `Auto-renewed ${c.cust}: ${o.units} ${o.w} units x ${o.days} days at $${round2(o.price)}k`);
+          logCash(s, 0, "renew", `Auto-renewed ${c.cust}: ${o.units} ${o.w} units x ${o.days} days at $${round2(o.price)}k`, { c: c.cust });
           log(s, `auto-renew ${c.id} -> ${o.id}`);
         }
       }
@@ -1920,15 +1932,15 @@
       s.offers = s.offers.filter(o => o.renewOf !== c.id);                    // no renewal from a customer who left
       s.contracts = s.contracts.filter(x => !(x.renewOf === c.id && x.start > d - 1e-9));
       if (on(s, "reputation")) repHit(s, K.REP_JOB_CANCEL);
-      logCash(s, 0, "contractLost", `${c.cust} terminated: ${K.SLA_WALK_DAYS} days of missed deliveries ($${Math.round(c.penaltyPaid)}k in penalties)`);
-      pushNews(s, { title: `${c.cust} walks away`, body: `${K.SLA_WALK_DAYS} days of missed deliveries. Contract terminated; penalties paid $${Math.round(c.penaltyPaid)}k.`, tone: "bad", cat: "contracts", icon: "doc" });
+      logCash(s, 0, "contractLost", `${c.cust} terminated: ${K.SLA_WALK_DAYS} days of missed deliveries ($${Math.round(c.penaltyPaid)}k in penalties)`, { c: c.cust });
+      pushNews(s, { title: `${c.cust} walks away`, body: `${K.SLA_WALK_DAYS} days of missed deliveries. Contract terminated; penalties paid $${Math.round(c.penaltyPaid)}k.`, tone: "bad", cat: "contracts", icon: "doc", ...kp("n.walk", { c: c.cust, d: K.SLA_WALK_DAYS, x: Math.round(c.penaltyPaid) }) });
       log(s, `contract ${c.id} terminated after ${c.streak} missed days`);
     }
     for (const c of s.contracts.filter(x => !isJob(x) && d >= x.end)) {
       const ok = !c.walked && c.missed <= K.CONTRACT_OK_MISS * c.units * c.days;
       s.contractLog[ok ? "fulfilled" : "failed"]++;
       if (ok && on(s, "reputation")) s.rep = clamp(s.rep + K.REP_CONTRACT_OK, 0, 100);
-      if (!c.walked) pushNews(s, { title: `Contract with ${c.cust} ${ok ? "fulfilled" : "ended short"}`, body: `Delivered ${Math.round(c.delivered)} units, penalties $${Math.round(c.penaltyPaid)}k.`, tone: ok ? "good" : "bad", cat: "contracts" });
+      if (!c.walked) pushNews(s, { title: `Contract with ${c.cust} ${ok ? "fulfilled" : "ended short"}`, body: `Delivered ${Math.round(c.delivered)} units, penalties $${Math.round(c.penaltyPaid)}k.`, tone: ok ? "good" : "bad", cat: "contracts", ...kp(ok ? "n.fulfilled" : "n.short", { c: c.cust, u: Math.round(c.delivered), x: Math.round(c.penaltyPaid) }) });
       log(s, `contract ${c.id} end ok=${ok}`);
     }
     for (const c of s.contracts.filter(x => isJob(x) && d >= x.deadline + x.lateMax)) {
@@ -1936,8 +1948,8 @@
       s.contractLog.failed++; s.contractLog.cancelled++;
       addLoss(s, "cancelled", lost);
       if (on(s, "reputation")) repHit(s, K.REP_JOB_CANCEL);
-      logCash(s, 0, "contractCancel", `${c.cust} cancelled a late training job: $${Math.round(lost)}k of work unpaid, $${Math.round(c.penaltyPaid)}k in late fees`);
-      pushNews(s, { title: `${c.cust} cancels a late training job`, body: `${Math.round(c.done / c.work * 100)} % done, never paid. Late fees $${Math.round(c.penaltyPaid)}k.`, tone: "bad", cat: "contracts", icon: "doc" });
+      logCash(s, 0, "contractCancel", `${c.cust} cancelled a late training job: $${Math.round(lost)}k of work unpaid, $${Math.round(c.penaltyPaid)}k in late fees`, { c: c.cust, x: Math.round(lost) });
+      pushNews(s, { title: `${c.cust} cancels a late training job`, body: `${Math.round(c.done / c.work * 100)} % done, never paid. Late fees $${Math.round(c.penaltyPaid)}k.`, tone: "bad", cat: "contracts", icon: "doc", ...kp("n.jobCancel", { c: c.cust, p: Math.round(c.done / c.work * 100), x: Math.round(c.penaltyPaid) }) });
       log(s, `job ${c.id} cancelled done=${c.done.toFixed(1)}/${c.work} lost=${lost.toFixed(1)}`);
     }
     s.contracts = s.contracts.filter(x => isJob(x) ? d < x.deadline + x.lateMax : d < x.end);
@@ -2033,14 +2045,14 @@
     const vc = C.VCS[Math.floor(R() * C.VCS.length)];
     s.roundOffer = { id: "r" + s.nextId++, vc, pct, amount: Math.round(amount), valuation: Math.round(pre), expires: s.day + K.ROUND_EXPIRY,
       pitch: `"Our board targets are gentle: about +${Math.round(K.PITCH_GROWTH * 100)} % per half-year."` };
-    pushNews(s, { title: `${vc} offers $${Math.round(amount)}k for ${Math.round(pct * 100)} %`, body: s.roundOffer.pitch, tone: "pitch", cat: "investors", icon: "tag" });
+    pushNews(s, { title: `${vc} offers $${Math.round(amount)}k for ${Math.round(pct * 100)} %`, body: s.roundOffer.pitch, tone: "pitch", cat: "investors", icon: "tag", ...kp("n.round", { v: vc, x: Math.round(amount), p: Math.round(pct * 100), g: Math.round(K.PITCH_GROWTH * 100) }) });
     log(s, `round offer ${s.roundOffer.id} ${pct} for ${Math.round(amount)} (pre ${Math.round(pre)}, growth ${g.toFixed(2)})`);
   }
   function policyVote(s, p) {
     const h = s.hidden.policy[p.id], prob = clamp(h.p0 + p.shift, 0.02, 0.98);
     const passed = h.u < prob;
     p.status = passed ? "passed" : "failed";
-    pushNews(s, { title: `${p.title} ${passed ? "passes" : "fails"}`, body: passed ? p.body : "Back to committee.", tone: passed ? "bad" : "good", cat: "policy", icon: "flag" });
+    pushNews(s, { title: `${p.title} ${passed ? "passes" : "fails"}`, body: passed ? p.body : "Back to committee.", tone: passed ? "bad" : "good", cat: "policy", icon: "flag", ...kp(passed ? "n.polPass" : "n.polFail", { pol: "@pol." + p.kind, b: "@pol." + p.kind + ".b" }) });
     log(s, `policy ${p.id} vote p=${prob.toFixed(2)} u=${h.u.toFixed(2)} passed=${passed}`);
     if (!passed) return;
     if (p.kind === "carbonTax") s.policyFx.carbonTax = K.CARBON_TAX0;
@@ -2048,7 +2060,7 @@
     if (p.kind === "export") {
       s.policyFx.exportCtl = true;
       const barred = s.contracts.filter(c => c.foreign);
-      for (const c of barred) pushNews(s, { title: `Contract with ${c.cust} ends`, body: "Customer barred by export controls. No penalty; revenue gone.", tone: "bad", cat: "contracts" });
+      for (const c of barred) pushNews(s, { title: `Contract with ${c.cust} ends`, body: "Customer barred by export controls. No penalty; revenue gone.", tone: "bad", cat: "contracts", ...kp("n.barred", { c: c.cust }) });
       s.contracts = s.contracts.filter(c => !c.foreign);
       s.offers = s.offers.filter(o => !o.foreign);
     }
@@ -2091,12 +2103,12 @@
           if (b.misses >= 2) {
             s.firedScore = s.equity.own * companyValue(s) * K.FIRED_SCORE;
             s.over = "fired";
-            pushNews(s, { title: "The board fires you", body: "Two missed targets in a row.", tone: "bad", cat: "investors" });
+            pushNews(s, { title: "The board fires you", body: "Two missed targets in a row.", tone: "bad", cat: "investors", ...kp("n.fired") });
             log(s, "fired");
             return;
           }
-          pushNews(s, hit ? { title: "Board target met", body: `Revenue $${Math.round(b.rev)}k vs $${Math.round(b.target)}k.`, tone: "good", cat: "investors" }
-            : { title: "Board warning: target missed", body: `Revenue $${Math.round(b.rev)}k vs $${Math.round(b.target)}k. Miss again and you are out.`, tone: "bad", cat: "investors" });
+          pushNews(s, hit ? { title: "Board target met", body: `Revenue $${Math.round(b.rev)}k vs $${Math.round(b.target)}k.`, tone: "good", cat: "investors", ...kp("n.boardMet", { x: Math.round(b.rev), t: Math.round(b.target) }) }
+            : { title: "Board warning: target missed", body: `Revenue $${Math.round(b.rev)}k vs $${Math.round(b.target)}k. Miss again and you are out.`, tone: "bad", cat: "investors", ...kp("n.boardMiss", { x: Math.round(b.rev), t: Math.round(b.target) }) });
           Object.assign(b, { start: d, end: d + K.BOARD_EVERY, target: Math.max(b.rev, b.target * 0.9) * (1 + K.BOARD_GROWTH), rev: 0 });
         }
       }
@@ -2114,14 +2126,14 @@
         }
       }
     }
-    for (const l of s.leaks.filter(x => d >= x.day)) { if (on(s, "reputation")) press(s, "lobby"); else pushNews(s, Object.assign({ tone: "bad", cat: "press" }, C.PRESS.lobby)); }
+    for (const l of s.leaks.filter(x => d >= x.day)) { if (on(s, "reputation")) press(s, "lobby"); else pushNews(s, Object.assign({ tone: "bad", cat: "press" }, C.PRESS.lobby, kp("n.press.lobby"))); }
     s.leaks = s.leaks.filter(x => d < x.day);
     // M63 pilots: an exotic card reveals its measured field performance after 10 days in a rack
     if (s.mech.disrupt) for (const r of s.racks) for (const dv of r.devices) {
       const it = itemOf(s, dv);
       if (it.role === "exotic" && s.measured[it.vendor] == null && dv.inst != null && d - dv.inst >= K.PILOT_DAYS) {
         s.measured[it.vendor] = it.field;
-        pushNews(s, { title: `Pilot result: ${it.name}`, body: `Measured ${Math.round(it.field * 100)} % of the spec sheet in your rack.`, tone: it.field < 0.9 ? "bad" : "good", cat: "vendor", vendor: it.vendor });
+        pushNews(s, { title: `Pilot result: ${it.name}`, body: `Measured ${Math.round(it.field * 100)} % of the spec sheet in your rack.`, tone: it.field < 0.9 ? "bad" : "good", cat: "vendor", vendor: it.vendor, ...kp("n.pilot", { it: "@it." + it.key, p: Math.round(it.field * 100) }) });
         log(s, `pilot ${it.vendor} measured ${it.field}`);
       }
     }
@@ -2129,9 +2141,9 @@
     else if (on(s, "ops") && s.policy.autoSwap) autoSwapSweep(s);
     if (on(s, "ops") && Object.keys(s.policy.keepSpares).length) restock(s);
     if (s.heatWave && d >= s.heatWave.until) s.heatWave = null;
-    if (s.outage && d >= s.outage.until) { s.outage = null; pushNews(s, { title: "Grid power restored", body: "", tone: "good", cat: "facilities" }); }
-    if (s.drought && d >= s.drought.until) { s.drought = null; pushNews(s, { title: "Drought over", body: "Water limits lifted.", tone: "good", cat: "environment" }); }
-    if (s.ppa && d >= s.ppa.end) { log(s, "ppa ended"); pushNews(s, { title: "PPA term ended", body: "Back to spot power.", tone: "info", cat: "energy" }); s.ppa = null; }
+    if (s.outage && d >= s.outage.until) { s.outage = null; pushNews(s, { title: "Grid power restored", body: "", tone: "good", cat: "facilities", ...kp("n.restored") }); }
+    if (s.drought && d >= s.drought.until) { s.drought = null; pushNews(s, { title: "Drought over", body: "Water limits lifted.", tone: "good", cat: "environment", ...kp("n.droughtOver") }); }
+    if (s.ppa && d >= s.ppa.end) { log(s, "ppa ended"); pushNews(s, { title: "PPA term ended", body: "Back to spot power.", tone: "info", cat: "energy", ...kp("n.ppaEnd") }); s.ppa = null; }
     checkChapters(s, st);
   }
 
@@ -2204,7 +2216,7 @@
 
     const q0 = Math.floor(s.day / 90), d0 = Math.floor(s.day);
     s.day = +(s.day + dt).toFixed(4);
-    while (s.hires.length && s.hires[0] <= s.day + 1e-9) { s.hires.shift(); s.techs++; pushNews(s, { title: "New technician starts", body: `${s.techs} on staff.`, tone: "good", cat: "ops", icon: "wrench" }); log(s, `hire arrived, techs=${s.techs}`); }
+    while (s.hires.length && s.hires[0] <= s.day + 1e-9) { s.hires.shift(); s.techs++; pushNews(s, { title: "New technician starts", body: `${s.techs} on staff.`, tone: "good", cat: "ops", icon: "wrench", ...kp("n.hired", { n: s.techs }) }); log(s, `hire arrived, techs=${s.techs}`); }
     if (s.transitOrders.length) {
       for (const o of s.transitOrders) if (o.day <= s.day + 1e-9) { s.transit = Math.max(0, s.transit + o.delta); log(s, `transit now ${s.transit}`); }
       s.transitOrders = s.transitOrders.filter(o => o.day > s.day + 1e-9);
@@ -2225,12 +2237,12 @@
   function completeJob(s, c) {
     const pay = c.pay, key = c.kind === "frontier" ? "frontier" : "train";
     s.cash += pay; s.totals.revenue += pay; s.fin.rev += pay; s.dayAcc.rev += pay; s.dayAcc.profit += pay; s.ledger[key] += pay;
-    logCash(s, pay, "contract", `${c.kind === "frontier" ? "Frontier training" : "Training"} job for ${c.cust} done${c.late ? " (late)" : ""}`);
+    logCash(s, pay, "contract", `${c.kind === "frontier" ? "Frontier training" : "Training"} job for ${c.cust} done${c.late ? " (late)" : ""}`, { c: c.cust });
     s.contracts.splice(s.contracts.indexOf(c), 1);
     s.contractLog.fulfilled++;
     if (c.late) s.contractLog.late++;
     else if (on(s, "reputation")) s.rep = clamp(s.rep + K.REP_CONTRACT_OK, 0, 100);
-    pushNews(s, { title: `${c.cust}: training job done`, body: `Paid $${Math.round(pay)}k${c.late ? `, after $${Math.round(c.penaltyPaid)}k in late fees` : ""}.`, tone: c.late ? "info" : "good", cat: "contracts", icon: "doc" });
+    pushNews(s, { title: `${c.cust}: training job done`, body: `Paid $${Math.round(pay)}k${c.late ? `, after $${Math.round(c.penaltyPaid)}k in late fees` : ""}.`, tone: c.late ? "info" : "good", cat: "contracts", icon: "doc", ...kp(c.late ? "n.jobDoneLate" : "n.jobDone", { c: c.cust, x: Math.round(pay), f: Math.round(c.penaltyPaid) }) });
     log(s, `job ${c.id} done pay=${pay.toFixed(1)} late=${!!c.late}`);
   }
   function sampleHistory(s, st) {

@@ -2,7 +2,7 @@
 
 **Status (2026-09-25, UI pass A):** bugs 1–5, "From the specs" (except i18n + text diet = pass B), every P0 QOL item and
 the automation-policy toggles are implemented (CHANGELOG [Unreleased], CLAUDE.md "UI pass A"). P1 items (upgrade rack,
-sell all old-gen, stats screen) are not done. Pass B: i18n zh/en + text diet through `L()` (js/strings.js).
+sell all old-gen, stats screen) are not done. **Pass B (done, 2026-09-25):** English + 简体中文 through `js/i18n.js`, and the text diet (main-screen words −52 %); see docs/I18N.md "Implementation".
 
 Specs: `docs/CONTRACTS_CORE.md`, `docs/I18N.md` (i18n + text diet + show-not-tell), `docs/GAME_FEEL.md`.
 

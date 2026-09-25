@@ -4,7 +4,8 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Sim = require("../js/sim.js");
 const QOL = require("../js/qol.js");
-const { L } = require("../js/strings.js");
+const I18N = require("../js/i18n.js");
+const L = (k, p) => I18N.tl(k, p, "en");
 const K = Sim.K;
 
 const sb = (seed = 1) => Sim.newGame(seed, { sandbox: true });
@@ -161,10 +162,10 @@ test("alerts: no switch, failed part, idle capacity and runway are listed, most 
   assert.ok(!QOL.alerts(Sim, s, st).some(a => a.kind === "idle"), "parked racks are not idle alerts");
 });
 
-test("linkColor is stable per contract id; L() interpolates and falls back to the key", () => {
+test("linkColor is stable per contract id; L() (I18N.t) interpolates and falls back to the key", () => {
   assert.equal(QOL.linkColor("c19"), QOL.linkColor("c19"));
   assert.notEqual(QOL.linkColor("c19"), QOL.linkColor("c20"));
-  assert.equal(L("board.free", { free: 3, need: 6 }), "3 / 6 free");
+  assert.equal(L("board.free", { free: 3, need: 6 }), "3/6");
   assert.equal(L("no.such.key"), "no.such.key");
 });
 

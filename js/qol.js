@@ -16,7 +16,9 @@
   "use strict";
 
   /* ---------- rejection reasons ---------- */
+  /* msg: a Sim.check result (its language-neutral `code` wins) or the English message string (legacy, matched by prefix) */
   function reason(msg) {
+    if (msg && typeof msg === "object") return msg.code || reason(msg.msg);
     const m = String(msg || "");
     if (/^Needs \$|Not enough cash|Fit-out needs \$/.test(m)) return "cash";
     if (/^Needs \d+U/.test(m)) return "space";

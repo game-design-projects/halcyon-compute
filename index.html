@@ -84,35 +84,36 @@
 
 <div class="stage" id="stage">
 <header class="hud" id="hud">
-  <button class="iconbtn" id="menubtn" title="Main menu"><svg class="i"><use href="#burger"/></svg></button>
-  <div class="chip" id="h-cashchip" title="Cash and current net income per day"><svg class="i"><use href="#coin"/></svg><div><span class="big" id="h-cash"></span><span class="delta" id="h-cash-d"></span><small id="h-rate" style="display:block"></small><div class="bar runway" id="h-runway"><i class="ghostbar"></i><i class="now"></i></div></div></div>
-  <div class="chip click" id="h-techs" title="Technicians install, move, repair and sell hardware. Filled = free"></div>
+  <button class="iconbtn" id="menubtn" data-i18n-title="hud.menu"><svg class="i"><use href="#burger"/></svg></button>
+  <div class="chip" id="h-cashchip"><svg class="i"><use href="#coin"/></svg><div><span class="big" id="h-cash"></span><span class="delta" id="h-cash-d"></span><small id="h-rate" style="display:block"></small><div class="bar runway" id="h-runway"><i class="ghostbar"></i><i class="now"></i></div></div></div>
+  <div class="chip click" id="h-techs"></div>
   <div class="chip" id="h-when"></div>
-  <div class="speed" role="group" aria-label="Game speed">
-    <button data-speed="0" title="Pause (space)"><svg class="i"><use href="#pause"/></svg></button>
-    <button data-speed="1" title="1x speed (1)"><svg class="i"><use href="#play1"/></svg></button>
-    <button data-speed="2" title="2x speed (2)"><svg class="i"><use href="#play2"/></svg></button>
-    <button data-speed="4" title="4x speed (3)"><svg class="i"><use href="#play3"/></svg></button>
-    <button data-speed="8" title="8x speed (4)"><svg class="i"><use href="#play4"/></svg></button>
-    <button id="skipbtn" title="Skip to the next event (N)" aria-pressed="false"><svg class="i"><use href="#skip"/></svg></button>
+  <div class="speed" role="group" data-i18n-aria="hud.speed">
+    <button data-speed="0" data-i18n-title="hud.pause"><svg class="i"><use href="#pause"/></svg></button>
+    <button data-speed="1" data-i18n-title="hud.x1"><svg class="i"><use href="#play1"/></svg></button>
+    <button data-speed="2" data-i18n-title="hud.x2"><svg class="i"><use href="#play2"/></svg></button>
+    <button data-speed="4" data-i18n-title="hud.x4"><svg class="i"><use href="#play3"/></svg></button>
+    <button data-speed="8" data-i18n-title="hud.x8"><svg class="i"><use href="#play4"/></svg></button>
+    <button id="skipbtn" data-i18n-title="skip.tip" aria-pressed="false"><svg class="i"><use href="#skip"/></svg></button>
   </div>
   <div class="chip click" id="h-power"></div>
   <div class="chip" id="h-heat"></div>
   <div class="chip click" id="h-transit" hidden></div>
   <div class="chip" id="h-score"></div>
-  <div class="chip pace" id="h-pace" hidden title="Pace: two bots play your seed alongside you, up to today"></div>
+  <div class="chip pace" id="h-pace" hidden></div>
   <span class="spacer"></span>
   <div class="drawer-btns" id="drawer-btns">
-    <button class="iconbtn labeled board-dup" data-drawer="contracts" id="db-contracts" title="Contracts: offers, active contracts, track record" hidden><svg class="i"><use href="#hand"/></svg><span class="lbl">Contracts</span><span class="dot" hidden></span></button>
-    <button class="iconbtn" data-drawer="finance" id="db-finance" title="Finance: quarter results, debt, leases, investors"><svg class="i"><use href="#trend"/></svg><span class="dot" hidden></span></button>
-    <button class="iconbtn" data-drawer="energy" id="db-energy" title="Energy, facilities and environment" hidden><svg class="i"><use href="#bolt"/></svg><span class="dot" hidden></span></button>
-    <button class="iconbtn" data-drawer="affairs" id="db-affairs" title="Reputation and policy" hidden><svg class="i"><use href="#flag"/></svg><span class="dot" hidden></span></button>
+    <button class="iconbtn labeled board-dup" data-drawer="contracts" id="db-contracts" data-i18n-title="dr.contractsTip" hidden><svg class="i"><use href="#hand"/></svg><span class="lbl" data-i18n="dr.contracts">Contracts</span><span class="dot" hidden></span></button>
+    <button class="iconbtn" data-drawer="finance" id="db-finance" data-i18n-title="dr.financeTip"><svg class="i"><use href="#trend"/></svg><span class="dot" hidden></span></button>
+    <button class="iconbtn" data-drawer="energy" id="db-energy" data-i18n-title="dr.energy" hidden><svg class="i"><use href="#bolt"/></svg><span class="dot" hidden></span></button>
+    <button class="iconbtn" data-drawer="affairs" id="db-affairs" data-i18n-title="dr.affairs" hidden><svg class="i"><use href="#flag"/></svg><span class="dot" hidden></span></button>
   </div>
-  <button class="iconbtn" id="alertbtn" title="Alerts (A)" aria-label="Alerts"><svg class="i"><use href="#bell"/></svg><span class="dot" hidden></span></button>
-  <button class="iconbtn" id="fsbtn" title="Fullscreen (F)" aria-pressed="false"><svg class="i"><use href="#expand"/></svg></button>
-  <button class="iconbtn" id="mutebtn" title="Sound (M)"><svg class="i"><use href="#sound"/></svg></button>
-  <button class="iconbtn" id="setbtn" title="Settings and saves (O)" aria-label="Settings"><svg class="i"><use href="#gear"/></svg></button>
-  <button class="iconbtn" id="helpbtn" title="Keyboard and chapter card (?)"><svg class="i"><use href="#help"/></svg></button>
+  <button class="iconbtn" id="alertbtn" data-i18n-title="hud.alerts" data-i18n-aria="alerts.title"><svg class="i"><use href="#bell"/></svg><span class="dot" hidden></span></button>
+  <button class="iconbtn langbtn" id="langbtn" type="button">中</button>
+  <button class="iconbtn" id="fsbtn" aria-pressed="false"><svg class="i"><use href="#expand"/></svg></button>
+  <button class="iconbtn" id="mutebtn"><svg class="i"><use href="#sound"/></svg></button>
+  <button class="iconbtn" id="setbtn" data-i18n-title="hud.settings" data-i18n-aria="set.title"><svg class="i"><use href="#gear"/></svg></button>
+  <button class="iconbtn" id="helpbtn" data-i18n-title="hud.help"><svg class="i"><use href="#help"/></svg></button>
   <div class="pop" id="pop" hidden></div>
 </header>
 
@@ -122,10 +123,10 @@
   <section class="floor-wrap">
     <div class="goal" id="goal"></div>
     <div class="offerstrip board" id="offerstrip" hidden aria-live="polite"></div>
-    <div class="floorbar"><div class="halltabs" id="halltabs" role="group" aria-label="Hall"></div><div class="modes" role="group" aria-label="Map mode" id="modes"></div><div class="legend" id="legend"></div></div>
+    <div class="floorbar"><div class="halltabs" id="halltabs" role="group" data-i18n-aria="hud.halls"></div><div class="modes" role="group" data-i18n-aria="hud.mapMode" id="modes"></div><div class="legend" id="legend"></div></div>
     <div class="floor-scroll"><div class="floor" id="floor"></div><div class="boxsel" id="boxsel" hidden></div><div class="bulkbar" id="bulkbar" hidden></div></div>
     <div class="shelf-wrap" id="shelf-wrap" hidden>
-      <div class="shelf-head"><h2>Spares</h2><span id="shelf-n"></span><svg class="i" id="shelf-help"><use href="#help"/></svg></div>
+      <div class="shelf-head"><h2 data-i18n="shelf.title">Spares</h2><span id="shelf-n"></span></div>
       <div class="shelf" id="shelf" data-drop-shelf></div>
     </div>
     <div class="tray-title" id="tray-title"></div>
@@ -133,34 +134,33 @@
   </section>
 
   <aside class="side">
-    <div class="corp" id="corp" aria-label="Company">
+    <div class="corp" id="corp" data-i18n-aria="hud.company">
       <div class="chip click" id="h-debt" data-drawer="finance" hidden></div>
       <div class="chip click" id="h-rep" data-drawer="affairs" hidden></div>
       <div class="chip click" id="h-carbon" data-drawer="energy" hidden></div>
       <div class="chip click" id="h-equity" data-drawer="finance" hidden></div>
     </div>
     <div class="card tabcard" id="infotabs">
-      <div class="tabs" role="tablist" aria-label="Rack panel, news, markets and benchmarks">
-        <button role="tab" id="tab-rack" data-tab="rack" aria-selected="true" aria-controls="pane-rack"><svg class="i"><use href="#cpu"/></svg><span id="tab-rack-lbl">Rack</span></button>
-        <button role="tab" id="tab-news" data-tab="news" aria-selected="false" aria-controls="pane-news"><svg class="i"><use href="#news"/></svg><span>News</span><span class="dot" hidden></span></button>
-        <button role="tab" id="tab-markets" data-tab="markets" aria-selected="false" aria-controls="pane-markets"><svg class="i"><use href="#coin"/></svg><span>Markets</span></button>
-        <button role="tab" id="tab-bench" data-tab="bench" aria-selected="false" aria-controls="pane-bench"><svg class="i"><use href="#chip"/></svg><span>Benchmarks</span></button>
+      <div class="tabs" role="tablist" data-i18n-aria="tab.aria">
+        <button role="tab" id="tab-rack" data-tab="rack" aria-selected="true" aria-controls="pane-rack"><svg class="i"><use href="#cpu"/></svg><span id="tab-rack-lbl" data-i18n="tab.rack">Rack</span></button>
+        <button role="tab" id="tab-news" data-tab="news" aria-selected="false" aria-controls="pane-news"><svg class="i"><use href="#news"/></svg><span data-i18n="tab.news">News</span><span class="dot" hidden></span></button>
+        <button role="tab" id="tab-markets" data-tab="markets" aria-selected="false" aria-controls="pane-markets"><svg class="i"><use href="#coin"/></svg><span data-i18n="tab.markets">Markets</span></button>
+        <button role="tab" id="tab-bench" data-tab="bench" aria-selected="false" aria-controls="pane-bench"><svg class="i"><use href="#chip"/></svg><span data-i18n="tab.bench">Benchmarks</span></button>
       </div>
       <div class="pane rackpane" role="tabpanel" id="pane-rack" aria-labelledby="tab-rack"><div id="detail"></div></div>
       <div class="pane chart" role="tabpanel" id="pane-markets" aria-labelledby="tab-markets" hidden>
-        <h2><svg class="i"><use href="#coin"/></svg>Compute markets</h2>
+        <h2><svg class="i"><use href="#coin"/></svg><span data-i18n="mk.title">Compute markets</span></h2>
         <div class="market-legend" id="market-legend"></div>
-        <svg viewBox="0 0 320 150" id="market-chart" role="img" aria-label="Price and demand history for training and inference"></svg>
+        <svg viewBox="0 0 320 150" id="market-chart" role="img" data-i18n-aria="mk.aria"></svg>
       </div>
       <div class="pane chart" role="tabpanel" id="pane-bench" aria-labelledby="tab-bench" hidden>
         <div id="bench-card">
-          <h2><svg class="i"><use href="#chip"/></svg>Vendor benchmarks</h2>
-          <div class="sub">Performance per kW, as reported by each vendor. Past data only.</div>
-          <svg viewBox="0 0 300 140" id="bench-chart" role="img" aria-label="Vendor-reported benchmarks for emerging accelerators"></svg>
+          <h2 data-i18n-title="bench.sub"><svg class="i"><use href="#chip"/></svg><span data-i18n="bench.title">Vendor benchmarks</span></h2>
+          <svg viewBox="0 0 300 140" id="bench-chart" role="img" data-i18n-aria="bench.sub"></svg>
         </div>
       </div>
       <div class="pane newspane" role="tabpanel" id="pane-news" aria-labelledby="tab-news" hidden>
-        <div class="newsfilter" id="newsfilter" role="group" aria-label="Filter news"></div>
+        <div class="newsfilter" id="newsfilter" role="group" data-i18n-aria="news.filter"></div>
         <div class="news" id="newsfeed"></div>
       </div>
     </div>
@@ -168,29 +168,30 @@
 </div>
 
 <aside class="drawer" id="drawer" aria-hidden="true">
-  <header><h2 id="drawer-title"></h2><span class="sub" id="drawer-sub"></span><button class="iconbtn" id="drawer-close" title="Close (Esc)"><svg class="i"><use href="#cross"/></svg></button></header>
+  <header><h2 id="drawer-title"></h2><span class="sub" id="drawer-sub"></span><button class="iconbtn" id="drawer-close" data-i18n-title="btn.close"><svg class="i"><use href="#cross"/></svg></button></header>
   <div class="dbody" id="drawer-body"></div>
 </aside>
 
 <div class="toast" id="toast" role="status"></div>
 <div class="hovercard" id="hovercard" hidden role="tooltip"></div>
 <div class="sr-only" id="sr" aria-live="polite"></div>
-<div class="undo" id="undo" role="status" aria-live="polite"><span id="undo-msg"></span><button class="btn" id="undo-btn" type="button"><svg class="i"><use href="#undoarrow"/></svg>Undo</button><i class="undo-bar"></i></div>
+<div class="undo" id="undo" role="status" aria-live="polite"><span id="undo-msg"></span><button class="btn" id="undo-btn" type="button"><svg class="i"><use href="#undoarrow"/></svg><span data-i18n="sold.undo">Undo</span></button><i class="undo-bar"></i></div>
+<div class="teach" id="teach" hidden aria-hidden="true"></div>
 <div class="qcard" id="qcard" aria-live="polite"></div>
 
 <div class="mainmenu" id="mainmenu">
   <div class="menucard">
-    <div class="menuhead"><span class="logo big">Halcyon Compute</span><span class="sub">Build a datacenter. Read the signals. Five years.</span></div>
+    <div class="menuhead"><span class="logo big">Halcyon Compute</span><span class="sub" data-i18n="menu.tag">Build a datacenter. Read the signals. Five years.</span><span class="mlang" id="m-lang"></span></div>
     <div class="menubtns">
-      <button class="mbtn primary" id="m-continue" hidden><svg class="i"><use href="#play1"/></svg><span><b>Continue</b><small id="m-continue-sub"></small></span></button>
-      <button class="mbtn" id="m-campaign"><svg class="i"><use href="#flag"/></svg><span><b>New campaign</b><small>17 chapters, one mechanic at a time</small></span></button>
-      <button class="mbtn" id="m-sandbox"><svg class="i"><use href="#layers"/></svg><span><b>Sandbox</b><small>Everything unlocked from day 0</small></span></button>
-      <label class="seedrow"><svg class="i"><use href="#globe"/></svg><span>Seed</span><input id="m-seed" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="9" aria-label="Seed"><button class="btn" id="m-dice" title="Random seed" type="button"><svg class="i"><use href="#rocket"/></svg></button></label>
-      <button class="mbtn ghostbtn" id="m-load"><svg class="i"><use href="#box"/></svg><span><b id="m-load-t">Load / import a save</b></span></button>
-      <button class="mbtn ghostbtn" id="m-how"><svg class="i"><use href="#help"/></svg><span><b>How to play</b></span></button>
-      <button class="mbtn ghostbtn" id="m-export" hidden><svg class="i"><use href="#download"/></svg><span><b>Export gameplay log</b><small>JSON: seed + every action, replayable</small></span></button>
-      <button class="mbtn ghostbtn" id="m-tele" hidden><svg class="i"><use href="#globe"/></svg><span><b>Share anonymous gameplay data</b><small id="m-tele-sub"></small></span></button>
-      <button class="mbtn ghostbtn" id="m-resume" hidden><svg class="i"><use href="#cross"/></svg><span><b>Back to the game</b></span></button>
+      <button class="mbtn primary" id="m-continue" hidden><svg class="i"><use href="#play1"/></svg><span><b data-i18n="menu.continue">Continue</b><small id="m-continue-sub"></small></span></button>
+      <button class="mbtn" id="m-campaign"><svg class="i"><use href="#flag"/></svg><span><b data-i18n="menu.campaignNew">New campaign</b><small data-i18n="menu.campaignSub">17 chapters, one mechanic at a time</small></span></button>
+      <button class="mbtn" id="m-sandbox"><svg class="i"><use href="#layers"/></svg><span><b data-i18n="menu.sandbox">Sandbox</b><small data-i18n="menu.sandboxSub">Everything unlocked from day 0</small></span></button>
+      <label class="seedrow"><svg class="i"><use href="#globe"/></svg><span data-i18n="menu.seed">Seed</span><input id="m-seed" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="9" data-i18n-aria="menu.seed"><button class="btn" id="m-dice" data-i18n-title="menu.dice" type="button"><svg class="i"><use href="#rocket"/></svg></button></label>
+      <button class="mbtn ghostbtn" id="m-load"><svg class="i"><use href="#box"/></svg><span><b id="m-load-t" data-i18n="menu.load">Load / import a save</b></span></button>
+      <button class="mbtn ghostbtn" id="m-how"><svg class="i"><use href="#help"/></svg><span><b data-i18n="menu.how">How to play</b></span></button>
+      <button class="mbtn ghostbtn" id="m-export" hidden><svg class="i"><use href="#download"/></svg><span><b data-i18n="set.log">Export gameplay log</b><small data-i18n="menu.logSub">JSON: seed + every action, replayable</small></span></button>
+      <button class="mbtn ghostbtn" id="m-tele" hidden><svg class="i"><use href="#globe"/></svg><span><b data-i18n="menu.tele">Share anonymous gameplay data</b><small id="m-tele-sub"></small></span></button>
+      <button class="mbtn ghostbtn" id="m-resume" hidden><svg class="i"><use href="#cross"/></svg><span><b data-i18n="menu.resume">Back to the game</b></span></button>
     </div>
     <div class="howto" id="m-howto" hidden></div>
   </div>
@@ -199,7 +200,7 @@
 <dialog id="chapter" class="chap" aria-labelledby="ct">
   <header><h2 id="ct"></h2><span style="color:var(--hud-ink-2)" id="csub"></span></header>
   <div class="body" id="cbody"></div>
-  <footer><button class="end" data-close>Got it</button></footer>
+  <footer><button class="end" data-close data-i18n="btn.gotIt">Got it</button></footer>
 </dialog>
 
 <dialog id="card" class="chap cardlg" aria-labelledby="kt">
@@ -209,13 +210,13 @@
 </dialog>
 
 <dialog id="settings" class="chap setdlg" aria-labelledby="st-t">
-  <header><h2 id="st-t"></h2><button class="iconbtn" data-close title="Close (Esc)"><svg class="i"><use href="#cross"/></svg></button></header>
+  <header><h2 id="st-t"></h2><button class="iconbtn" data-close data-i18n-title="btn.close"><svg class="i"><use href="#cross"/></svg></button></header>
   <div class="body" id="st-body"></div>
   <input type="file" id="st-file" accept=".json,application/json" hidden>
 </dialog>
 
 <dialog id="keys" class="chap keysdlg" aria-labelledby="ky-t">
-  <header><h2 id="ky-t"></h2><button class="iconbtn" data-close title="Close (Esc)"><svg class="i"><use href="#cross"/></svg></button></header>
+  <header><h2 id="ky-t"></h2><button class="iconbtn" data-close data-i18n-title="btn.close"><svg class="i"><use href="#cross"/></svg></button></header>
   <div class="body" id="ky-body"></div>
   <footer id="ky-foot" style="gap:8px"></footer>
 </dialog>
@@ -223,13 +224,15 @@
 <dialog id="over" class="overdlg" aria-labelledby="ot">
   <header><h2 id="ot"></h2><span style="color:var(--hud-ink-2)" id="osub"></span></header>
   <div class="body" id="obody"></div>
-  <footer style="gap:8px"><button class="btn" id="o-export"><svg class="i"><use href="#download"/></svg>Export log</button><button class="btn" id="same-seed">Replay this seed</button><button class="end" id="new-game">Main menu</button></footer>
+  <footer style="gap:8px"><button class="btn" id="o-export"><svg class="i"><use href="#download"/></svg><span data-i18n="end.export">Export log</span></button><button class="btn" id="same-seed" data-i18n="end.replay">Replay this seed</button><button class="end" id="new-game" data-i18n="end.menu">Main menu</button></footer>
 </dialog>
 </div>
 
 <script src="js/build.js"></script>
 <script src="js/telemetry.js"></script>
-<script src="js/strings.js"></script>
+<script src="js/i18n.js"></script>
+<script src="js/i18n/ui.js"></script>
+<script src="js/i18n/content.js"></script>
 <script src="js/content.js"></script>
 <script src="js/sim.js"></script>
 <script src="bots/bots.js"></script>
