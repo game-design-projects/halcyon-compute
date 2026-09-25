@@ -25,7 +25,7 @@ const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps * Math.max(1, Math.abs
 test("campaign: 1800 days, 17 chapters at the spec days", () => {
   assert.equal(K.END_DAY, 1800);
   assert.equal(Sim.CHAPTERS.length, 17);
-  assert.deepEqual(Sim.CHAPTERS.map(c => c.day), [0, 30, 60, 120, 240, 300, 420, 480, 570, 660, 750, 840, 930, 1020, 1110, 1200, 1290]);
+  assert.deepEqual(Sim.CHAPTERS.map(c => c.day), [0, 45, 100, 170, 250, 330, 420, 490, 570, 660, 750, 840, 930, 1020, 1110, 1200, 1290]);
   for (const c of Sim.CHAPTERS) assert.ok(c.bullets.length >= 1 && c.bullets.length <= 4, c.key);
   const s = camp(3);
   for (const [i, c] of Sim.CHAPTERS.entries()) {
@@ -55,12 +55,12 @@ test("mechanics are inactive before their chapter (campaign)", () => {
   assert.match(Sim.check(s, { type: "pr" }).msg, /chapter 15/);
   // no failures before ch6 even for hot, packed racks
   for (const id of ["B1", "B2", "B3", "C1"]) fill(s, id, "c1", 4, "train");
-  Sim.advance(s, 190);
+  Sim.advance(s, 220);
   assert.ok(s.racks.every(r => r.devices.every(d => !d.failed)));
   assert.equal(Sim.stats(s).costs.salaries, 0);
   assert.equal(Sim.stats(s).costs.transit, 0);
   Sim.advance(s, 20);
-  assert.ok(Sim.check(s, { type: "hire" }).ok, "ops open at d300");
+  assert.ok(Sim.check(s, { type: "hire" }).ok, "ops open at d330");
 });
 
 test("ablation flags for the new groups switch their chapter off", () => {
@@ -395,9 +395,10 @@ test("M36: leasing: no upfront, 0.45 %/day, excluded from net worth, returned by
   assert.ok(d);
   assert.equal(Sim.check(s, { type: "sell", rack: "B1", uid: d.uid }).ok, false);
   assert.ok(Sim.apply(s, { type: "returnLease", rack: "B1", uid: d.uid }).ok);
-  assert.equal(Sim.stats(s).costs.lease, 0);
+  assert.ok(Sim.stats(s).costs.lease > 0, "v0.3: billed until the return job completes");
   Sim.advance(s, 1.25);
   assert.ok(!rack(s, "B1").devices.some(x => x.leased));
+  assert.equal(Sim.stats(s).costs.lease, 0);
 });
 
 test("M37: 21 % tax on positive quarterly profit after 3-year straight-line depreciation", () => {
@@ -871,6 +872,7 @@ test("M07b: a 4th grid tier follows the 700 kW tier, with a long lead time", () 
   const s = sb(1);
   s.cash = 1e5;
   for (const kw of [K.GRID_KW_UP, K.GRID_KW_UP2]) { assert.ok(Sim.apply(s, { type: "grid" }).ok); Sim.advance(s, 50); assert.equal(s.gridKw, kw); }
+  s.halls[1].built = s.halls[2].built = true;   // v0.3: tier 4 powers Hall 3 (built or under construction)
   const cash = s.cash;
   assert.ok(Sim.apply(s, { type: "grid" }).ok);
   assert.ok(near(cash - s.cash, K.GRID_COST3));
@@ -939,7 +941,7 @@ test("M29b/M65: a real demand cut sends inference build-to-suit customers away (
 });
 
 test("full 1800-day campaign with a random-action driver is deterministic", () => {
-  const a = playRandom(22).s, b = playRandom(22).s;   // seed 22: takes an equity round and reaches d1800 (re-check the seed when RNG draws change)
+  const a = playRandom(21).s, b = playRandom(21).s;   // seed 21 (v0.3 timeline; was 22): takes an equity round and reaches d1800 (re-check the seed when RNG draws change)
   assert.equal(JSON.stringify(a), JSON.stringify(b));
   assert.equal(a.over, "end", `game lasted ${a.day} days (${a.over})`);
   assert.ok(a.equity.rounds >= 1 && a.contractLog.signed >= 1 && a.racks.length >= 36, "the driver touched the late chapters (Hall 2+)");

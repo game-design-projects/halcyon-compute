@@ -119,7 +119,9 @@
       chapter: 0, unlocked: {}, events: [], firedEvents: 0,
       market: { mult: { web: 1, train: 1, infer: 1 }, noise: { web: 1, train: 1, infer: 1 }, dmult: { web: 1, train: 1, infer: 1 }, gpuCut: 1 },
       vendors: {}, items: {},
-      ledger: newLedger(), lastQuarter: null, totals: { revenue: 0, power: 0, capex: 0, resale: 0, opex: 0, tax: 0 },
+      ledger: newLedger(), lastQuarter: null, totals: { revenue: 0, power: 0, capex: 0, resale: 0, opex: 0, tax: 0, flow: 0 },
+      // v0.3: every discrete cash jump that is not the player's own action is logged, so the UI can explain it
+      cashEvents: [], cashSeq: 0,
       // ch6 operations
       techs: K.TECHS, hires: [], repairAuto: true, shelf: [],
       // ch7 fabric
@@ -697,6 +699,7 @@
       for (const d of r.devices) if (d.leased) lease += d.leaseRate;
       for (const d of r.pending) if (d.leased) lease += d.leaseRate;
     }
+    for (const j of s.jobs) if (j.kind === "returnLease" && j.dev && j.dev.leased) lease += j.dev.leaseRate;   // billed until it is gone
     let facility = 0;
     for (const hh of halls) facility += hh.it * hh.pue;
     const unit = se.powerPrice / K.PUE_BASE;           // price per facility kW-day (PUE 1.3 baked in before ch13)
@@ -786,6 +789,19 @@
       s.ledger[ledgerKey || "other"] += amt;
     }
   }
+  /* a discrete cash change the player did not click (tax, auto-repair, a finished sale): {n, day, amt, kind, label} */
+  const CASH_LOG_MAX = 40;
+  function ensureCashLog(s) {
+    if (!s.cashEvents) s.cashEvents = [];
+    if (s.cashSeq == null) s.cashSeq = 0;
+    if (s.totals.flow == null) s.totals.flow = 0;
+  }
+  function logCash(s, amt, kind, label) {
+    ensureCashLog(s);
+    s.cashEvents.push({ n: ++s.cashSeq, day: round2(s.day), amt: round2(amt), kind, label });
+    if (s.cashEvents.length > CASH_LOG_MAX) s.cashEvents.shift();
+    if (DEBUG && Math.abs(amt) >= 10) console.debug(`[sim d${s.day.toFixed(2)}] cash ${amt >= 0 ? "+" : ""}${amt.toFixed(1)} ${kind}: ${label}`);
+  }
   const depRate = s => s.deprec.reduce((a, x) => a + (x.until > s.day ? x.rate : 0), 0);
   function repHit(s, amt) { s.rep = clamp(s.rep - amt, 0, 100); }
   function press(s, kind, hit) {
@@ -836,6 +852,20 @@
   const gridNext = s => s.gridTier === 0 ? { kw: K.GRID_KW_UP, cost: K.GRID_COST, days: K.GRID_DAYS }
     : s.gridTier === 1 && on(s, "facilities") ? { kw: K.GRID_KW_UP2, cost: K.GRID_COST2, days: K.GRID_DAYS2 }
     : s.gridTier === 2 && on(s, "facilities") ? { kw: K.GRID_KW_UP3, cost: K.GRID_COST3, days: K.GRID_DAYS3 } : null;
+  /* grid tier 4 exists to power Hall 3: it may be ordered once Hall 3 stands or is being built (the 90-day feed and the
+     120-day hall can overlap), never before (DECISIONS D41) */
+  const hall3Started = s => { ensureHalls(s); return s.halls[2].built || s.jobs.some(j => j.kind === "buildHall" && j.hall === 3); };
+  /* the workload a GPU earns more on at today's spot prices, when it is the first GPU in its rack (else null: the rack
+     keeps the player's choice). Used by the UI as the default on install; bots choose their own workload. */
+  function naturalWorkload(s, rackId, key) {
+    const r = rackById(s, rackId), it = s.items[key];
+    if (!r || !it || it.role !== "gpu" || r.tank) return null;
+    if (r.devices.concat(r.pending).some(d => itemOf(s, d).role === "gpu")) return null;
+    const mk = marketAt(s, s.day);
+    let best = null, bestV = -1;
+    for (const w of WORKLOADS) { const v = Math.min(it.F, it.B * INTENSITY[w]) * mk[w].price; if (v > bestV) { bestV = v; best = w; } }
+    return best;
+  }
   function ppaQuote(s) {  // tracks the recent spot average (season + noise), a little below it
     const H = s.history.slice(-12);
     const avg = H.length ? H.reduce((a, h) => a + (h.sp || seasonAt(h.d).powerPrice / K.PUE_BASE), 0) / H.length : seasonAt(s.day).powerPrice / K.PUE_BASE;
@@ -899,6 +929,7 @@
         const g = gridNext(s);
         if (!g) return no(s.gridTier >= 3 ? "Grid fully upgraded" : "Next upgrade unlocks in chapter 11");
         if (s.jobs.some(j => j.kind === "grid")) return no("Upgrade under way");
+        if (g.kw === K.GRID_KW_UP3 && !hall3Started(s)) return no("Needs Hall 3 (built or under construction)");
         if (s.cash < g.cost) return no(`Needs $${g.cost}k`);
         return { ok: true, msg: `Grid to ${g.kw} kW, $${g.cost}k, ${g.days} days` };
       }
@@ -1258,6 +1289,7 @@
     const c = repairCost(s, f.d);
     if (s.cash < c) return false;
     spend(s, c, "opex", "repairs");
+    logCash(s, -c, "repair", `Repair: ${itemOf(s, f.d).name}${f.r ? " in " + f.r.id : " on the shelf"}`);
     const parts = repairParts(s, f.d);
     s.jobs.push({ id: s.nextId++, kind: "repair", rack: f.r ? f.r.id : null, uid, phase: "parts", left: parts, total: parts, work: K.REPAIR_DAYS });
     log(s, `repair ${f.d.type} ${uid} $${c}k`);
@@ -1276,7 +1308,7 @@
       if (k === "buy" || k === "lease") j.dev.inst = s.day;
       if (j.dev.inst == null) j.dev.inst = s.day;
       r.devices.push(j.dev);
-    } else if (k === "sell") { s.cash += j.value; s.totals.resale += j.value; }
+    } else if (k === "sell") { s.cash += j.value; s.totals.resale += j.value; logCash(s, j.value, "sale", `Sold ${itemOf(s, j.dev).name}${j.rack ? " from " + j.rack : ""}`); }
     else if (k === "tank") rackById(s, j.rack).tank = true;
     else if (k === "grid") {
       s.gridTier++; s.gridUp = true; s.gridKw = j.kw || K.GRID_KW_UP;
@@ -1510,7 +1542,10 @@
     const f = s.fin;
     if (on(s, "finance")) {
       const profit = f.rev - f.opex - f.dep, tax = K.TAX * Math.max(0, profit);
-      if (tax > 0) { s.cash -= tax; s.ledger.tax += tax; s.totals.tax += tax; addLoss(s, "taxes", tax); }
+      if (tax > 0) {
+        s.cash -= tax; s.ledger.tax += tax; s.totals.tax += tax; addLoss(s, "taxes", tax);
+        logCash(s, -tax, "tax", `Quarterly tax: ${Math.round(K.TAX * 100)} % of $${Math.round(profit)}k profit`);
+      }
       log(s, `quarter ${q0} profit=${profit.toFixed(1)} dep=${f.dep.toFixed(1)} tax=${tax.toFixed(1)}`);
     }
     s.fin = { rev: 0, opex: 0, dep: 0 };
@@ -1523,7 +1558,8 @@
   /* ================= time ================= */
   function step(s) {
     const dt = K.DT, st = stats(s);
-    s.cash += st.net * dt;
+    ensureCashLog(s);
+    s.cash += st.net * dt; s.totals.flow += st.net * dt;
     s.totals.revenue += st.gross * dt; s.totals.power += st.powerCost * dt; s.totals.opex += st.opex * dt;
     const L = s.ledger, c = st.costs;
     L.web += st.revenue.web * dt; L.train += st.revenue.train * dt; L.infer += st.revenue.infer * dt;
@@ -1660,7 +1696,7 @@
     K, MODES, MARKET, INTENSITY, NET_NEED, CHAPTERS, BASE_ITEMS, SHOP_ORDER, GEN_LAUNCH, WORKLOADS, CONTENT: C, LOSS_LABEL,
     newGame, step, advance, stats, check, apply, project, shallowClone, netWorth, resale, score, summary, companyValue,
     seasonAt, marketAt, rackById, rackIndex, usedU, rackKw, rackKwAll, gridKwAll, shopItems, currentGen, busyTechs, isDead, throttleAt,
-    on, repOf, repFactor, hazard, ppaQuote, creditLimitOf, shelfLoad, transitTarget, trailingRevenue, hbmF, gridNext, hallCost, HALL_LETTERS,
+    on, repOf, repFactor, hazard, naturalWorkload, logCash, ppaQuote, creditLimitOf, shelfLoad, transitTarget, trailingRevenue, hbmF, gridNext, hallCost, HALL_LETTERS,
     setDebug(v) { DEBUG = !!v; },
   };
 });

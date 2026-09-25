@@ -56,7 +56,7 @@ test("technicians limit parallel installs to 3", () => {
 
 test("constraints: U, rack kW, grid kW, cash, tank compatibility", () => {
   const s = fresh();
-  s.day = 80; s.cash = 1e6;
+  s.day = 110; s.cash = 1e6;
   const r = rack(s, "C1");
   for (let i = 0; i < 5; i++) assert.ok(Sim.apply(s, { type: "buy", item: "c1", rack: "C1" }).ok || i === 5);
   // 5 x 6 kW = 30 kW: full on power; 20U used
@@ -73,7 +73,7 @@ test("constraints: U, rack kW, grid kW, cash, tank compatibility", () => {
 
 test("grid cap blocks purchases past 250 kW", () => {
   const s = fresh();
-  s.day = 80; s.cash = 1e6;
+  s.day = 110; s.cash = 1e6;
   let bought = 0;
   for (const r of s.racks) for (let i = 0; i < 4; i++) if (Sim.apply(s, { type: "buy", item: "c1", rack: r.id }).ok) bought++;
   assert.ok(Sim.gridKwAll(s) <= Sim.K.GRID_KW + 1e-9);
@@ -148,7 +148,7 @@ test("markets saturate: oversupply sells at a quarter price", () => {
 test("generation launch drops compute prices and resale of older cards", () => {
   const s = fresh(3);
   s.cash = 1e6;
-  Sim.advance(s, 80);
+  Sim.advance(s, 110);
   Sim.apply(s, { type: "buy", item: "c1", rack: "B1" });
   Sim.advance(s, 10);
   const d = rack(s, "B1").devices[0];
@@ -202,11 +202,11 @@ test("PM-900: boosts bandwidth while alive, bricks the rack when Nanofab dies", 
 test("chapters unlock over time and gate the shop", () => {
   const s = fresh();
   assert.ok(!Sim.shopItems(s).includes("c1"));
-  Sim.advance(s, 80);
+  Sim.advance(s, 110);
   assert.ok(Sim.shopItems(s).includes("c1"));
   assert.equal(s.chapter, 2);
   Sim.advance(s, 400);
-  assert.equal(s.chapter, 7, "contracts chapter opens at d480");
+  assert.equal(s.chapter, 7, "contracts chapter opens at d490");
   Sim.advance(s, 1300 - s.day);
   assert.equal(s.chapter, 16);
 });

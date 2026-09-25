@@ -28,24 +28,25 @@ original list, it wins.
 - **End screen**: score, breakdown, replay of the same seed by the Greedy and Planner bots, "behind the curtain" reveal of every hidden truth, and 3 personalised lessons (the largest measurable mistakes, e.g. "you lost $1.2M to throttling in Y3 summer").
 
 ## 2. Chapters (campaign day → mechanics). Each mechanic has an id M##.
+v0.3 pacing (playtest round 1): d0, 45, 100, 170, 250, 330, 420, 490, 570, 660, 750, 840, 930, 1020, 1110, 1200, 1290 (was 0, 30, 60, 120, 240, 300, …, 480, …). GPUs (c1/m1) go on sale with ch3 and CRU coolers with ch4. Ch17 stays at d1290: its seeded arc (launches 1290/1440/1590, vendor death 1500, Nanofab 1560) fills the last 500 days.
 
 ### Ch1 Racks and cash (d0) — exists
 M01 18-rack Hall 1 floor, 20U / 30 kW per rack. M02 switch per rack (rack-local network, 16 per switch). M03 web servers + web market (demand ≈30, flat). M04 oversupply sells at 25 %. M05 technicians install (3), 6-day shipping + 2-day install. M06 move/sell via drag.
 
-### Ch2 Power (d30) — exists
-M07 grid cap 250 kW, upgrade to 400 kW. (Later tiers: 700 kW from ch11, **M07b** 1000 kW after that — $1.8M, 90 days.) M08 seasonal power price. M09 Eco/Std/Boost per rack.
+### Ch2 Power (d45) — exists
+M07 grid cap 250 kW, upgrade to 400 kW. (Later tiers: 700 kW from ch11, **M07b** 1000 kW after that — $1.8M, 90 days; v0.3: only once Hall 3 is built or under construction.) M08 seasonal power price. M09 Eco/Std/Boost per rack.
 
-### Ch3 GPUs and the roofline (d60) — exists
+### Ch3 GPUs and the roofline (d100) — exists
 M10 Kestrel C (compute) and Heron M (bandwidth) families. M11 training vs inference markets with separate demand/price. M12 roofline throughput = min(F, B × intensity). M13 per-rack workload toggle. M14 network need per workload.
 
-### Ch4 Seasons and heat (d120) — exists
+### Ch4 Seasons and heat (d170) — exists
 M15 seasonal cooling capacity. M16 room thermal inertia. M17 per-rack inlet + neighbour heat + throttling. M18 CRU cooler item.
 
-### Ch5 Hardware generations (d240; launches d390, d780, d1170, d1560)
+### Ch5 Hardware generations (d250; launches d390, d780, d1170, d1560)
 M19 generation launches cut market price and resale. M20 rumours ~60 days ahead. M21 older-gen cards on sale at a discount ("OLD GEN").
 Extend to gen 4 and gen 5 (C4/M4 at d1170, C5/M5 at d1560); keep the per-gen scaling (~1.55× F and B, ~+8 % kW, ~+20 % price). **v3 balance:** all GPU list prices are 1.6× the v2 catalogue (C1 $288k … M5 $688k) so mid-game paybacks are ~200–300 days and reinvestment absorbs profit.
 
-### Ch6 Operations (d300)
+### Ch6 Operations (d330)
 M22 **Hardware failures**: each device has a daily failure hazard = base(role) × age factor (bathtub: higher first 20 days and after 500 days) × heat factor (×2 per 5 °C above 30 °C inlet). Seeded. A failed device produces nothing and shows a red cross.
 M23 **Repair**: a technician job (1 day, 8 % of list price). The player sets a rack-agnostic **repair policy**: auto-repair on/off (on = queue repair jobs automatically).
 M24 **Hire/fire technicians** (1–10). Salary 0.35 k/day each. Hiring takes 7 days. Firing is instant but costs 10 days' salary.
@@ -58,7 +59,7 @@ M27 **Frontier training market**: a third market that pays 1.6× the training pr
 M28 **Internet transit**: web + inference output needs transit capacity (1 transit unit per 10 output units). Transit is bought in steps with a stepper (0.4 k/day per unit, changes take effect after 5 days). Short transit caps web + inference output proportionally.
 Decision: cluster training racks in a row (network wins) vs spread them out (heat wins).
 
-### Ch8 Customers and contracts (d480)
+### Ch8 Customers and contracts (d490)
 M29 **Contract offers** arrive every ~25 days (seeded) as cards: customer (icon + name), workload, units, days, price/unit·day, SLA (min delivered fraction), penalty per missed unit·day, expiry (15 days).
 **M29b Build-to-suit** (v3): about every 60 days (±15, first 30 days after ch8) a big customer asks for dedicated capacity: units 40–80 % of today's output on that workload (≥20), 360–540 days, price = spot × (1.0–1.2) × reputation adjustment, SLA 95 %, penalty 3× the price, an up-front **fit-out** of $6k per unit (capex, paid at signing), and delivery starting **45 days** after signing (time to buy the hardware). Signing commits cash and capacity: a hedge before launches, a trap before a real demand shock (see M65).
 M30 Accepted contracts are served first from your supply at their fixed price; the rest goes to spot. A shortfall below the SLA costs the penalty and −reputation (from ch15).
@@ -73,7 +74,7 @@ Decision: buy ahead into inventory vs wait; read which scares are real.
 
 ### Ch10 Finance (d660)
 M35 **Credit line**: borrow in $100k steps up to 40 % of net worth. Interest 9 %/yr, accrued daily. Repay any time. Bankrupt at cash < −(credit line limit).
-M36 **Leasing**: any GPU in the catalog can be leased instead of bought: no upfront cost, pays 0.45 % of list price per day, return any time (1-day technician job). Leased cards don't count toward net worth.
+M36 **Leasing**: any GPU in the catalog can be leased instead of bought: no upfront cost, pays 0.45 % of list price per day, return any time (1-day technician job; v0.3: billed until that job completes). Leased cards don't count toward net worth.
 M37 **Tax**: 21 % of positive quarterly profit, where profit = revenue − opex − depreciation (capex straight-line over 3 years). Shown in the quarter waterfall.
 Decision: leverage to grow before a price drop vs stay safe; lease the gen you will replace soon.
 
