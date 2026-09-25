@@ -1,10 +1,10 @@
 {
-  "generated": "2026-09-25T04:55:39.214Z",
+  "generated": "2026-09-25T05:07:54.293Z",
   "patch": null,
   "method": "bots/run.js: Bots.play per seed 1..N, score = Sim.score (founder equity), worth = Sim.netWorth",
   "timing": {
-    "plannerSecPerGame": 4.423975490196079,
-    "greedySecPerGame": 1.4821764705882354,
+    "plannerSecPerGame": 4.700813725490196,
+    "greedySecPerGame": 1.622637254901961,
     "workers": 8
   },
   "rows": [
@@ -17,56 +17,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 5010.973542613804,
-        "worth": 1975.6974494467092,
+        "score": 6212.83716047844,
+        "worth": 2188.434834185345,
         "bankrupt": 0,
-        "idleCashDays": 3.75,
-        "ms": 2013.5833333333333
+        "idleCashDays": 4.166666666666667,
+        "ms": 1956.8333333333333
       },
       "planner": {
-        "score": 57663.99985380988,
-        "worth": 17875.694799020126,
+        "score": 59280.7480311122,
+        "worth": 17912.27865357984,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 493.3333333333333,
-        "idleCashDaysMax": 800,
-        "cashShare": 0.5255300892863392,
-        "own": 0.9596400000000003,
-        "ms": 5573.916666666667
+        "idleCashDays": 520.8333333333334,
+        "idleCashDaysMax": 875,
+        "cashShare": 0.5266362010952987,
+        "own": 0.9581266666666668,
+        "ms": 5505.25
       },
-      "scoreGap": 52653.02631119607,
-      "scoreGapSd": 22555.964816104723,
-      "scoreGapPct": 1050.7544265286901,
-      "relGapMedianPct": 1779.8568815741885,
-      "relGapMinPct": 332.2691960488798,
+      "scoreGap": 53067.910870633736,
+      "scoreGapSd": 24587.685605647406,
+      "scoreGapPct": 854.1654883249357,
+      "relGapMedianPct": 1082.2980433860166,
+      "relGapMinPct": 186.36190917958166,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 15899.997349573418,
-      "worthGapPct": 804.7789581358312,
+      "worthGap": 15723.843819394497,
+      "worthGapPct": 718.4972371017741,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.5255300892863392,
-        "greedy": 0.21955100029753616
+        "planner": 0.5266362010952987,
+        "greedy": 0.21909973269035432
       },
-      "idleShareOfPlannerPct": 1.25325930611228,
+      "idleShareOfPlannerPct": 1.2190794962053473,
       "ablatedChapterUse": null,
       "contracts": {
         "planner": {
-          "signed": 146.75,
-          "fulfilled": 109.08333333333333,
-          "failed": 14.166666666666666,
-          "cancelled": 0.5,
-          "sla": 1371.8401084731547,
-          "idle": 7230.871956101215,
+          "signed": 145.66666666666666,
+          "fulfilled": 109.33333333333333,
+          "failed": 14.916666666666666,
+          "cancelled": 0.25,
+          "sla": 1431.9368762171114,
+          "idle": 7220.423414537054,
           "chapter": 16
         },
         "greedy": {
-          "signed": 121.33333333333333,
-          "fulfilled": 107.16666666666667,
-          "failed": 8.25,
+          "signed": 122.5,
+          "fulfilled": 108.41666666666667,
+          "failed": 7.416666666666667,
           "cancelled": 0.75,
-          "sla": 1153.1972685614926,
-          "idle": 2620.953335303259,
+          "sla": 1030.8590730087165,
+          "idle": 2627.5264428783385,
           "chapter": 16
         },
         "idle": {
@@ -79,126 +79,126 @@
           "chapter": 0
         },
         "casual": {
-          "signed": 94.5,
-          "fulfilled": 83.25,
+          "signed": 93,
+          "fulfilled": 81.5,
           "failed": 6.166666666666667,
           "cancelled": 0.5,
-          "sla": 1006.1832132587996,
-          "idle": 4538.916562554883,
+          "sla": 1153.9074939652162,
+          "idle": 4695.665296205474,
           "chapter": 16
         },
         "expert": {
-          "signed": 62.25,
-          "fulfilled": 48.416666666666664,
-          "failed": 6.25,
+          "signed": 64.75,
+          "fulfilled": 49.416666666666664,
+          "failed": 6.083333333333333,
           "cancelled": 0.08333333333333333,
-          "sla": 881.4315323498781,
-          "idle": 8173.256464873489,
+          "sla": 868.7264984606901,
+          "idle": 7879.633938774866,
           "chapter": 16
         }
       },
       "human": {
         "casual": {
-          "score": 4151.098888693545,
-          "min": 891.8063397886305,
-          "max": 13029.031467915622,
+          "score": 5205.419902907391,
+          "min": 877.4762524258481,
+          "max": 11396.5606284277,
           "bankrupt": 0,
           "fired": 0,
-          "ms": 1057.8333333333333
+          "ms": 1051.0833333333333
         },
         "expert": {
-          "score": 14930.447700542029,
-          "min": 1987.4129320647216,
-          "max": 34827.26136932383,
+          "score": 17012.79504685172,
+          "min": 4899.848754884229,
+          "max": 35593.11873716883,
           "bankrupt": 0,
           "fired": 0,
-          "ms": 1844.0833333333333
+          "ms": 1893.25
         },
-        "expertBeatsCasual": 11,
+        "expertBeatsCasual": 10,
         "casualBeatsIdle": 12
       },
       "perSeedHuman": [
         {
           "seed": 1,
-          "casual": 892,
+          "casual": 1363,
           "expert": 4900,
           "casualOver": "end",
           "expertOver": "end"
         },
         {
           "seed": 2,
-          "casual": 2946,
-          "expert": 8292,
+          "casual": 8847,
+          "expert": 7271,
           "casualOver": "end",
           "expertOver": "end"
         },
         {
           "seed": 3,
-          "casual": 4429,
-          "expert": 18469,
+          "casual": 1018,
+          "expert": 14801,
           "casualOver": "end",
           "expertOver": "end"
         },
         {
           "seed": 4,
-          "casual": 2059,
-          "expert": 27381,
+          "casual": 2831,
+          "expert": 8242,
           "casualOver": "end",
           "expertOver": "end"
         },
         {
           "seed": 5,
-          "casual": 8128,
+          "casual": 11397,
           "expert": 21039,
           "casualOver": "end",
           "expertOver": "end"
         },
         {
           "seed": 6,
-          "casual": 1594,
-          "expert": 34827,
+          "casual": 7872,
+          "expert": 26602,
           "casualOver": "end",
           "expertOver": "end"
         },
         {
           "seed": 7,
-          "casual": 1064,
-          "expert": 6476,
+          "casual": 6540,
+          "expert": 14074,
           "casualOver": "end",
           "expertOver": "end"
         },
         {
           "seed": 8,
-          "casual": 13029,
-          "expert": 29732,
+          "casual": 7910,
+          "expert": 35593,
           "casualOver": "end",
           "expertOver": "end"
         },
         {
           "seed": 9,
-          "casual": 4795,
+          "casual": 7115,
           "expert": 7062,
           "casualOver": "end",
           "expertOver": "end"
         },
         {
           "seed": 10,
-          "casual": 2920,
-          "expert": 1987,
+          "casual": 877,
+          "expert": 8751,
           "casualOver": "end",
           "expertOver": "end"
         },
         {
           "seed": 11,
-          "casual": 6708,
-          "expert": 14908,
+          "casual": 2406,
+          "expert": 20412,
           "casualOver": "end",
           "expertOver": "end"
         },
         {
           "seed": 12,
-          "casual": 1250,
-          "expert": 4091,
+          "casual": 4289,
+          "expert": 35408,
           "casualOver": "end",
           "expertOver": "end"
         }
@@ -207,52 +207,52 @@
         "racks": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 132.9
+          "meanActions": 135.5
         },
         "power": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 65.3
+          "meanActions": 65.6
         },
         "gpu": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 218.9
+          "meanActions": 217.6
         },
         "heat": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 31.8
+          "meanActions": 35.5
         },
         "gens": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 80.9
+          "meanActions": 81.3
         },
         "ops": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 10.9
+          "meanActions": 9.6
         },
         "fabric": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 6.4
+          "meanActions": 8.3
         },
         "contracts": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 9.6
+          "meanActions": 10
         },
         "memory": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 25.9
+          "meanActions": 24.7
         },
         "finance": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 10.6
+          "meanActions": 11.6
         },
         "facilities": {
           "games": 12,
@@ -262,27 +262,27 @@
         "energy": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 2.9
+          "meanActions": 3
         },
         "environment": {
           "games": 7,
           "decisions": 7,
-          "meanActions": 2.2
+          "meanActions": 2.1
         },
         "investors": {
-          "games": 8,
+          "games": 6,
           "decisions": 12,
-          "meanActions": 15.5
+          "meanActions": 12.5
         },
         "reputation": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 1.7
+          "meanActions": 1.8
         },
         "policy": {
           "games": 12,
           "decisions": 12,
-          "meanActions": 7.3
+          "meanActions": 7.5
         },
         "disrupt": {
           "games": 12,
@@ -293,32 +293,32 @@
       "perSeed": [
         {
           "seed": 1,
-          "planner": 40782,
-          "greedy": 1456,
+          "planner": 41674,
+          "greedy": 7241,
           "idle": 723,
-          "plannerWorth": 11230,
-          "greedyWorth": 1417,
+          "plannerWorth": 14197,
+          "greedyWorth": 2499,
           "over": "end",
           "greedyOver": "end",
-          "own": 0.99,
+          "own": 0.93,
           "idleCashDays": 720,
           "used": {
-            "racks": 146,
-            "power": 46,
-            "gpu": 186,
-            "gens": 51,
-            "fabric": 11,
-            "ops": 6,
+            "racks": 161,
+            "power": 48,
+            "gpu": 192,
+            "gens": 62,
+            "fabric": 16,
+            "ops": 8,
             "contracts": 4,
-            "memory": 20,
+            "memory": 22,
             "facilities": 1,
             "energy": 3,
-            "heat": 22,
+            "heat": 23,
             "finance": 7,
-            "disrupt": 18,
-            "investors": 9,
-            "policy": 13,
-            "reputation": 1
+            "disrupt": 20,
+            "investors": 3,
+            "policy": 10,
+            "reputation": 2
           }
         },
         {
@@ -353,72 +353,71 @@
         },
         {
           "seed": 3,
-          "planner": 81648,
+          "planner": 103225,
           "greedy": 8518,
           "idle": 723,
-          "plannerWorth": 25199,
+          "plannerWorth": 43019,
           "greedyWorth": 2632,
           "over": "end",
           "greedyOver": "end",
-          "own": 0.93,
+          "own": 0.88,
           "idleCashDays": 425,
           "used": {
-            "racks": 122,
-            "power": 64,
-            "gpu": 261,
-            "gens": 101,
-            "fabric": 1,
-            "ops": 16,
+            "racks": 119,
+            "power": 73,
+            "gpu": 226,
+            "gens": 83,
+            "fabric": 11,
+            "ops": 10,
             "contracts": 11,
-            "finance": 6,
-            "memory": 18,
-            "heat": 47,
+            "finance": 12,
+            "memory": 14,
+            "heat": 39,
             "facilities": 2,
             "energy": 3,
-            "disrupt": 30,
+            "disrupt": 28,
             "policy": 9,
-            "investors": 30,
+            "investors": 42,
             "reputation": 2
           }
         },
         {
           "seed": 4,
-          "planner": 38191,
-          "greedy": 1292,
+          "planner": 25186,
+          "greedy": 1783,
           "idle": 723,
-          "plannerWorth": 23030,
-          "greedyWorth": 886,
+          "plannerWorth": 8825,
+          "greedyWorth": 1275,
           "over": "end",
           "greedyOver": "end",
-          "own": 0.99,
-          "idleCashDays": 260,
+          "own": 1,
+          "idleCashDays": 390,
           "used": {
-            "racks": 124,
-            "power": 49,
-            "gpu": 154,
-            "gens": 61,
-            "fabric": 1,
+            "racks": 123,
+            "power": 77,
+            "gpu": 201,
+            "gens": 84,
+            "fabric": 15,
+            "ops": 9,
             "contracts": 7,
-            "facilities": 1,
-            "ops": 11,
-            "finance": 2,
-            "energy": 2,
-            "heat": 26,
-            "memory": 22,
+            "finance": 18,
+            "heat": 41,
+            "memory": 30,
+            "facilities": 2,
+            "energy": 3,
             "environment": 2,
-            "investors": 20,
-            "disrupt": 7,
-            "policy": 3,
+            "disrupt": 13,
+            "policy": 11,
             "reputation": 2
           }
         },
         {
           "seed": 5,
           "planner": 110376,
-          "greedy": 1327,
+          "greedy": 9575,
           "idle": 723,
           "plannerWorth": 44230,
-          "greedyWorth": 1253,
+          "greedyWorth": 2561,
           "over": "end",
           "greedyOver": "end",
           "own": 0.9,
@@ -444,40 +443,40 @@
         },
         {
           "seed": 6,
-          "planner": 37571,
-          "greedy": 8692,
+          "planner": 40464,
+          "greedy": 11132,
           "idle": 723,
-          "plannerWorth": 13070,
-          "greedyWorth": 2750,
+          "plannerWorth": 9470,
+          "greedyWorth": 3965,
           "over": "end",
           "greedyOver": "end",
           "own": 1,
-          "idleCashDays": 445,
+          "idleCashDays": 325,
           "used": {
-            "racks": 131,
-            "power": 92,
-            "gpu": 192,
-            "gens": 70,
-            "fabric": 8,
-            "ops": 17,
-            "memory": 46,
-            "contracts": 10,
-            "heat": 33,
-            "finance": 28,
+            "racks": 144,
+            "power": 64,
+            "gpu": 197,
+            "gens": 65,
+            "fabric": 13,
+            "ops": 11,
+            "memory": 23,
+            "contracts": 13,
+            "heat": 49,
+            "finance": 7,
             "facilities": 2,
             "energy": 3,
-            "disrupt": 32,
-            "policy": 3,
+            "disrupt": 29,
+            "policy": 6,
             "reputation": 2
           }
         },
         {
           "seed": 7,
           "planner": 72694,
-          "greedy": 2508,
+          "greedy": 2823,
           "idle": 723,
           "plannerWorth": 24429,
-          "greedyWorth": 1728,
+          "greedyWorth": 1743,
           "over": "end",
           "greedyOver": "end",
           "own": 0.93,
@@ -505,10 +504,10 @@
         {
           "seed": 8,
           "planner": 48848,
-          "greedy": 8709,
+          "greedy": 17058,
           "idle": 723,
           "plannerWorth": 10748,
-          "greedyWorth": 2856,
+          "greedyWorth": 3483,
           "over": "end",
           "greedyOver": "end",
           "own": 1,
@@ -535,10 +534,10 @@
         {
           "seed": 9,
           "planner": 56405,
-          "greedy": 9228,
+          "greedy": 2139,
           "idle": 723,
           "plannerWorth": 11122,
-          "greedyWorth": 2692,
+          "greedyWorth": 1757,
           "over": "end",
           "greedyOver": "end",
           "own": 1,
@@ -565,10 +564,10 @@
         {
           "seed": 10,
           "planner": 33437,
-          "greedy": 6215,
+          "greedy": 2907,
           "idle": 723,
           "plannerWorth": 10499,
-          "greedyWorth": 2137,
+          "greedyWorth": 2044,
           "over": "end",
           "greedyOver": "end",
           "own": 1,
@@ -594,42 +593,41 @@
         },
         {
           "seed": 11,
-          "planner": 38131,
-          "greedy": 615,
+          "planner": 45174,
+          "greedy": 336,
           "idle": 723,
-          "plannerWorth": 11742,
-          "greedyWorth": 769,
+          "plannerWorth": 9199,
+          "greedyWorth": 420,
           "over": "end",
           "greedyOver": "end",
-          "own": 0.92,
-          "idleCashDays": 555,
+          "own": 1,
+          "idleCashDays": 875,
           "used": {
-            "racks": 119,
-            "power": 60,
-            "gpu": 227,
-            "gens": 92,
-            "fabric": 16,
-            "ops": 13,
-            "contracts": 10,
-            "finance": 2,
-            "memory": 28,
-            "facilities": 3,
+            "racks": 126,
+            "power": 53,
+            "gpu": 188,
+            "gens": 85,
+            "fabric": 5,
+            "ops": 9,
+            "contracts": 12,
+            "finance": 13,
+            "memory": 30,
+            "facilities": 2,
+            "heat": 43,
             "energy": 3,
-            "heat": 22,
-            "disrupt": 33,
-            "policy": 10,
-            "investors": 22,
-            "environment": 2,
+            "disrupt": 31,
+            "policy": 5,
+            "environment": 1,
             "reputation": 2
           }
         },
         {
           "seed": 12,
           "planner": 71638,
-          "greedy": 10667,
+          "greedy": 10138,
           "idle": 723,
           "plannerWorth": 21126,
-          "greedyWorth": 3460,
+          "greedyWorth": 2753,
           "over": "end",
           "greedyOver": "end",
           "own": 0.89,
@@ -665,56 +663,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 10260.755431198339,
-        "worth": 3422.299597778319,
+        "score": 10094.5866623047,
+        "worth": 3369.242166651769,
         "bankrupt": 0,
-        "idleCashDays": 27.916666666666668,
-        "ms": 1265.8333333333333
+        "idleCashDays": 62.5,
+        "ms": 1208.3333333333333
       },
       "planner": {
-        "score": 76328.94729677761,
-        "worth": 20698.223601303947,
+        "score": 72376.032555111,
+        "worth": 20966.55355743667,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 442.0833333333333,
-        "idleCashDaysMax": 805,
-        "cashShare": 0.4615898397900568,
-        "own": 0.9670616666666668,
-        "ms": 6257.5
+        "idleCashDays": 422.5,
+        "idleCashDaysMax": 695,
+        "cashShare": 0.4598205922212468,
+        "own": 0.9641666666666667,
+        "ms": 5787.166666666667
       },
-      "scoreGap": 66068.19186557928,
-      "scoreGapSd": 35931.694609926715,
-      "scoreGapPct": 643.8920828840306,
-      "relGapMedianPct": 945.621060472841,
-      "relGapMinPct": 49.8805171383174,
+      "scoreGap": 62281.44589280629,
+      "scoreGapSd": 36447.27490181219,
+      "scoreGapPct": 616.9786636770204,
+      "relGapMedianPct": 663.590111997666,
+      "relGapMinPct": 109.94661409324058,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 17275.924003525626,
-      "worthGapPct": 504.80454764219866,
+      "worthGap": 17597.3113907849,
+      "worthGapPct": 522.2928635097925,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.4615898397900568,
-        "greedy": 0.22849008688775319
+        "planner": 0.4598205922212468,
+        "greedy": 0.23395616405584166
       },
-      "idleShareOfPlannerPct": 0.946796032224269,
+      "idleShareOfPlannerPct": 0.9985065759084776,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 199.5,
-          "fulfilled": 148.16666666666666,
-          "failed": 15.333333333333334,
-          "cancelled": 0.8333333333333334,
-          "sla": 1494.146862312108,
-          "idle": 7736.581336124949,
+          "signed": 196.41666666666666,
+          "fulfilled": 144.41666666666666,
+          "failed": 17.333333333333332,
+          "cancelled": 1,
+          "sla": 1626.0296129897688,
+          "idle": 6233.320616361282,
           "chapter": 16
         },
         "greedy": {
-          "signed": 121.08333333333333,
-          "fulfilled": 106.66666666666667,
-          "failed": 5.583333333333333,
+          "signed": 122.83333333333333,
+          "fulfilled": 106.5,
+          "failed": 6.416666666666667,
           "cancelled": 0.6666666666666666,
-          "sla": 763.4254895189287,
-          "idle": 2781.5049015736618,
+          "sla": 802.1981731108772,
+          "idle": 2761.707385526557,
           "chapter": 16
         },
         "idle": {
@@ -737,56 +735,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 26207.69884187652,
-        "worth": 8598.951705333324,
+        "score": 29273.11506338371,
+        "worth": 8759.938456636275,
         "bankrupt": 0,
-        "idleCashDays": 98.75,
-        "ms": 1394.9166666666667
+        "idleCashDays": 94.58333333333333,
+        "ms": 1436.0833333333333
       },
       "planner": {
-        "score": 158705.99780726593,
-        "worth": 48990.81893374038,
+        "score": 170252.6387314349,
+        "worth": 52447.010328732395,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 626.25,
+        "idleCashDays": 644.5833333333334,
         "idleCashDaysMax": 1025,
-        "cashShare": 0.43384297063566163,
-        "own": 0.9371266666666668,
-        "ms": 6065.666666666667
+        "cashShare": 0.4308565689849099,
+        "own": 0.9350673333333335,
+        "ms": 6370.583333333333
       },
-      "scoreGap": 132498.2989653894,
-      "scoreGapSd": 15925.505385802171,
-      "scoreGapPct": 505.5701370990811,
-      "relGapMedianPct": 578.822695957698,
-      "relGapMinPct": 200.70258046035278,
+      "scoreGap": 140979.5236680512,
+      "scoreGapSd": 29509.728881993287,
+      "scoreGapPct": 481.60068842278935,
+      "relGapMedianPct": 526.3399695159085,
+      "relGapMinPct": 261.1808184919366,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 40391.86722840707,
-      "worthGapPct": 469.7301323759597,
+      "worthGap": 43687.07187209612,
+      "worthGapPct": 498.7143698366975,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.43384297063566163,
-        "greedy": 0.23966525840737496
+        "planner": 0.4308565689849099,
+        "greedy": 0.2408143858933102
       },
-      "idleShareOfPlannerPct": 0.45535736168085633,
-      "ablatedChapterUse": 10,
+      "idleShareOfPlannerPct": 0.42447473932221097,
+      "ablatedChapterUse": 11,
       "contracts": {
         "planner": {
-          "signed": 168.91666666666666,
-          "fulfilled": 132.5,
-          "failed": 13.583333333333334,
-          "cancelled": 0.25,
-          "sla": 1299.697931496177,
-          "idle": 9736.637725294664,
+          "signed": 175.08333333333334,
+          "fulfilled": 136.41666666666666,
+          "failed": 13,
+          "cancelled": 0.3333333333333333,
+          "sla": 1203.4700946698965,
+          "idle": 10400.601861917565,
           "chapter": 16
         },
         "greedy": {
-          "signed": 134.25,
-          "fulfilled": 115.66666666666667,
-          "failed": 8.5,
-          "cancelled": 0.4166666666666667,
-          "sla": 1219.5676680041609,
-          "idle": 3004.730251638033,
+          "signed": 131.83333333333334,
+          "fulfilled": 114.5,
+          "failed": 8.25,
+          "cancelled": 0.5833333333333334,
+          "sla": 1131.1223965162278,
+          "idle": 3069.503870102911,
           "chapter": 15.833333333333334
         },
         "idle": {
@@ -809,56 +807,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 13945.542922544633,
-        "worth": 4189.809056646201,
+        "score": 13504.082640606292,
+        "worth": 4046.5359663639215,
         "bankrupt": 0,
-        "idleCashDays": 43.75,
-        "ms": 1755.25
+        "idleCashDays": 36.25,
+        "ms": 1784
       },
       "planner": {
-        "score": 83481.98606605128,
-        "worth": 28939.08643658458,
+        "score": 82578.87015248249,
+        "worth": 28463.157690282595,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 810.8333333333334,
+        "idleCashDays": 747.0833333333334,
         "idleCashDaysMax": 1220,
-        "cashShare": 0.5734957350773823,
-        "own": 0.9443083333333334,
-        "ms": 4536.25
+        "cashShare": 0.5538746043450828,
+        "own": 0.9442666666666669,
+        "ms": 4647.916666666667
       },
-      "scoreGap": 69536.44314350667,
-      "scoreGapSd": 39904.01469910886,
-      "scoreGapPct": 498.62844013833774,
-      "relGapMedianPct": 515.5031614888392,
-      "relGapMinPct": 85.51365198885664,
+      "scoreGap": 69074.7875118762,
+      "scoreGapSd": 37470.835271060954,
+      "scoreGapPct": 511.51040281826175,
+      "relGapMedianPct": 404.1414128033406,
+      "relGapMinPct": 143.5824253469438,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 24749.277379938383,
-      "worthGapPct": 590.7017967961847,
+      "worthGap": 24416.621723918677,
+      "worthGapPct": 603.3956432582661,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.5734957350773823,
-        "greedy": 0.21795271671919222
+        "planner": 0.5538746043450828,
+        "greedy": 0.21672376627269163
       },
-      "idleShareOfPlannerPct": 0.8656711208004289,
+      "idleShareOfPlannerPct": 0.8751384501991987,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 182.75,
-          "fulfilled": 136.58333333333334,
-          "failed": 19.666666666666668,
+          "signed": 187.75,
+          "fulfilled": 137.5,
+          "failed": 20.166666666666668,
           "cancelled": 0.16666666666666666,
-          "sla": 1772.5178452727214,
-          "idle": 5801.598018791065,
+          "sla": 1716.9156430845835,
+          "idle": 5791.769434594338,
           "chapter": 16
         },
         "greedy": {
-          "signed": 136.75,
-          "fulfilled": 119.58333333333333,
-          "failed": 6,
-          "cancelled": 0.5,
-          "sla": 1075.5377626977736,
-          "idle": 3109.73482953911,
+          "signed": 137.58333333333334,
+          "fulfilled": 120.75,
+          "failed": 4.75,
+          "cancelled": 0.4166666666666667,
+          "sla": 1038.166945858447,
+          "idle": 3075.942343436234,
           "chapter": 16
         },
         "idle": {
@@ -881,56 +879,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 20968.947545499355,
-        "worth": 6326.252691058714,
+        "score": 25038.65214352866,
+        "worth": 6901.649735710035,
         "bankrupt": 0,
-        "idleCashDays": 88.75,
-        "ms": 1855.6666666666667
+        "idleCashDays": 92.08333333333333,
+        "ms": 2013.1666666666667
       },
       "planner": {
-        "score": 119696.87124461659,
-        "worth": 42546.96925372106,
+        "score": 118439.69948126048,
+        "worth": 42416.37449005704,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 677.0833333333334,
+        "idleCashDays": 646.6666666666666,
         "idleCashDaysMax": 1135,
-        "cashShare": 0.5463468168364978,
-        "own": 0.9155976666666668,
-        "ms": 5703.833333333333
+        "cashShare": 0.5288870192330645,
+        "own": 0.9201950000000001,
+        "ms": 5897.583333333333
       },
-      "scoreGap": 98727.92369911725,
-      "scoreGapSd": 37942.97998086328,
-      "scoreGapPct": 470.8291795994673,
-      "relGapMedianPct": 538.207774543719,
-      "relGapMinPct": 125.67713086161483,
+      "scoreGap": 93401.04733773181,
+      "scoreGapSd": 39919.739250406485,
+      "scoreGapPct": 373.0274569187291,
+      "relGapMedianPct": 374.6087916701112,
+      "relGapMinPct": 105.91736730864407,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 36220.71656266234,
-      "worthGapPct": 572.5461553860365,
+      "worthGap": 35514.72475434699,
+      "worthGapPct": 514.583123084169,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.5463468168364978,
-        "greedy": 0.2147011000129279
+        "planner": 0.5288870192330645,
+        "greedy": 0.21345716435460146
       },
-      "idleShareOfPlannerPct": 0.6037580071475316,
+      "idleShareOfPlannerPct": 0.610166563753217,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 186.33333333333334,
-          "fulfilled": 133.83333333333334,
-          "failed": 12.333333333333334,
+          "signed": 187.66666666666666,
+          "fulfilled": 135.16666666666666,
+          "failed": 12.75,
           "cancelled": 0.3333333333333333,
-          "sla": 1126.9828093259355,
-          "idle": 12549.695775800225,
+          "sla": 1167.2810959144995,
+          "idle": 13003.603068863486,
           "chapter": 16
         },
         "greedy": {
-          "signed": 154.16666666666666,
-          "fulfilled": 130.16666666666666,
-          "failed": 8.833333333333334,
-          "cancelled": 0.5833333333333334,
-          "sla": 1483.778930372899,
-          "idle": 3330.3198986974185,
+          "signed": 160.91666666666666,
+          "fulfilled": 134.58333333333334,
+          "failed": 9.916666666666666,
+          "cancelled": 0.8333333333333334,
+          "sla": 1548.257845096021,
+          "idle": 3415.2536680456337,
           "chapter": 16
         },
         "idle": {
@@ -957,7 +955,7 @@
         "worth": 13076.095189507003,
         "bankrupt": 0,
         "idleCashDays": 624.5833333333334,
-        "ms": 2641.8333333333335
+        "ms": 2135.5
       },
       "planner": {
         "score": 69456.06326013607,
@@ -968,7 +966,7 @@
         "idleCashDaysMax": 1140,
         "cashShare": 0.5040120127725651,
         "own": 0.9193983333333334,
-        "ms": 6145
+        "ms": 5046.916666666667
       },
       "scoreGap": 34685.064964453406,
       "scoreGapSd": 11432.020898555062,
@@ -1025,56 +1023,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 7157.249115243274,
-        "worth": 2648.820575994776,
+        "score": 7701.9409478502785,
+        "worth": 2761.6943674302915,
         "bankrupt": 0,
-        "idleCashDays": 12.083333333333334,
-        "ms": 1553.25
+        "idleCashDays": 13.333333333333334,
+        "ms": 1595.8333333333333
       },
       "planner": {
-        "score": 77714.21555007208,
-        "worth": 22499.40022464564,
+        "score": 78199.48914251824,
+        "worth": 23163.332303949184,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 518.3333333333334,
+        "idleCashDays": 542.5,
         "idleCashDaysMax": 825,
-        "cashShare": 0.5346661529581597,
-        "own": 0.9415863333333335,
-        "ms": 5056.083333333333
+        "cashShare": 0.5391957720599897,
+        "own": 0.9407290000000003,
+        "ms": 5077.666666666667
       },
-      "scoreGap": 70556.9664348288,
-      "scoreGapSd": 24629.65293548735,
-      "scoreGapPct": 985.8112425423183,
-      "relGapMedianPct": 785.2464148654542,
-      "relGapMinPct": 353.43307746735906,
+      "scoreGap": 70497.54819466795,
+      "scoreGapSd": 25405.51000819936,
+      "scoreGapPct": 915.3218477265114,
+      "relGapMedianPct": 893.2418805797475,
+      "relGapMinPct": 389.9613397515229,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 19850.57964865087,
-      "worthGapPct": 749.4120148623468,
+      "worthGap": 20401.637936518895,
+      "worthGapPct": 738.7362691948516,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.5346661529581597,
-        "greedy": 0.22021794410044448
+        "planner": 0.5391957720599897,
+        "greedy": 0.22018828937696044
       },
-      "idleShareOfPlannerPct": 0.9299192423538186,
+      "idleShareOfPlannerPct": 0.9241485492665605,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 157.41666666666666,
-          "fulfilled": 116.16666666666667,
+          "signed": 160.25,
+          "fulfilled": 119.25,
           "failed": 13.083333333333334,
-          "cancelled": 0.5833333333333334,
-          "sla": 1325.1751734414977,
-          "idle": 8910.811549705619,
+          "cancelled": 0.6666666666666666,
+          "sla": 1290.2800653891316,
+          "idle": 9059.187134330925,
           "chapter": 16
         },
         "greedy": {
-          "signed": 126.08333333333333,
-          "fulfilled": 109.83333333333333,
-          "failed": 7.833333333333333,
-          "cancelled": 1.3333333333333333,
-          "sla": 1001.5457934853147,
-          "idle": 2731.8080099463727,
+          "signed": 123.5,
+          "fulfilled": 107.16666666666667,
+          "failed": 7.75,
+          "cancelled": 1,
+          "sla": 986.4010772204036,
+          "idle": 2748.0590370877653,
           "chapter": 16
         },
         "idle": {
@@ -1097,57 +1095,57 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 6386.058874646546,
-        "worth": 2492.5060946209765,
-        "bankrupt": 1,
-        "idleCashDays": 8.75,
-        "ms": 1780.8333333333333
+        "score": 9477.087399614962,
+        "worth": 2979.4811744999265,
+        "bankrupt": 3,
+        "idleCashDays": 13.75,
+        "ms": 1659.75
       },
       "planner": {
-        "score": 48239.11797366841,
-        "worth": 17150.758491513487,
+        "score": 49586.30888859076,
+        "worth": 16914.681031175085,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 633.75,
+        "idleCashDays": 675,
         "idleCashDaysMax": 1120,
-        "cashShare": 0.5835784221023309,
-        "own": 0.9731,
-        "ms": 3974.5
+        "cashShare": 0.5818922433489042,
+        "own": 0.9674666666666667,
+        "ms": 4117.166666666667
       },
-      "scoreGap": 41853.05909902187,
-      "scoreGapSd": 22900.689471656395,
-      "scoreGapPct": 655.3816668553394,
-      "relGapMedianPct": 838.7891789361665,
-      "relGapMinPct": 7.650962393457772,
+      "scoreGap": 40109.2214889758,
+      "scoreGapSd": 24686.42240535633,
+      "scoreGapPct": 423.22308318698606,
+      "relGapMedianPct": 550.3068414138428,
+      "relGapMinPct": 17.757297772130933,
       "plannerWins": 12,
       "winsAt25": 11,
-      "worthGap": 14658.252396892507,
-      "worthGapPct": 588.0929410173225,
+      "worthGap": 13935.199856675159,
+      "worthGapPct": 467.7055849837356,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.5835784221023309,
-        "greedy": 0.2218008092099355
+        "planner": 0.5818922433489042,
+        "greedy": 0.22223764783711228
       },
-      "idleShareOfPlannerPct": 1.498119109140682,
+      "idleShareOfPlannerPct": 1.4574173005458855,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 138.91666666666666,
-          "fulfilled": 103.16666666666667,
-          "failed": 14.166666666666666,
-          "cancelled": 1,
-          "sla": 1460.9010287981966,
-          "idle": 7379.574377627959,
+          "signed": 141.41666666666666,
+          "fulfilled": 104.66666666666667,
+          "failed": 14.666666666666666,
+          "cancelled": 0.9166666666666666,
+          "sla": 1462.949034239886,
+          "idle": 7420.344615396668,
           "chapter": 16
         },
         "greedy": {
-          "signed": 135.91666666666666,
-          "fulfilled": 118.08333333333333,
-          "failed": 9.666666666666666,
-          "cancelled": 0.75,
-          "sla": 1237.0839260998864,
-          "idle": 3145.105055140599,
-          "chapter": 15.833333333333334
+          "signed": 130.66666666666666,
+          "fulfilled": 111.91666666666667,
+          "failed": 8.833333333333334,
+          "cancelled": 0.5833333333333334,
+          "sla": 1254.90979702063,
+          "idle": 2814.602442036516,
+          "chapter": 15.583333333333334
         },
         "idle": {
           "signed": 0,
@@ -1169,56 +1167,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 6696.70248833566,
-        "worth": 2309.826219948651,
+        "score": 4863.839231856839,
+        "worth": 1829.1531123185457,
         "bankrupt": 1,
-        "idleCashDays": 5.416666666666667,
-        "ms": 1323.0833333333333
+        "idleCashDays": 5.833333333333333,
+        "ms": 1375.9166666666667
       },
       "planner": {
-        "score": 57164.291836344426,
-        "worth": 17342.06207376091,
+        "score": 55124.61124167524,
+        "worth": 16273.337383732425,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 579.5833333333334,
+        "idleCashDays": 589.5833333333334,
         "idleCashDaysMax": 825,
-        "cashShare": 0.5672470345980348,
-        "own": 0.954586666666667,
-        "ms": 3965.5
+        "cashShare": 0.5683709294834051,
+        "own": 0.9537200000000002,
+        "ms": 3900.75
       },
-      "scoreGap": 50467.58934800876,
-      "scoreGapSd": 20491.31790685072,
-      "scoreGapPct": 753.6185075552243,
-      "relGapMedianPct": 769.1839309112769,
-      "relGapMinPct": 223.97639403822578,
+      "scoreGap": 50260.77200981841,
+      "scoreGapSd": 20983.550539834305,
+      "scoreGapPct": 1033.3559481288744,
+      "relGapMedianPct": 1865.8348231033135,
+      "relGapMinPct": 211.7011477148406,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 15032.235853812263,
-      "worthGapPct": 650.7950998212514,
+      "worthGap": 14444.184271413878,
+      "worthGapPct": 789.665128312038,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.5672470345980348,
-        "greedy": 0.22308280061527544
+        "planner": 0.5683709294834051,
+        "greedy": 0.2247313406377128
       },
-      "idleShareOfPlannerPct": 1.2642148117804064,
+      "idleShareOfPlannerPct": 1.3109923646918797,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 142.66666666666666,
-          "fulfilled": 109.66666666666667,
-          "failed": 11.583333333333334,
+          "signed": 143.83333333333334,
+          "fulfilled": 110.33333333333333,
+          "failed": 12.083333333333334,
           "cancelled": 0.5,
-          "sla": 1259.5584431316172,
-          "idle": 6845.672232571935,
+          "sla": 1252.3852025829462,
+          "idle": 6820.717961024705,
           "chapter": 16
         },
         "greedy": {
-          "signed": 116.58333333333333,
-          "fulfilled": 99.75,
+          "signed": 112.5,
+          "fulfilled": 96.91666666666667,
           "failed": 8.583333333333334,
           "cancelled": 1,
-          "sla": 656.3798570445641,
-          "idle": 2540.4888995559745,
+          "sla": 668.6999672797648,
+          "idle": 2588.2069293451445,
           "chapter": 15.75
         },
         "idle": {
@@ -1241,56 +1239,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 6976.725716310967,
-        "worth": 2609.728506140309,
+        "score": 8106.747393817096,
+        "worth": 2845.1909258828855,
         "bankrupt": 0,
-        "idleCashDays": 7.5,
-        "ms": 1569.1666666666667
+        "idleCashDays": 10.416666666666666,
+        "ms": 1678.8333333333333
       },
       "planner": {
-        "score": 45234.87049944206,
-        "worth": 13527.23419844245,
+        "score": 46076.77621381285,
+        "worth": 12771.508391651842,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 598.3333333333334,
-        "idleCashDaysMax": 1135,
-        "cashShare": 0.5362856220837394,
-        "own": 0.984375,
-        "ms": 4370.666666666667
+        "idleCashDays": 566.6666666666666,
+        "idleCashDaysMax": 910,
+        "cashShare": 0.539408224319407,
+        "own": 0.9827083333333334,
+        "ms": 4397.583333333333
       },
-      "scoreGap": 38258.1447831311,
-      "scoreGapSd": 13764.113026530853,
-      "scoreGapPct": 548.3681936024366,
-      "relGapMedianPct": 595.9958574623994,
+      "scoreGap": 37970.028819995765,
+      "scoreGapSd": 13924.681871403862,
+      "scoreGapPct": 468.37562558018,
+      "relGapMedianPct": 601.325860665948,
       "relGapMinPct": 146.440931762509,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 10917.50569230214,
-      "worthGapPct": 418.338753116075,
+      "worthGap": 9926.317465768956,
+      "worthGapPct": 348.8805399830502,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.5362856220837394,
-        "greedy": 0.2196325269942666
+        "planner": 0.539408224319407,
+        "greedy": 0.21872572153400036
       },
-      "idleShareOfPlannerPct": 1.597615813785424,
+      "idleShareOfPlannerPct": 1.5684244945673949,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 142.83333333333334,
-          "fulfilled": 108.75,
-          "failed": 13,
-          "cancelled": 1.0833333333333333,
-          "sla": 1241.170510578862,
-          "idle": 7070.492658099237,
+          "signed": 147,
+          "fulfilled": 111.91666666666667,
+          "failed": 13.333333333333334,
+          "cancelled": 0.8333333333333334,
+          "sla": 1243.08219016879,
+          "idle": 7049.76346906498,
           "chapter": 16
         },
         "greedy": {
           "signed": 125,
-          "fulfilled": 110.16666666666667,
-          "failed": 7.833333333333333,
-          "cancelled": 0.4166666666666667,
-          "sla": 975.8860093989932,
-          "idle": 2599.8423586875933,
+          "fulfilled": 108.83333333333333,
+          "failed": 8.416666666666666,
+          "cancelled": 0.3333333333333333,
+          "sla": 1029.0662695699689,
+          "idle": 2772.066490058738,
           "chapter": 16
         },
         "idle": {
@@ -1313,56 +1311,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 6266.048434139987,
-        "worth": 2244.624600713421,
-        "bankrupt": 0,
-        "idleCashDays": 7.083333333333333,
-        "ms": 1562.0833333333333
+        "score": 5466.512806048481,
+        "worth": 2237.440844409333,
+        "bankrupt": 1,
+        "idleCashDays": 5.416666666666667,
+        "ms": 1536.1666666666667
       },
       "planner": {
-        "score": 52761.48604788632,
-        "worth": 14624.488376489991,
+        "score": 50804.657095186034,
+        "worth": 16092.45514650389,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 472.5,
-        "idleCashDaysMax": 720,
-        "cashShare": 0.521540883187354,
-        "own": 0.9573373333333334,
-        "ms": 4495.916666666667
+        "idleCashDays": 525.8333333333334,
+        "idleCashDaysMax": 1080,
+        "cashShare": 0.5353124876686784,
+        "own": 0.9548573333333333,
+        "ms": 4319.25
       },
-      "scoreGap": 46495.43761374635,
-      "scoreGapSd": 21632.709083726106,
-      "scoreGapPct": 742.0216760601505,
-      "relGapMedianPct": 794.5347932747588,
-      "relGapMinPct": 211.36350192349346,
+      "scoreGap": 45338.14428913756,
+      "scoreGapSd": 15537.408982665098,
+      "scoreGapPct": 829.3796410569585,
+      "relGapMedianPct": 1011.4456524446247,
+      "relGapMinPct": 278.4865952350756,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 12379.863775776568,
-      "worthGapPct": 551.5338186992074,
+      "worthGap": 13855.014302094556,
+      "worthGapPct": 619.2348877832421,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.521540883187354,
-        "greedy": 0.22156981644084076
+        "planner": 0.5353124876686784,
+        "greedy": 0.2203735097226485
       },
-      "idleShareOfPlannerPct": 1.3697101779668224,
+      "idleShareOfPlannerPct": 1.4224669267828223,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 137.5,
-          "fulfilled": 103.33333333333333,
-          "failed": 11.5,
-          "cancelled": 0.6666666666666666,
-          "sla": 1284.6858537014843,
-          "idle": 7438.782827610103,
+          "signed": 139.08333333333334,
+          "fulfilled": 105.75,
+          "failed": 12.083333333333334,
+          "cancelled": 0.8333333333333334,
+          "sla": 1261.1841437836356,
+          "idle": 7214.221905517178,
           "chapter": 16
         },
         "greedy": {
-          "signed": 120.08333333333333,
-          "fulfilled": 105.91666666666667,
-          "failed": 5.25,
-          "cancelled": 0.25,
-          "sla": 915.7145455034884,
-          "idle": 2718.9188315078886,
+          "signed": 120.33333333333333,
+          "fulfilled": 107.83333333333333,
+          "failed": 5.333333333333333,
+          "cancelled": 0.6666666666666666,
+          "sla": 886.7051385530091,
+          "idle": 2602.283712349182,
           "chapter": 16
         },
         "idle": {
@@ -1385,56 +1383,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 6537.250151711615,
-        "worth": 2388.1877841235105,
+        "score": 7248.533355446892,
+        "worth": 2647.3992722307153,
         "bankrupt": 0,
-        "idleCashDays": 7.083333333333333,
-        "ms": 1573.0833333333333
+        "idleCashDays": 10,
+        "ms": 1575.1666666666667
       },
       "planner": {
-        "score": 55970.304310262385,
-        "worth": 12698.275956349333,
+        "score": 54211.71303504251,
+        "worth": 12086.192212220078,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 489.1666666666667,
+        "idleCashDays": 503.3333333333333,
         "idleCashDaysMax": 800,
-        "cashShare": 0.528186976647281,
+        "cashShare": 0.522829852732591,
         "own": 1,
-        "ms": 4385
+        "ms": 4360.166666666667
       },
-      "scoreGap": 49433.054158550774,
-      "scoreGapSd": 25424.70019474458,
-      "scoreGapPct": 756.1750431962279,
-      "relGapMedianPct": 788.249119781287,
-      "relGapMinPct": 159.1945946851057,
+      "scoreGap": 46963.17967959561,
+      "scoreGapSd": 26383.828814411703,
+      "scoreGapPct": 647.8990628401434,
+      "relGapMedianPct": 687.4497196655362,
+      "relGapMinPct": 160.2884641488902,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 10310.088172225822,
-      "worthGapPct": 431.71178752217475,
+      "worthGap": 9438.79293998936,
+      "worthGapPct": 356.530767345727,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.528186976647281,
-        "greedy": 0.2208635678242428
+        "planner": 0.522829852732591,
+        "greedy": 0.21974276329803444
       },
-      "idleShareOfPlannerPct": 1.2911836970518984,
+      "idleShareOfPlannerPct": 1.3330688221884874,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 146.83333333333334,
-          "fulfilled": 108.25,
-          "failed": 14.666666666666666,
-          "cancelled": 1,
-          "sla": 1395.1911341298808,
-          "idle": 5979.505621512918,
+          "signed": 150,
+          "fulfilled": 111.91666666666667,
+          "failed": 14.833333333333334,
+          "cancelled": 0.75,
+          "sla": 1407.3734880328896,
+          "idle": 6143.902478328084,
           "chapter": 16
         },
         "greedy": {
-          "signed": 124.66666666666667,
-          "fulfilled": 108.25,
-          "failed": 7.666666666666667,
-          "cancelled": 0.8333333333333334,
-          "sla": 1022.2501265792357,
-          "idle": 2635.7641161865854,
+          "signed": 129.41666666666666,
+          "fulfilled": 113.33333333333333,
+          "failed": 7.166666666666667,
+          "cancelled": 1.1666666666666667,
+          "sla": 871.4457490821657,
+          "idle": 2502.8308062023857,
           "chapter": 16
         },
         "idle": {
@@ -1457,56 +1455,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 11241.707234575477,
-        "worth": 2750.014679019921,
+        "score": 12235.351190616848,
+        "worth": 2682.571866542776,
         "bankrupt": 0,
-        "idleCashDays": 9.583333333333334,
-        "ms": 1549.8333333333333
+        "idleCashDays": 3.3333333333333335,
+        "ms": 1555.0833333333333
       },
       "planner": {
-        "score": 62822.01515946619,
-        "worth": 16757.516911608534,
+        "score": 66637.22652297428,
+        "worth": 18367.07065777923,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 485.8333333333333,
+        "idleCashDays": 497.9166666666667,
         "idleCashDaysMax": 800,
-        "cashShare": 0.5238457039133569,
-        "own": 0.9935333333333336,
-        "ms": 4396.166666666667
+        "cashShare": 0.5224811793140224,
+        "own": 0.9922133333333335,
+        "ms": 4588.166666666667
       },
-      "scoreGap": 51580.30792489071,
-      "scoreGapSd": 19470.61333412186,
-      "scoreGapPct": 458.8298454014894,
-      "relGapMedianPct": 716.9659670655051,
-      "relGapMinPct": 65.74766039961466,
+      "scoreGap": 54401.87533235743,
+      "scoreGapSd": 21521.540105909036,
+      "scoreGapPct": 444.628637828374,
+      "relGapMedianPct": 518.8080008412395,
+      "relGapMinPct": 177.64540053821682,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 14007.502232588617,
-      "worthGapPct": 509.36099866858734,
+      "worthGap": 15684.498791236458,
+      "worthGapPct": 584.6814017120892,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.5238457039133569,
-        "greedy": 0.21726426045824812
+        "planner": 0.5224811793140224,
+        "greedy": 0.21804492970876863
       },
-      "idleShareOfPlannerPct": 1.150360176460447,
+      "idleShareOfPlannerPct": 1.0844980833577884,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 147.41666666666666,
-          "fulfilled": 110.75,
-          "failed": 14,
-          "cancelled": 0.25,
-          "sla": 1621.712960936653,
-          "idle": 6196.993849979467,
+          "signed": 149.5,
+          "fulfilled": 111.91666666666667,
+          "failed": 14.583333333333334,
+          "cancelled": 0.3333333333333333,
+          "sla": 1546.6860688186262,
+          "idle": 6746.068629106351,
           "chapter": 16
         },
         "greedy": {
-          "signed": 126.75,
-          "fulfilled": 111.08333333333333,
-          "failed": 7.833333333333333,
+          "signed": 126.58333333333333,
+          "fulfilled": 111.41666666666667,
+          "failed": 7.75,
           "cancelled": 0.8333333333333334,
-          "sla": 1103.1479487330027,
-          "idle": 2701.164712902418,
+          "sla": 1051.771066914965,
+          "idle": 2528.6143523492847,
           "chapter": 16
         },
         "idle": {
@@ -1529,56 +1527,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 6179.362507503273,
-        "worth": 2410.2547144694113,
+        "score": 7473.666479371356,
+        "worth": 2481.3908400452387,
         "bankrupt": 0,
-        "idleCashDays": 7.916666666666667,
-        "ms": 1512.5833333333333
+        "idleCashDays": 11.25,
+        "ms": 1642.9166666666667
       },
       "planner": {
-        "score": 64633.44813613439,
-        "worth": 17956.747161314182,
+        "score": 59927.33869783696,
+        "worth": 17830.46889625769,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 482.0833333333333,
-        "idleCashDaysMax": 720,
-        "cashShare": 0.52675263664472,
-        "own": 0.9370466666666668,
-        "ms": 4785.916666666667
+        "idleCashDays": 502.0833333333333,
+        "idleCashDaysMax": 815,
+        "cashShare": 0.5258528022720279,
+        "own": 0.9489066666666668,
+        "ms": 4536.416666666667
       },
-      "scoreGap": 58454.08562863111,
-      "scoreGapSd": 20000.542248364636,
-      "scoreGapPct": 945.95657007747,
-      "relGapMedianPct": 767.3029209520959,
-      "relGapMinPct": 336.50331382800215,
+      "scoreGap": 52453.672218465596,
+      "scoreGapSd": 20977.41644880075,
+      "scoreGapPct": 701.8465750812808,
+      "relGapMedianPct": 606.9320152583398,
+      "relGapMinPct": 273.1703748047722,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 15546.492446844772,
-      "worthGapPct": 645.0145021401668,
+      "worthGap": 15349.078056212455,
+      "worthGapPct": 618.5675311001238,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.52675263664472,
-        "greedy": 0.2187891954707546
+        "planner": 0.5258528022720279,
+        "greedy": 0.21871019715409892
       },
-      "idleShareOfPlannerPct": 1.1181198981095641,
+      "idleShareOfPlannerPct": 1.205926143472359,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 152.66666666666666,
-          "fulfilled": 112.66666666666667,
-          "failed": 14.416666666666666,
+          "signed": 152.33333333333334,
+          "fulfilled": 113.16666666666667,
+          "failed": 15.166666666666666,
           "cancelled": 0.6666666666666666,
-          "sla": 1347.2532973998466,
-          "idle": 7313.7426038528865,
+          "sla": 1430.818194722856,
+          "idle": 7443.297816776233,
           "chapter": 16
         },
         "greedy": {
-          "signed": 124.16666666666667,
-          "fulfilled": 111.25,
-          "failed": 6.666666666666667,
-          "cancelled": 0.5,
-          "sla": 861.2968269378971,
-          "idle": 2654.948652885547,
+          "signed": 125.5,
+          "fulfilled": 112.91666666666667,
+          "failed": 6.5,
+          "cancelled": 0.3333333333333333,
+          "sla": 906.7737989642472,
+          "idle": 2535.3486971740203,
           "chapter": 16
         },
         "idle": {
@@ -1601,56 +1599,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 10169.975179168758,
-        "worth": 3017.5121807551313,
+        "score": 8793.207248603314,
+        "worth": 2863.691269654337,
         "bankrupt": 0,
-        "idleCashDays": 14.166666666666666,
-        "ms": 1641.8333333333333
+        "idleCashDays": 13.333333333333334,
+        "ms": 1555.75
       },
       "planner": {
-        "score": 71903.49924798343,
-        "worth": 19817.46903497034,
+        "score": 74603.2480890772,
+        "worth": 20283.434725111878,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 617.0833333333334,
+        "idleCashDays": 586.25,
         "idleCashDaysMax": 980,
-        "cashShare": 0.5453420343626675,
-        "own": 0.9464866666666668,
-        "ms": 4215.083333333333
+        "cashShare": 0.533537358477986,
+        "own": 0.9435533333333335,
+        "ms": 4466.5
       },
-      "scoreGap": 61733.52406881467,
-      "scoreGapSd": 22820.80088304013,
-      "scoreGapPct": 607.0174506941172,
-      "relGapMedianPct": 670.6171240780942,
+      "scoreGap": 65810.04084047388,
+      "scoreGapSd": 20223.334790637055,
+      "scoreGapPct": 748.4190805456899,
+      "relGapMedianPct": 1144.672603668572,
       "relGapMinPct": 227.6327734584211,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 16799.95685421521,
-      "worthGapPct": 556.7486010946616,
+      "worthGap": 17419.74345545755,
+      "worthGapPct": 608.2968384214198,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.5453420343626675,
-        "greedy": 0.21961898943779903
+        "planner": 0.533537358477986,
+        "greedy": 0.21890827769761353
       },
-      "idleShareOfPlannerPct": 1.0050685321336594,
+      "idleShareOfPlannerPct": 0.9686970245337786,
       "ablatedChapterUse": 0,
       "contracts": {
         "planner": {
-          "signed": 149.5,
-          "fulfilled": 114.08333333333333,
-          "failed": 13,
-          "cancelled": 0.9166666666666666,
-          "sla": 1154.638690161635,
-          "idle": 7896.200521118667,
+          "signed": 149.91666666666666,
+          "fulfilled": 114.16666666666667,
+          "failed": 13.416666666666666,
+          "cancelled": 1,
+          "sla": 1186.5818741925511,
+          "idle": 7534.834018179684,
           "chapter": 15
         },
         "greedy": {
-          "signed": 143.41666666666666,
-          "fulfilled": 128.41666666666666,
-          "failed": 5.25,
+          "signed": 141,
+          "fulfilled": 126.66666666666667,
+          "failed": 5.833333333333333,
           "cancelled": 0.16666666666666666,
-          "sla": 818.4828778541532,
-          "idle": 2887.564060839526,
+          "sla": 849.1452762380964,
+          "idle": 2912.0965765312667,
           "chapter": 15
         },
         "idle": {
@@ -1673,56 +1671,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 9644.752199812503,
-        "worth": 3002.0037425833775,
+        "score": 11988.803850553033,
+        "worth": 3486.4164861051613,
         "bankrupt": 0,
-        "idleCashDays": 15.416666666666666,
-        "ms": 1545.8333333333333
+        "idleCashDays": 19.583333333333332,
+        "ms": 1610.1666666666667
       },
       "planner": {
-        "score": 65191.26099020423,
-        "worth": 20290.74175463845,
+        "score": 65262.79989170749,
+        "worth": 20943.387855484947,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 563.3333333333334,
-        "idleCashDaysMax": 1065,
-        "cashShare": 0.5279924729170496,
-        "own": 0.9420200000000002,
-        "ms": 4745
+        "idleCashDays": 636.25,
+        "idleCashDaysMax": 1135,
+        "cashShare": 0.5402253979826394,
+        "own": 0.9219866666666668,
+        "ms": 4413.083333333333
       },
-      "scoreGap": 55546.50879039174,
-      "scoreGapSd": 13601.329784926524,
-      "scoreGapPct": 575.924685669701,
-      "relGapMedianPct": 594.2423178922868,
-      "relGapMinPct": 296.9368217441076,
+      "scoreGap": 53273.99604115446,
+      "scoreGapSd": 12339.164240073485,
+      "scoreGapPct": 444.3645646825473,
+      "relGapMedianPct": 411.61715892764937,
+      "relGapMinPct": 215.81019721261123,
       "plannerWins": 12,
       "winsAt25": 12,
-      "worthGap": 17288.738012055073,
-      "worthGapPct": 575.9066108684206,
+      "worthGap": 17456.971369379786,
+      "worthGapPct": 500.71388312191533,
       "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.5279924729170496,
-        "greedy": 0.22134589767616628
+        "planner": 0.5402253979826394,
+        "greedy": 0.2214533295547667
       },
-      "idleShareOfPlannerPct": 1.1085526395217837,
+      "idleShareOfPlannerPct": 1.1073374811433274,
       "ablatedChapterUse": null,
       "contracts": {
         "planner": {
-          "signed": 157.5,
-          "fulfilled": 115.33333333333333,
-          "failed": 13.583333333333334,
-          "cancelled": 0.5833333333333334,
-          "sla": 1573.699265604365,
-          "idle": 7661.35564210469,
+          "signed": 156.91666666666666,
+          "fulfilled": 116.25,
+          "failed": 13.75,
+          "cancelled": 0.5,
+          "sla": 1506.0818320565888,
+          "idle": 7468.955918291084,
           "chapter": 16
         },
         "greedy": {
-          "signed": 130.66666666666666,
-          "fulfilled": 117.25,
-          "failed": 4.583333333333333,
-          "cancelled": 0.25,
-          "sla": 791.4017740988185,
-          "idle": 3124.532574712002,
+          "signed": 129.41666666666666,
+          "fulfilled": 115.58333333333333,
+          "failed": 4.75,
+          "cancelled": 0.4166666666666667,
+          "sla": 826.1348282271148,
+          "idle": 3100.219734123106,
           "chapter": 16
         },
         "idle": {
@@ -1745,56 +1743,56 @@
         "bankrupt": 0
       },
       "greedy": {
-        "score": 2969.300085010888,
-        "worth": 1520.5055770988056,
+        "score": 2987.3920105175926,
+        "worth": 1536.1114083916711,
         "bankrupt": 0,
-        "idleCashDays": 3.75,
-        "ms": 1267.0833333333333
+        "idleCashDays": 5,
+        "ms": 1265.3333333333333
       },
       "planner": {
-        "score": 20176.40045816425,
-        "worth": 5896.332684486147,
+        "score": 20084.50266743539,
+        "worth": 5501.234086831569,
         "fired": 0,
         "bankrupt": 0,
-        "idleCashDays": 302.0833333333333,
+        "idleCashDays": 305.8333333333333,
         "idleCashDaysMax": 770,
-        "cashShare": 0.5966595374190843,
-        "own": 0.9509226666666669,
-        "ms": 2324.0833333333335
+        "cashShare": 0.5908658124639806,
+        "own": 0.9527893333333334,
+        "ms": 2481.6666666666665
       },
-      "scoreGap": 17207.100373153364,
-      "scoreGapSd": 11001.587503603463,
-      "scoreGapPct": 579.5002148828036,
-      "relGapMedianPct": 649.018693388643,
-      "relGapMinPct": -7.149327608742717,
-      "plannerWins": 11,
-      "winsAt25": 11,
-      "worthGap": 4375.82710738734,
-      "worthGapPct": 287.7876394071911,
-      "plannerWinsWorth": 11,
+      "scoreGap": 17097.110656917805,
+      "scoreGapSd": 10560.840829040682,
+      "scoreGapPct": 572.3089101371593,
+      "relGapMedianPct": 785.2143870938796,
+      "relGapMinPct": 133.60694816568227,
+      "plannerWins": 12,
+      "winsAt25": 12,
+      "worthGap": 3965.1226784398964,
+      "worthGapPct": 258.1272853504442,
+      "plannerWinsWorth": 12,
       "cashShare": {
-        "planner": 0.5966595374190843,
-        "greedy": 0.24204484389362377
+        "planner": 0.5908658124639806,
+        "greedy": 0.23910445251284185
       },
-      "idleShareOfPlannerPct": 3.5818056146482578,
+      "idleShareOfPlannerPct": 3.598194371106743,
       "ablatedChapterUse": 12,
       "contracts": {
         "planner": {
-          "signed": 110.08333333333333,
-          "fulfilled": 86.75,
+          "signed": 110.5,
+          "fulfilled": 87.16666666666667,
           "failed": 10.833333333333334,
-          "cancelled": 0.9166666666666666,
-          "sla": 654.0395463344236,
-          "idle": 3246.7177058324796,
+          "cancelled": 1.0833333333333333,
+          "sla": 678.6644406457975,
+          "idle": 3266.6437709150146,
           "chapter": 16
         },
         "greedy": {
-          "signed": 117.25,
-          "fulfilled": 104.25,
-          "failed": 7.083333333333333,
-          "cancelled": 0.6666666666666666,
-          "sla": 610.1923501069884,
-          "idle": 2161.346970689926,
+          "signed": 119.66666666666667,
+          "fulfilled": 107,
+          "failed": 7.25,
+          "cancelled": 0.5833333333333334,
+          "sla": 662.177886335288,
+          "idle": 2196.0463441148086,
           "chapter": 16
         },
         "idle": {
@@ -1808,6 +1806,5 @@
         }
       }
     }
-  ],
-  "note": "row \"no contracts\" re-run after the ablation fix (flat-rate buyer at index x 1.2, power chapter at d45 in that mode); other rows unchanged by that fix"
+  ]
 }

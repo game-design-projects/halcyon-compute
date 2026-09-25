@@ -117,25 +117,25 @@ a *lower bound* on depth. Weak signals, not proof.
 
 | Variant | Greedy score (mean $k) | Planner score | Relative gap (mean / median / min) | Planner wins | Note |
 |---|---|---|---|---|---|
-| **Full game** | 5,011 | 57,664 | **+1,051 % / +1,780 % / +332 %** | 12/12 | net worth gap +805 % |
-| No heat/seasons | 10,261 | 76,329 | +644 % / +946 % / +50 % | 12/12 |  |
-| No generations | 26,208 | 158,706 | +506 % / +579 % / +201 % | 12/12 | confounded: prices never fall |
-| No operations | 13,946 | 83,482 | +499 % / +516 % / +86 % | 12/12 |  |
-| No fabric | 20,969 | 119,697 | +471 % / +538 % / +126 % | 12/12 | confounded: also removes transit |
+| **Full game** | 6,213 | 59,281 | **+854 % / +1,082 % / +186 %** | 12/12 | net worth gap +718 % |
+| No heat/seasons | 10,095 | 72,376 | +617 % / +664 % / +110 % | 12/12 |  |
+| No generations | 29,273 | 170,253 | +482 % / +526 % / +261 % | 12/12 | confounded: prices never fall |
+| No operations | 13,504 | 82,579 | +512 % / +404 % / +144 % | 12/12 |  |
+| No fabric | 25,039 | 118,440 | +373 % / +375 % / +106 % | 12/12 | confounded: also removes transit |
 | **No contracts** | 34,771 | 69,456 | **+100 % / +89 % / +31 %** | 12/12 | a flat-rate buyer at index × 1.2 up to demand; no board |
-| No memory market | 7,157 | 77,714 | +986 % / +785 % / +353 % | 12/12 |  |
-| No finance | 6,386 | 48,239 | +655 % / +839 % / +8 % | 12/12 | greedy bankrupt 1/12 |
-| No facilities | 6,697 | 57,164 | +754 % / +769 % / +224 % | 12/12 | greedy bankrupt 1/12 |
-| No energy | 6,977 | 45,235 | +548 % / +596 % / +146 % | 12/12 |  |
-| No environment | 6,266 | 52,761 | +742 % / +795 % / +211 % | 12/12 |  |
-| No investors | 6,537 | 55,970 | +756 % / +788 % / +159 % | 12/12 |  |
-| No reputation | 11,242 | 62,822 | +459 % / +717 % / +66 % | 12/12 |  |
-| No policy | 6,179 | 64,633 | +946 % / +767 % / +337 % | 12/12 |  |
-| No disruption | 10,170 | 71,903 | +607 % / +671 % / +228 % | 12/12 |  |
-| No network | 9,645 | 65,191 | +576 % / +594 % / +297 % | 12/12 |  |
-| No roofline | 2,969 | 20,176 | +580 % / +649 % / −7 % | 11/12 | confounded: both families poor at inference |
+| No memory market | 7,702 | 78,199 | +915 % / +893 % / +390 % | 12/12 |  |
+| No finance | 9,477 | 49,586 | +423 % / +550 % / +18 % | 12/12 | greedy bankrupt 3/12 |
+| No facilities | 4,864 | 55,125 | +1,033 % / +1,866 % / +212 % | 12/12 | greedy bankrupt 1/12 |
+| No energy | 8,107 | 46,077 | +468 % / +601 % / +146 % | 12/12 |  |
+| No environment | 5,467 | 50,805 | +829 % / +1,011 % / +278 % | 12/12 | greedy bankrupt 1/12 |
+| No investors | 7,249 | 54,212 | +648 % / +687 % / +160 % | 12/12 |  |
+| No reputation | 12,235 | 66,637 | +445 % / +519 % / +178 % | 12/12 |  |
+| No policy | 7,474 | 59,927 | +702 % / +607 % / +273 % | 12/12 |  |
+| No disruption | 8,793 | 74,603 | +748 % / +1,145 % / +228 % | 12/12 |  |
+| No network | 11,989 | 65,263 | +444 % / +412 % / +216 % | 12/12 |  |
+| No roofline | 2,987 | 20,085 | +572 % / +785 % / +134 % | 12/12 | confounded: both families poor at inference |
 
-Human-paced, full game, n = 12: **Casual 4,151** (892–13,029), **Expert 14,930** (1,987–34,827); Expert beats Casual on 11/12,
+Human-paced, full game, n = 12: **Casual 5,205** (877–11,397), **Expert 17,013** (4,900–35,593); Expert beats Casual on 10/12,
 Casual beats idle on 12/12, none bankrupt or fired.
 
 Balance targets (SPEC §6) on the full game, n = 12:

@@ -251,3 +251,27 @@ test("policies are part of the state: deterministic and JSON round-trip safe", (
   assert.match(Sim.check(camp, { type: "policy", key: "autoSwap", on: true }).msg, /chapter 6/, "gated by the operations chapter");
   assert.ok(Sim.check(camp, { type: "policy", key: "autoRenew", on: true }).ok, "renewals: from day 0");
 });
+
+/* ============ review follow-ups ============ */
+test("a pre-v4 save migrates: gets the anchor customer and a running order board", () => {
+  const s = Sim.newGame(3);
+  s.contracts = []; s.offers = []; s.nextOffer = -1; s.v = 2;
+  delete s.prog; delete s.policy; delete s.recentlySold;
+  const t = JSON.parse(JSON.stringify(s));
+  Sim.advance(t, 30);
+  assert.equal(t.v, 4);
+  assert.ok(t.contracts.some(c => c.anchor), "anchor added");
+  assert.ok(t.log.some(l => /offer c\d+ web/.test(l)), "offers arrive again");
+  assert.ok(t.cash > s.cash, "it earns");
+});
+
+test("a customer who walks away offers no renewal, and a renewal signed before the walk-out is withdrawn", () => {
+  const s = sb(11);
+  s.cash = 1e5;
+  Sim.apply(s, { type: "policy", key: "autoRenew", on: true });
+  const c = { id: "kW", kind: "infer", cust: "Gone Co", icon: "x", foreign: false, w: "infer", units: 30, days: 25, lead: 0, price: 0.3, sla: 0.95,
+    penalty: 0.45, signed: s.day, start: s.day, end: s.day + 25, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 };
+  s.contracts.push(c);
+  Sim.advance(s, 30);
+  assert.ok(!s.offers.some(o => o.renewOf === "kW") && !s.contracts.some(x => x.renewOf === "kW"));
+});

@@ -30,6 +30,7 @@
      action budget and each chapter's mechanics are off-limits until the bot has "learnt" them; declines are free
      no-ops (a person lets an offer expire). BUDGET is null for the full-speed bots. */
   let BUDGET = null;
+  const BLOCKED = /attention|learning/;
   function ap(s, a) {
     if (!BUDGET) return Sim.apply(s, a);
     if (a.type === "declineContract" || a.type === "declineRound") return { ok: true, msg: "ignored" };
@@ -235,7 +236,9 @@
       const ok = revenue > 0 && profit > 0 && capex + spent <= s.cash - reserve && (capex === 0 || capex / Math.max(1e-6, perDay) <= payback(mem));
       if (ok) {
         // Casual keeps a running tally of what it just promised and what that will cost; full-speed greedy does not
-        if (ap(s, { type: "signContract", id: o.id }).ok && mem.h) { owed[m] += o.units; spent += capex; }
+        const res = ap(s, { type: "signContract", id: o.id });
+        if (res.ok && mem.h) { owed[m] += o.units; spent += capex; }
+        else if (!res.ok && BLOCKED.test(res.msg)) mem.offerSeen.delete(o.id);   // not decided yet: look again next session
       } else ap(s, { type: "declineContract", id: o.id });
     }
   }
@@ -408,6 +411,10 @@
     const real = [];
     for (const c of contractsOf(p)) {
       if (Sim.isJob(c)) {
+        if (c.deadline <= B.day) {                    // already late: runs flat out until done or cancelled (fees count)
+          if (d < c.deadline + c.lateMax) real.push(c);
+          continue;
+        }
         if (d >= c.deadline) continue;
         const rate = Math.max(0, c.work - c.done) / Math.max(1, c.deadline - B.day);
         real.push(Object.assign({}, c, { done: Math.min(c.work, c.done + rate * Math.max(0, d - B.day)), maxRate: rate + 1e-9 }));
@@ -663,7 +670,9 @@
       const gain = r.g - (r.miss > 0.02 * o.units ? 100 : 0) - (r.cover < need ? 1e9 : 0);
       if ((gain > 5 || (mem.rescue && gain > -20 && !o.bts)) && (!o.bts || fund(s, mem, o.fitout + 50))) {
         const why = `sign ${o.bts ? "BUILD-TO-SUIT " : ""}${o.kind} ${job ? o.work + "ud" : o.units + "u"} x${o.days}d gain ${gain.toFixed(0)}${how}`;
-        if (act(s, mem, { type: "signContract", id: o.id }, key, why)) {
+        const signed = act(s, mem, { type: "signContract", id: o.id }, key, why);
+        if (!signed && BUDGET) mem.offerSeen.delete(o.id);                        // blocked by attention/learning: look again
+        if (signed) {
           if (how) { mem.expandFor = s.day; mem.committed = (mem.committed || 0) + 0.5 * (r.cost || 0); }
           if (mem.h) return;                  // Expert takes on one new deal per sitting
           // a long fixed price signed ahead of a known launch is the hedge the generations chapter teaches

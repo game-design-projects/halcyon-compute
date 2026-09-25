@@ -786,10 +786,11 @@
       }
     }
     const sell = () => core(s) ? allocate(s, day, mk, perRack, s.racks) : spotSale(s, mk, perRack, s.racks, supply, frontierElig);
-    let sold = sell(), outageLoss = 0;
+    let sold = sell(), outageLoss = 0, supplyPre = null;
     if (blackout) {
       outageLoss = sold.gross + sold.accrual;
-      for (const r of s.racks) { const o = perRack[r.id].out; o.web = o.train = o.infer = 0; }
+      for (const r of s.racks) { const pr = perRack[r.id]; pr.outPre = Object.assign({}, pr.out); pr.out.web = pr.out.train = pr.out.infer = 0; }
+      supplyPre = Object.assign({}, supply);
       supply.web = supply.train = supply.infer = 0; frontierElig = 0;
       sold = sell();
     }
@@ -842,7 +843,7 @@
     const green = facility > 0 ? Math.min(1, (solarKw + ppaKw) / facility) : 0;
     return { day, se, mk, kw, halls, heatCap: halls[0].heatCap, tTarget: halls[0].tTarget, roomT: halls[0].roomT, roomHeat: halls[0].heat,
       perRack, supply, frontierElig, cluster, transitF, revenue, gross, cDel: sold.cDel, cMiss: sold.cMiss,
-      alloc: sold.alloc, idle: sold.idle, lostCap: sold.idle, owed: sold.owed, accrual: sold.accrual, idleLoss,
+      alloc: sold.alloc, idle: sold.idle, supplyPre: supplyPre || supply, lostCap: sold.idle, owed: sold.owed, accrual: sold.accrual, idleLoss,
       powerCost, upkeep, costs, opex, throttleLoss, failLoss, brickLoss, outageLoss, transitLost,
       facility, spot, solarKw, ppaKw, draw, dieselKw, waterRate, carbon, green, blackout, drought, heatWave: wave,
       net: gross - opex, earn: gross + sold.accrual - opex };
@@ -907,6 +908,17 @@
     if (!s.policy) s.policy = { autoSwap: false, keepSpares: {}, autoRenew: false };
     if (s.contractLog.cancelled == null) Object.assign(s.contractLog, { cancelled: 0, late: 0 });
     for (const k of Object.keys(LOSS_LABEL)) if (s.losses[k] == null) { s.losses[k] = 0; s.lossBy[k] = {}; }
+    if (!(s.v >= 4)) {           // a pre-v4 save: give it the contracts core (anchor customer + a running board)
+      if (core(s) && !s.contracts.some(c => c.anchor)) {
+        const p = +(MARKET.web.base * 1.05).toFixed(4), a = C.ANCHOR;
+        s.contracts.unshift({ id: "c" + s.nextId++, kind: "web", anchor: true, cust: a.name, icon: a.icon, foreign: false, w: "web",
+          units: K.ANCHOR_UNITS, days: K.END_DAY, lead: 0, price: p, spot: MARKET.web.base, repAdj: 1, sla: K.SLA_WEB,
+          penalty: +(p * K.PENALTY_MULT).toFixed(4), signed: s.day, start: s.day, end: K.END_DAY + 1, delivered: 0, missed: 0, penaltyPaid: 0, missDays: 0, streak: 0 });
+      }
+      if (core(s) && !(s.nextOffer >= 0)) s.nextOffer = Math.floor(s.day) + 1;
+      s.v = 4;
+      log(s, "migrated save to v4");
+    }
   }
   function logCash(s, amt, kind, label) {
     ensureCashLog(s);
@@ -1275,8 +1287,8 @@
         spend(s, it.price, "capex");
         Object.assign(job, { paid: it.price, day0: s.day, capex: true });
         s.deprec[dep0].job = job.id;
-        if (s.policyFx.exportCtl && it.role === "gpu" && it.gen === currentGen(s)) s.exportUsed++;
-        if (it.role === "gpu") s.prog.gpuOrders++;
+        if (s.policyFx.exportCtl && it.role === "gpu" && it.gen === currentGen(s)) { s.exportUsed++; job.exportQ = Math.floor(s.day / 90); }
+        if (it.role === "gpu") { s.prog.gpuOrders++; job.gpu = true; }
         s.jobs.push(job); have++;
         logCash(s, -it.price, "restock", `Auto-ordered a spare ${it.name}`);
         log(s, `restock ${k} (${have}/${n})`);
@@ -1403,7 +1415,8 @@
       const back = buildRefund(s, j);
       refundPaid(s, j, back);
       if (j.paid) logCash(s, back, "refund", `Cancelled ${k === "buildHall" ? "Hall " + j.hall : k}: $${round2(back)}k of $${round2(j.paid)}k back`);
-      if (k === "forward" && s.policyFx.exportCtl) s.exportUsed = Math.max(0, s.exportUsed - 1);
+      if (j.exportQ != null && j.exportQ === Math.floor(s.day / 90)) s.exportUsed = Math.max(0, s.exportUsed - 1);
+      if (j.gpu) s.prog.gpuOrders = Math.max(0, s.prog.gpuOrders - 1);
       what = `refund ${back} of ${j.paid}`;
     }
     log(s, `cancel job ${j.id} ${k} (${what})`);
@@ -1520,7 +1533,7 @@
       case "forward": {
         const it = s.items[a.item], d = dev(s, a.item);
         spend(s, it.price, "capex");
-        if (s.policyFx.exportCtl && it.gen === currentGen(s)) s.exportUsed++;
+        if (s.policyFx.exportCtl && it.gen === currentGen(s)) { s.exportUsed++; job.exportQ = Math.floor(s.day / 90); }
         Object.assign(job, { dev: d, phase: "contract", left: K.FORWARD_DAYS, total: K.FORWARD_DAYS, toShelf: true });
         s.jobs.push(job); break;
       }
@@ -1706,7 +1719,7 @@
     const cap = { web: 0, train: 0, infer: 0, frontier: st.frontierElig };
     for (const r of s.racks) {
       const pr = st.perRack[r.id];
-      for (const w of ["web", "train", "infer"]) cap[w] += r.mode === "off" ? pr.raw[w] * pr.netF : pr.out[w];
+      for (const w of ["web", "train", "infer"]) cap[w] += r.mode === "off" ? pr.raw[w] * pr.netF : (pr.outPre || pr.out)[w];   // a blackout is not lost capacity
       for (const d of r.pending) {
         const it = itemOf(s, d);
         if (it.role === "cpu") cap.web += 1;
@@ -1887,7 +1900,7 @@
     // renewals: a serving customer whose SLA has held so far offers the same deal, re-priced to today's market, to start
     // when the current one ends; with the autoRenew policy it is signed on the spot
     for (const c of s.contracts.slice()) {
-      if (isJob(c) || c.anchor || c.renewOffered || c.walked || c.end - d > K.RENEW_BEFORE || d >= c.end) continue;
+      if (isJob(c) || c.anchor || c.renewOffered || c.walked || c.streak > 0 || c.end - d > K.RENEW_BEFORE || d >= c.end) continue;
       const elapsed = Math.max(1, Math.min(c.days, d - c.start));
       if (c.missed > K.CONTRACT_OK_MISS * c.units * elapsed || (c.foreign && s.policyFx.exportCtl)) continue;
       c.renewOffered = true;
@@ -1904,6 +1917,8 @@
     // sustained failure: the customer walks away (penalties stop, the revenue too; counts as a failed contract)
     for (const c of s.contracts.filter(x => !isJob(x) && x.streak >= K.SLA_WALK_DAYS && d < x.end)) {
       c.end = d; c.walked = true;
+      s.offers = s.offers.filter(o => o.renewOf !== c.id);                    // no renewal from a customer who left
+      s.contracts = s.contracts.filter(x => !(x.renewOf === c.id && x.start > d - 1e-9));
       if (on(s, "reputation")) repHit(s, K.REP_JOB_CANCEL);
       logCash(s, 0, "contractLost", `${c.cust} terminated: ${K.SLA_WALK_DAYS} days of missed deliveries ($${Math.round(c.penaltyPaid)}k in penalties)`);
       pushNews(s, { title: `${c.cust} walks away`, body: `${K.SLA_WALK_DAYS} days of missed deliveries. Contract terminated; penalties paid $${Math.round(c.penaltyPaid)}k.`, tone: "bad", cat: "contracts", icon: "doc" });
@@ -1975,7 +1990,7 @@
       case "memory": return s.prog.gpuOrders >= 10;
       case "finance": {
         if (trailingRevenue(s, 90) >= 500) return true;
-        const short = ["web", "train", "infer"].some(w => st.owed[w] > st.supply[w] + 0.5);
+        const short = ["web", "train", "infer"].some(w => st.owed[w] > st.supplyPre[w] + 0.5);
         return short && s.cash < cheapestGpu(s);
       }
       case "facilities": return f.hall1 >= 15 || gridKwAll(s) >= 0.85 * s.gridKw;
