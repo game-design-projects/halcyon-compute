@@ -183,6 +183,7 @@
 
   // ---------- drawers ----------
   "dr.contracts": ["Contracts", "合同"], "dr.finance": ["Finance", "金融"], "dr.energy": ["Energy & facilities", "能源与设施"], "dr.affairs": ["Reputation & policy", "声誉与政策"],
+  "dr.min": ["Fold / unfold (the rack panel takes the space)", "收起 / 展开（机柜面板占用空间）"],
   "dr.contractsTip": ["Contracts: offers, active contracts, track record", "合同：报价、执行中、履约记录"],
   "dr.financeTip": ["Finance: quarter results, debt, leases, investors", "金融：季度业绩、负债、租赁、投资人"],
   "wf.web": ["Web", "Web"], "wf.train": ["Train", "训练"], "wf.infer": ["Infer", "推理"], "wf.frontier": ["Frontier", "前沿"], "wf.contracts": ["Contracts", "合同"],

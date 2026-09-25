@@ -6,6 +6,20 @@ release plus the fix and merged back here afterwards.
 
 ## [Unreleased]
 
+### Fixed
+- **The floor collapsed late in the game** (player on v0.4.4, year 3: "玩不下去了"; replay of their log measured 6–7 px
+  racks at every window size). The floor is now the hero and never shrinks below 3 rows of 72 px racks; everything else
+  gives way first (racks now 95 px in that state at 1512×982, 1280×720, 1920×1080 and 1366×768; 115 px on day 5).
+  - Order board: one slim chip row (title, price, kinds, next offer, auto-renew, then the contract pills) and one row of
+    compact offer cards (terms · Sign · ✕ · fit bar) that scrolls sideways; no empty placeholder slots, and with no
+    offers it is just the slim row ("No offers yet · ~Nd").
+  - Banners (HBM shortage, outage, heat wave, …) are chips on the goal line: one line in total, never stacking.
+  - Spares shelf is one thin row (thinner when empty); catalog cards are more compact.
+  - Right column: slimmer company chips; the rack panel keeps its whole elevation and Sell bin; the docked drawer
+    takes the rest, scrolls inside, and folds to its header (new − button).
+- `tools/layout-check.js`: headless-Chrome check that racks stay ≥ 70 stage px (plus no page scroll, no console
+  errors, drag-to-buy and drawer fold) in late, empty-board, stress and early states at five window sizes.
+
 ## [0.4.4] - 2026-09-25
 
 Fix round driven by real player telemetry (v0.4.1, seed 298670, two sessions of one player; replay-verified).

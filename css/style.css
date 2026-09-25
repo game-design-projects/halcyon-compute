@@ -846,7 +846,6 @@ body { background: var(--letterbox); display: grid; place-items: center; }
 .toggle.mini .sw { transform: scale(.8); transform-origin: left center; }
 .toggle.mini small { font-size: 12px; }
 .board .ocard { min-height: 92px; }
-.board .ocard.empty { display: flex; align-items: center; justify-content: center; gap: 6px; color: var(--ink-2); border-style: dashed; border-left-width: 1px; background: transparent; animation: none; }
 .ocard .on small em { font-style: normal; font-weight: 600; color: var(--wc); }
 .ocard.stretch { box-shadow: inset 0 0 0 1px var(--c-warn); }
 .ocard .ofit { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-2); }
@@ -1172,11 +1171,105 @@ html.lang-zh .end, html.lang-zh .pop h3, html.lang-zh .goal b { font-weight: 600
 .kchips.wide { margin: 0 0 8px; }
 .kchips.wide .kchip { background: var(--tile); color: var(--ink-2); padding: 3px 8px; font-size: 12px; }
 .kchips.wide .kchip.on { background: var(--c-contract); color: var(--white); }
-/* v0.4.2: drawers dock in the lower half of the right column; the rack panel above stays usable (DECISIONS D63) */
-#stage { --dock-h: calc((var(--stage-h, 810px) - 72px) * 0.46); }
-.drawer { top: auto; right: 10px; bottom: 10px; width: 380px; height: var(--dock-h); border: 1px solid var(--line); border-radius: 8px; transform: translateY(calc(100% + 24px)); box-shadow: 0 -8px 24px rgba(0,0,0,.18); }
-.drawer.open { transform: none; }
-.stage.docked .side { padding-bottom: calc(var(--dock-h) + 10px); }
-.stage.docked .tabcard { min-height: 120px; }
-.drawer > header { padding: 6px 10px; border-radius: 8px 8px 0 0; }
-.drawer > header h2 { font-size: 17px; }
+/* ================= v0.4.5 layout hotfix: the floor is the hero and never collapses =================
+   A v0.4.4 player at year 3 got 20 px racks: banners + a 240 px order board + shelf + catalog + a fixed-share docked drawer
+   ate the column and the floor (the only shrinkable child) absorbed it all. Now the budget is the other way round: the
+   floor is `flex: 1 0 auto` with rack rows `minmax(72px, 1fr)` (it only ever grows); everything else is compact by default
+   and is what gives way. Stage px budget of the left column (810 tall): HUD ~61 + goal row 30 + board 30 (+ ~70 with offers)
+   + map bar 28 + floor >= 324 + shelf 28-40 + catalog ~118 + gaps. `node tools/layout-check.js` asserts racks >= 70 stage px
+   in the replayed late-game state and an early state at 5 window sizes (CLAUDE.md "Layout check"). */
+.stage { grid-template-rows: auto minmax(0, 1fr); }
+.game { padding: 8px 10px; gap: 10px; }
+.floor-wrap { gap: 6px; }
+
+/* goal row: the chapter + next unlock, with every event banner as a chip on the SAME line (never a second row) */
+.goalrow { display: flex; gap: 6px; align-items: stretch; height: 30px; min-width: 0; }
+.goalrow .goal { flex: 1 1 auto; min-width: 200px; padding: 2px 10px; overflow: hidden; }
+.goalrow .goal b { white-space: nowrap; }
+.goalrow .banners { display: flex; flex: 0 1 auto; gap: 6px; min-width: 0; overflow: hidden; }
+.goalrow .banners:empty { display: none; }
+.goalrow .banner { flex: 0 1 auto; min-width: 64px; border-radius: 6px; padding: 0 9px; gap: 5px; font-size: 12.5px; white-space: nowrap; cursor: help; }
+.goalrow .banner svg.i { width: 15px; height: 15px; flex: none; }
+.goalrow .banner > span:not(.t) { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.goalrow .banner .t { margin-left: 2px; font-size: 13px; flex: none; }
+
+/* order board: one chip row (teal head with price / kinds / next / auto-renew, then the contract pills), then ONE row of
+   compact offer cards that scrolls sideways; no placeholder slots (zero offers = the slim head row alone) */
+.offerstrip.board { display: flex; flex-direction: column; gap: 5px; flex: 0 1 auto; min-height: 30px; overflow: hidden; }
+.offerstrip.board[hidden] { display: none; }
+.board .bhead { display: flex; align-items: center; gap: 6px; height: 30px; min-width: 0; flex: none; }
+.board .oshead { flex: none; flex-direction: row; align-items: center; justify-content: flex-start; gap: 7px; height: 30px; padding: 0 9px; min-width: 0; max-width: 62%; overflow: hidden; }
+.board .oshead .bt b { font-size: 15px; }
+.board .oshead svg.i { width: 16px; height: 16px; }
+.board .oshead .obk { align-self: center; }
+.board .oshead .kchips { flex-wrap: nowrap; }
+.board .oshead small { white-space: nowrap; display: inline-flex; align-items: center; gap: 3px; max-width: none; }
+.board .oshead .toggle.mini { margin: 0; width: auto; }
+.board .oshead .toggle.mini .sw { transform: scale(.72); margin-right: -8px; }
+.board .bhead .cpills { flex: 1 1 0; min-width: 0; min-height: 0; grid-column: auto; }
+.board .bcards { display: flex; gap: 8px; overflow-x: auto; overflow-y: hidden; min-height: 0; flex: 0 1 auto; padding-bottom: 2px; scrollbar-width: thin; overscroll-behavior-x: contain; }
+.board .bcards .ocard { flex: 1 0 310px; max-width: 460px; }
+.board .ocard { padding: 4px 8px 6px; gap: 3px; }
+.board .ocard .av { width: 22px; height: 22px; }
+.board .ocard .av svg.i { width: 14px; height: 14px; }
+.board .ocard .on { display: flex; align-items: baseline; gap: 6px; min-width: 0; overflow: hidden; white-space: nowrap; }
+.board .ocard .on small { overflow: hidden; text-overflow: ellipsis; }
+.board .ocard .op { display: flex; align-items: baseline; gap: 4px; }
+.board .ocard .op small.up, .board .ocard .op small.down { grid-column: auto; }
+.board .ocard .op b { font-size: 15px; }
+.board .ocard .oa .btn.sign { padding: 2px 12px; font-size: 14px; }
+.board .ocard .oa .btn.decl { padding: 2px 6px; }
+.board .ocard .oa .btn svg.i { width: 14px; height: 14px; }
+.board.none .oshead .bnone { opacity: .95; }
+
+/* the floor: never below 3 x 72 px racks; the aisles are thin; it takes every spare pixel */
+.floor-wrap > .floor-scroll { flex: 1 0 auto; min-height: 0; }
+.floor { grid-template-rows: 16px minmax(72px, 1fr) 16px minmax(72px, 1fr) 16px minmax(72px, 1fr) 16px; padding: 7px 10px; }
+.aisle { font-size: 11px; }
+.aisle svg.i { width: 12px; height: 12px; }
+.floorbar { min-height: 28px; }
+.floorbar button { padding-top: 3px; padding-bottom: 3px; }
+
+/* spares shelf: one thin row (slots are chips); an empty shelf is a slimmer drop row */
+.floor-wrap > .shelf-wrap { flex: 0 1 auto; min-height: 0; overflow: hidden; }
+.shelf-head { flex-direction: row; align-items: baseline; gap: 6px; }
+.shelf-head h2 { font-size: 15px; }
+.shelf { padding: 4px; gap: 4px; }
+.slot { min-height: 30px; flex-direction: row; gap: 3px; }
+.slot.card svg.i { width: 14px; height: 14px; }
+.shelf-wrap.empty .slot { min-height: 14px; }
+.shelf-wrap.empty .shelf { padding: 3px 4px; }
+
+/* catalog: compact cards; the tray is the last thing that gives way (it clips before the floor would shrink) */
+.tray-title { min-height: 24px; }
+.tray-title h2 svg.i { width: 18px; height: 18px; }
+.floor-wrap > .tray { flex: 0 1 auto; min-height: 0; overflow-y: hidden; padding: 6px 2px 2px; }
+.tray .item { padding: 5px 8px; gap: 3px; }
+.tray .item .av { width: 24px; height: 24px; }
+.tray .item .av svg.i { width: 15px; height: 15px; }
+.tray .item .price { font-size: 15px; }
+
+/* right column: company chips in one slim row; the rack panel keeps a usable minimum (it scrolls inside below that);
+   the docked drawer is IN the column (no fixed share), takes the rest, scrolls inside, and folds to its header */
+.side { gap: 8px; }
+.corp { padding: 3px 8px; gap: 4px; }
+.corp .chip { padding: 1px 4px; }
+.corp .chip .big { font-size: 16px; }
+.corp .chip small { font-size: 11px; }
+.corp .chip .bar { margin-top: 2px; height: 4px; }
+.tabcard { flex: 1 1 0; min-height: 384px; }   /* tabs + rack header + the whole 196 px elevation + the sell bin */
+.side > .drawer { position: relative; inset: auto; top: auto; right: auto; bottom: auto; z-index: 1; width: auto; height: auto; flex: 1 1 0; min-height: 0;
+  display: none; transform: none; border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.12); overflow: hidden; transition: none; }
+.side > .drawer.open { display: flex; animation: dock-in .18s ease-out; }
+.side > .drawer.min { flex: none; }
+.side > .drawer.min .dbody { display: none; }
+.side > .drawer.min > header { cursor: pointer; }
+.drawer > .dbody { flex: 1 1 0; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.drawer > header { padding: 5px 8px 5px 10px; border-radius: 8px 8px 0 0; gap: 6px; }
+.drawer > header h2 { font-size: 17px; white-space: nowrap; }
+.drawer > header #drawer-min { margin-left: auto; }
+.drawer > header #drawer-close { margin-left: 0; }
+.drawer > header .iconbtn { padding: 4px; }
+@keyframes dock-in { from { transform: translateY(12px); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .side > .drawer.open { animation: none; } }
+:root.reduce-motion .side > .drawer.open { animation: none; }

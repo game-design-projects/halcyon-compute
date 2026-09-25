@@ -118,11 +118,9 @@
   <div class="pop" id="pop" hidden></div>
 </header>
 
-<div class="banners" id="banners"></div>
-
 <div class="game">
   <section class="floor-wrap">
-    <div class="goal" id="goal"></div>
+    <div class="goalrow"><div class="goal" id="goal"></div><div class="banners" id="banners"></div></div>
     <div class="offerstrip board" id="offerstrip" hidden aria-live="polite"></div>
     <div class="floorbar"><div class="halltabs" id="halltabs" role="group" data-i18n-aria="hud.halls"></div><div class="modes" role="group" data-i18n-aria="hud.mapMode" id="modes"></div><div class="legend" id="legend"></div></div>
     <div class="floor-scroll"><div class="floor" id="floor"></div><div class="boxsel" id="boxsel" hidden></div><div class="bulkbar" id="bulkbar" hidden></div></div>
@@ -165,13 +163,13 @@
         <div class="news" id="newsfeed"></div>
       </div>
     </div>
+    <aside class="drawer" id="drawer" aria-hidden="true">
+      <header><h2 id="drawer-title"></h2><span class="sub" id="drawer-sub"></span><button class="iconbtn" id="drawer-min" data-i18n-title="dr.min" aria-expanded="true"><svg class="i"><use href="#minus"/></svg></button><button class="iconbtn" id="drawer-close" data-i18n-title="btn.close"><svg class="i"><use href="#cross"/></svg></button></header>
+      <div class="dbody" id="drawer-body"></div>
+    </aside>
   </aside>
 </div>
 
-<aside class="drawer" id="drawer" aria-hidden="true">
-  <header><h2 id="drawer-title"></h2><span class="sub" id="drawer-sub"></span><button class="iconbtn" id="drawer-close" data-i18n-title="btn.close"><svg class="i"><use href="#cross"/></svg></button></header>
-  <div class="dbody" id="drawer-body"></div>
-</aside>
 
 <div class="toast" id="toast" role="status"></div>
 <div class="hovercard" id="hovercard" hidden role="tooltip"></div>

@@ -1091,7 +1091,8 @@
     if (S.board && S.board.misses === 1) B.push(["bad", "flag", L("ban.board"), L("ban.boardSub"), L("u.days", { d: Math.ceil(S.board.end - S.day) })]);
     if (S.policyFx.mandate && S.day < S.policyFx.mandate.deadline + 1 && st.halls.some(h => h.pue > K.MANDATE_PUE + 1e-9))
       B.push(["warn", "flag", L("ban.mandate", { x: K.MANDATE_PUE }), L("ban.mandateSub", { x: K.MANDATE_PUE }), L("u.days", { d: Math.max(0, Math.ceil(S.policyFx.mandate.deadline - S.day)) })]);
-    $("banners").innerHTML = B.map(([cls, ic, t, sub, right]) => `<div class="banner ${cls}" title="${esc(sub)}">${icon(ic)}<span>${esc(t)}</span><span class="t">${esc(right)}</span></div>`).join("");
+    // v0.4.5: banners are compact chips on the goal row (one line in total, never stacking; the floor keeps the height)
+    $("banners").innerHTML = B.map(([cls, ic, t, sub, right]) => `<span class="banner ${cls}" title="${esc(t + " · " + sub + " · " + right)}">${icon(ic)}<span>${esc(t)}</span><span class="t">${esc(right)}</span></span>`).join("");
   }
 
   /* goal banner (text diet: ≤ 6 words): the current chapter + the next unlock and its milestone; details in tooltips.
@@ -1324,6 +1325,7 @@
       h += `<div class="slot incoming" title="${esc(what)}">${icon(j.kind === "forward" || j.kind === "restock" ? "truck" : "wrench")}<span>${j.kind === "swap" ? "⇄" : esc(itShort(j.dev.type))}</span><span>${L("u.days", { d: Math.ceil(j.left) })}</span>${cancelX(j)}<span class="sp" style="width:${Math.round((1 - jobFrac(j)) * 100)}%"></span></div>`;
     }
     for (let i = S.shelf.length + incoming.length; i < K.SHELF; i++) h += `<div class="slot"></div>`;
+    wrap.classList.toggle("empty", !S.shelf.length && !incoming.length);   // v0.4.5: an empty shelf is one thin drop row
     $("shelf").innerHTML = h;
     // compact header (the stage has no room for the hint line): count inline, the how-to in the tooltip
     $("shelf-n").textContent = `${Sim.shelfLoad(S)}/${K.SHELF}`;
@@ -1669,6 +1671,14 @@
     renderDrawer(Sim.stats(S)); renderDrawerBtns();
     dlog("drawer", k);
   }
+  /* v0.4.5: the docked drawer can fold to its header (the rack panel above takes the height back) */
+  function setDrawerMin(v) {
+    V.drawerMin = !!v;
+    $("drawer").classList.toggle("min", V.drawerMin);
+    $("drawer-min").setAttribute("aria-expanded", String(!V.drawerMin));
+    $("drawer-min").innerHTML = icon(V.drawerMin ? "plus" : "minus");
+    dlog("drawer", V.drawerMin ? "folded" : "unfolded");
+  }
   function closeDrawer() { V.drawer = null; const d = $("drawer"); d.classList.remove("open"); d.setAttribute("aria-hidden", "true"); $("stage").classList.remove("docked"); if (S) renderDrawerBtns(); }
   function renderDrawer(st) {
     const k = V.drawer; if (!k) return;
@@ -1868,7 +1878,6 @@
    * Visible from day 0. Each offer shows its kind, its terms (serving: units × days, start; jobs: work, pay, deadline),
    * its price vs the market index, whether you can deliver it (spare capacity vs need) and big Sign / Decline buttons.
    * Below the offers: every active contract as a pill in its link colour; the racks serving it carry the same colour. */
-  const OFFER_STRIP_MAX = 3;
   const kindCol = k => k === "frontier" ? COL.frontier : k === "bts" ? COL.contract : R[k] ? R[k].color : COL.contract;
   function offerTerms(o) {
     const lead = Math.round(o.lead || 0);
@@ -1939,7 +1948,7 @@
     const vis = Sim.contractsOn(S);
     show(el, vis);
     if (!vis) { el.innerHTML = ""; return; }
-    const list = QOL.byKind(S.offers, V.kf).slice().sort((a, b) => a.expires - b.expires).slice(0, OFFER_STRIP_MAX);
+    const list = QOL.byKind(S.offers, V.kf).slice().sort((a, b) => a.expires - b.expires);
     const nextIn = S.nextOffer != null ? Math.max(0, Math.ceil(S.nextOffer - S.day)) : null;
     const ob = Sim.overbook(S, st), obW = ["web", "train", "infer"].filter(w => ob[w].short > 0.5);
     V.overbook = ob;
@@ -1948,15 +1957,20 @@
     const obChip = obW.length ? `<small class="obk" title="${esc(obW.map(w => L("board.overHead", { n: Math.ceil(ob[w].short), w: "@wl." + w, d: Math.max(0, Math.ceil(ob[w].at - S.day)) })).join(" · "))}">${icon("warn", "width:12px;height:12px")}−${obW.map(w => Math.ceil(ob[w].short)).join("/")}</small>` : "";
     const satChip = webPriceChip(st);
     // text diet: icon + count; "next offer" and auto-renew are an icon chip and a switch, their words in tooltips
-    const head = `<div class="oshead" data-drawer="contracts" title="${esc(L("board.headTip"))}"><span class="bt">${icon("hand")}<b>${esc(L("board.title"))}</b><span class="badge" id="board-badge">${S.offers.length}</span></span>${obChip}${satChip}
-      ${kindChips("mini")}
-      ${QOL.byKind(S.offers, V.kf).length > OFFER_STRIP_MAX ? `<button class="btn slim" data-drawer="contracts">${esc(L("board.more", { n: QOL.byKind(S.offers, V.kf).length - OFFER_STRIP_MAX }))}</button>` : nextIn != null ? `<small title="${esc(L("board.nextTip"))}">${icon("mail", "width:12px;height:12px")}${esc(L("board.next", { d: nextIn }))}</small>` : ""}
-      <button class="toggle mini" data-act='${esc(JSON.stringify({ type: "policy", key: "autoRenew", on: !S.policy.autoRenew }))}' data-keep-title aria-pressed="${!!S.policy.autoRenew}" title="${esc(L("board.autoRenew") + ": " + L("board.autoRenewTip"))}" aria-label="${esc(L("board.autoRenew"))}"><span class="sw"></span>${icon("undoarrow", "width:12px;height:12px")}</button></div>`;
-    const cards = list.map(o => offerCard(o, st)).join("") + Array.from({ length: OFFER_STRIP_MAX - list.length }, (_, i) => `<div class="ocard empty">${i === 0 && !list.length ? `${icon("mail")}<small>${esc(L("board.none"))}</small>` : ""}</div>`).join("");
+    // v0.4.5 (layout hotfix, the floor never collapses): the head is ONE chip row (title, price, kinds, next, auto-renew, then
+    // the contract pills); offers are compact cards in one row that scrolls sideways; zero offers = a slim strip, no placeholders
+    const nextTxt = nextIn != null ? L("board.next", { d: nextIn }) : "";
+    const nextChip = list.length ? (nextIn != null ? `<small class="bnext" title="${esc(L("board.nextTip"))}">${icon("mail", "width:12px;height:12px")}${esc(nextTxt)}</small>` : "")
+      : `<small class="bnone" title="${esc(L("board.nextTip"))}">${icon("mail", "width:12px;height:12px")}${esc(L("board.none"))}${nextTxt ? " · " + esc(nextTxt) : ""}</small>`;
+    const head = `<div class="oshead" data-drawer="contracts" title="${esc(L("board.headTip"))}"><span class="bt">${icon("hand")}<b>${esc(L("board.title"))}</b><span class="badge" id="board-badge">${S.offers.length}</span></span>${obChip}${satChip}${kindChips("mini")}${nextChip}<button class="toggle mini" data-act='${esc(JSON.stringify({ type: "policy", key: "autoRenew", on: !S.policy.autoRenew }))}' data-keep-title aria-pressed="${!!S.policy.autoRenew}" title="${esc(L("board.autoRenew") + ": " + L("board.autoRenewTip"))}" aria-label="${esc(L("board.autoRenew"))}"><span class="sw"></span>${icon("undoarrow", "width:12px;height:12px")}</button></div>`;
+    const cards = list.map(o => offerCard(o, st)).join("");
     const pills = QOL.byKind(S.contracts, V.kf).map(c => contractPill(c, st, ob)).join("");
     if (V.boardSeen.size > 100) V.boardSeen = new Set(S.offers.map(o => o.id));   // bounded: only live offers matter
     if (previewCache.size > 30) previewCache.clear();
-    el.innerHTML = head + cards + `<div class="cpills" role="list" aria-label="${esc(L("board.active"))}">${pills}</div>`;
+    const sx = el.querySelector(".bcards"), keepX = sx ? sx.scrollLeft : 0;
+    el.innerHTML = `<div class="bhead">${head}<div class="cpills" role="list" aria-label="${esc(L("board.active"))}">${pills}</div></div>` + (list.length ? `<div class="bcards">${cards}</div>` : "");
+    el.classList.toggle("none", !list.length);
+    if (keepX && el.querySelector(".bcards")) el.querySelector(".bcards").scrollLeft = keepX;
     if (V.hl) applyHighlight();
   }
   /* hover an offer = the racks that would serve it light up; hover a contract pill = the racks serving it */
@@ -3116,6 +3130,7 @@
     const dr = t.closest("[data-drawer]");
     if (dr) { if (dr.closest("#h-debt, #h-rep, #h-carbon, #h-equity, #offerstrip") || dr.classList.contains("iconbtn")) { if (!(dr.classList.contains("oshead") && V.drawer === "contracts")) openDrawer(dr.dataset.drawer); else closeDrawer(); } return; }
     if (t.closest("#drawer-close")) { closeDrawer(); return; }
+    if (t.closest("#drawer-min") || (t.closest("#drawer > header") && V.drawerMin)) { setDrawerMin(!V.drawerMin); return; }
     if (t.closest("#h-techs")) { if (on("ops")) openPop("techs", $("h-techs")); return; }
     if (t.closest("#h-transit")) { openPop("transit", $("h-transit")); return; }
     if (t.closest("#h-power")) { if (on("power")) openPop("grid", $("h-power")); return; }
