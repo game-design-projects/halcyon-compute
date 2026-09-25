@@ -1,5 +1,9 @@
 # halcyon-telemetry (Cloudflare Worker + D1)
 
+**Deployed:** https://halcyon-telemetry.lishuyustevenli.workers.dev (D1 `halcyon-telemetry`, ENAM). CI injects
+`TELEMETRY_URL` (repo variable) into tagged builds. The admin token lives in `~/.config/halcyon/telemetry-admin-token`
+(mode 600, never commit it). Read logs with `tools/telemetry.sh list | get <id> | replay <id>`.
+
 Receives the game's anonymous gameplay telemetry (`js/telemetry.js`). Deploy:
 ```bash
 cd telemetry-worker

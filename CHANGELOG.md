@@ -5,6 +5,13 @@ Versions are milestones of the week-3 project; there are no tagged releases.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-09-25
+
+### Added
+- Remote telemetry is live: a Cloudflare Worker + D1 sink (`telemetry-worker/`, deployed), with tagged builds reporting
+  anonymous, replayable gameplay logs there (players can opt out in the main menu). `tools/telemetry.sh list|get|replay`
+  reads sessions back and replays them through the deterministic sim.
+
 ## [0.4.0] - 2026-09-25
 
 ### Added (UI pass B: English + 简体中文, and a text diet)
