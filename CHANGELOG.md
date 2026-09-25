@@ -1,9 +1,12 @@
 # Changelog
 
 All notable changes to Halcyon Compute. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
-Versions are milestones of the week-3 project; there are no tagged releases.
+Versions are tagged `vX.Y.Z`; a tag push publishes that build to itch.io (CI). Hotfix tags may be cut from the previous
+release plus the fix and merged back here afterwards.
 
 ## [Unreleased]
+
+## [0.4.4] - 2026-09-25
 
 Fix round driven by real player telemetry (v0.4.1, seed 298670, two sessions of one player; replay-verified).
 
@@ -44,6 +47,25 @@ Fix round driven by real player telemetry (v0.4.1, seed 298670, two sessions of 
   (chapter cards and the runway warnings still stop time), plus one teaching pause on the very first new offer ever.
   Saved settings from v0.4.1 and earlier are migrated to the new default once (settings version 2); toggles you change
   afterwards stick. (Released as the v0.4.2 hotfix.)
+
+## [0.4.3] - 2026-09-25 (hotfix)
+
+### Fixed
+- Telemetry no longer loses batches: batches are capped in size, retried with backoff until the server confirms, kept
+  across reloads, and every batch carries the session meta (replays of sessions with a lost first batch diverged).
+
+## [0.4.2] - 2026-09-25 (hotfix)
+
+### Fixed
+- Auto-pause no longer fires on every new contract offer (player feedback). By default it pauses only on cash < 0, plus a
+  one-time pause for the very first offer; old settings are migrated.
+
+### Changed
+- **Auto-pause is quiet by default** (player telemetry: ~20 pauses in 6 minutes, 19 of them on new offers; "每次出新的合同都自动
+  暂停"). New offers, failures and SLA misses no longer pause unless you turn them on in Settings; only cash below 0 pauses
+  (chapter cards and the runway warnings still stop time), plus one teaching pause on the very first new offer ever.
+  Saved settings from v0.4.1 and earlier are migrated to the new default once (settings version 2); toggles you change
+  afterwards stick.
 
 ## [0.4.1] - 2026-09-25
 
