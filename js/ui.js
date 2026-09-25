@@ -82,7 +82,7 @@
     contracts: { icons: ["doc", "hand", "warn", "trend"], col: "contract", where: "Contracts drawer (handshake icon, top right). Drag offers onto Sign or Decline." },
     memory: { icons: ["layers", "truck", "news", "lock"], col: "mem", where: "HBM index in the catalog header. Drag a GPU onto the shelf to order it forward." },
     finance: { icons: ["bank", "tag", "coin"], col: "debt", where: "Finance drawer (chart icon). Buy / Lease switch on the catalog." },
-    facilities: { icons: ["building", "bolt", "battery", "snow"], col: "info", where: "Hall 2 tab above the floor; Energy drawer (bolt icon) for UPS, CRAC and the grid." },
+    facilities: { icons: ["building", "bolt", "battery", "snow"], col: "info", where: "Hall 2 / Hall 3 tabs above the floor; Energy drawer (bolt icon) for UPS, CRAC and the grid." },
     energy: { icons: ["trend", "leaf", "sun"], col: "carbon", where: "Energy drawer: PPA stepper, solar, spot-price chart." },
     environment: { icons: ["drop", "warn", "leaf"], col: "water", where: "Energy drawer: cooling mode per hall, water and carbon gauges." },
     investors: { icons: ["coin", "flag", "warn", "pie"], col: "vc", where: "Finance drawer: VC offers, board target, buyback. The score chip now shows your equity value." },
@@ -126,6 +126,8 @@
     return g.length ? Sim.currentGen(S) - Math.min(...g) : null;
   };
   const hallRacks = n => S.racks.filter(r => r.hall === n);
+  const builtHalls = () => S.halls.filter(h => h.built).map(h => h.n);
+  const hallLetters = n => Sim.HALL_LETTERS[n - 1] || "ABC";
   const hasJob = uid => S.jobs.some(j => j.uid === uid || (j.dev && j.dev.uid === uid));
   function findDev(uid) {
     for (const r of S.racks) for (const d of r.devices) if (d.uid === uid) return { d, r };
@@ -247,7 +249,29 @@
   }
   /* feedback for a successful player action: physical placement gets a squash "thunk" + dust + drop sound */
   const PLACE = new Set(["buy", "lease", "move", "unstore"]), STAMP = new Set(["signContract", "acceptRound", "buildHall", "grid", "ups", "solar", "ppa", "pr", "lobby", "spine", "crac", "cooling", "buyback", "tank", "forward"]);
+  /* coyote time: after a purchase, an "Undo" toast for 2 real seconds while the order is still shipping (full refund) */
+  const UNDO_MS = 2000;
+  function showUndo(a) {
+    const j = S.jobs.slice().reverse().find(x => x.kind === a.type && x.to === a.rack && x.phase === "ship" && x.dev);
+    if (!j) return;
+    const op = { type: "cancelOrder", uid: j.dev.uid }, el = $("undo");
+    V.undo = { op, until: performance.now() + UNDO_MS };
+    $("undo-msg").textContent = `${item(j.dev.type).name} ordered for ${j.to}`;
+    $("undo-btn").dataset.act = JSON.stringify(op);
+    el.classList.remove("show"); void el.offsetWidth;   // restart the countdown bar
+    el.style.setProperty("--undo-ms", UNDO_MS + "ms");
+    el.classList.add("show");
+    dlog("undo offered", op);
+  }
+  function hideUndo(why) { if (!V.undo) return; V.undo = null; $("undo").classList.remove("show"); dlog("undo closed", why); }
+  function undoTick(now) {   // expire after 2 s, or as soon as the order leaves the truck (8x speed)
+    if (!V.undo) return;
+    if (now > V.undo.until) hideUndo("timeout");
+    else if (!Sim.check(S, V.undo.op).ok) hideUndo("shipped");
+  }
   function fxAct(a) {
+    if (a.type === "cancelOrder") { hideUndo("used"); SND("pickup"); return; }
+    if (a.type === "buy" || a.type === "lease") showUndo(a);
     if (PLACE.has(a.type)) {
       const id = a.to || a.rack;
       SND("drop");
@@ -283,6 +307,7 @@
         afterTick();
       }
       fxFrame(st || Sim.stats(S), dtSec, now);
+      undoTick(now);
       autosave();
     }
     if (FXON()) FX.tick(now);
@@ -296,7 +321,7 @@
     let devs = 0, failed = 0;
     for (const r of S.racks) { devs += r.devices.length * 7 + r.pending.length; for (const d of r.devices) if (d.failed) failed++; }
     return [S.jobs.length, newsKey(), S.chapter, devs, failed, S.shelf.length, S.gridKw, S.over, S.offers.length, S.contracts.length,
-      Object.keys(S.spines).length, S.halls[1].built, S.roundOffer ? S.roundOffer.id : "", S.techs, S.hires.length, S.transit, S.debt, S.ups, S.solar, !!S.ppa,
+      Object.keys(S.spines).length, builtHalls().join(), S.roundOffer ? S.roundOffer.id : "", S.techs, S.hires.length, S.transit, S.debt, S.ups, S.solar, !!S.ppa,
       S.halls.map(h => h.cooling + h.crac).join(), S.policies.map(p => p.status + p.announced + p.signals.length).join(), !!S.outage, !!S.heatWave, !!S.drought, S.hbm.shortage].join("|");
   }
   function afterTick() {
@@ -380,7 +405,7 @@
         SND("alarm"); SND("powerDown");
         if (fx) {
           FX.shake(0.9); FX.flash("#E0402A", 700, 0.45);
-          for (const hall of [1, 2]) rackOrder(hall).forEach((r, i) => FX.rackAnim(r.id, "fx-off", 380, 120 + i * 55, true, "ease-in"));
+          for (const hall of builtHalls()) rackOrder(hall).forEach((r, i) => FX.rackAnim(r.id, "fx-off", 380, 120 + i * 55, true, "ease-in"));
         }
         document.body.classList.add("blackout");
       } else { SND("warn"); if (fx) { FX.shake(0.35); FX.flash("#E0A43A", 450, 0.22); } }
@@ -392,7 +417,7 @@
         if (fx) {
           FX.clearRackAnims(e => e.hold);
           FX.flash("#FFFFFF", 350, 0.18);
-          for (const hall of [1, 2]) rackOrder(hall).forEach((r, i) => FX.rackAnim(r.id, "fx-relight", 520, i * 45));
+          for (const hall of builtHalls()) rackOrder(hall).forEach((r, i) => FX.rackAnim(r.id, "fx-relight", 520, i * 45));
         }
       }
     }
@@ -552,7 +577,7 @@
     if (!S) return;
     const t0 = performance.now();
     R = ROLE();
-    if (!rack(V.selected) || rack(V.selected).hall !== V.hall) { const hr = hallRacks(V.hall); if (hr.length) V.selected = hr[0].id; else if (V.hall === 2) V.selected = null; }
+    if (!rack(V.selected) || rack(V.selected).hall !== V.hall) { const hr = hallRacks(V.hall); V.selected = hr.length ? hr[0].id : null; }
     const st = Sim.stats(S);
     V.sig = signature(); V.lastFull = performance.now();
     renderHUD(st); renderDrawerBtns(); renderBanners(st); renderGoal(st); renderHallTabs(); renderModes(); renderFloor(st); renderShelf();
@@ -714,7 +739,7 @@
       case "contracts": tip = S.offers.length ? `${S.offers.length} offer${S.offers.length > 1 ? "s" : ""} waiting in the Contracts drawer. Don't promise more than you can deliver.` : "Contracts lock today's price: a hedge before a known launch."; break;
       case "memory": tip = S.hbm.shortage ? "Shortage: GPUs ship in 18 days. Forward orders and spares beat the queue." : "Scare stories come before shortages, but not every scare is real. Watch the follow-up news."; break;
       case "finance": tip = "Debt costs 9 %/yr. Leasing suits the generation you will replace soon."; break;
-      case "facilities": tip = S.halls[1].built ? "Two halls share one grid. Consider the 700 kW grid tier." : "Hall 2 doubles your floor. Outages hit harder without a UPS."; break;
+      case "facilities": { const nb = builtHalls().length; tip = nb >= 3 ? "Three halls on one grid: the 1000 kW tier keeps them all powered." : nb === 2 ? `Two halls share one grid. Consider the next grid tier${S.gridTier < 2 ? " (700 kW)" : ""}; Hall 3 adds 18 more racks.` : "Hall 2 doubles your floor. Outages hit harder without a UPS."; break; }
       case "energy": tip = "A PPA locks cheap green power for 540 days. Size it to your base load: unused PPA power is still paid for."; break;
       case "environment": tip = S.drought ? "Drought: evaporative halls lose cooling and reputation." : "Evaporative cooling is cheap until a drought. Chillers cost PUE."; break;
       case "investors": tip = S.board ? `Board target: ${money(S.board.rev)} of ${money(S.board.target)} revenue, ${Math.ceil(S.board.end - S.day)} days left.` : "VC money grows you faster, but every round dilutes your score and brings a board."; break;
@@ -727,11 +752,11 @@
 
   function renderHallTabs() {
     const el = $("halltabs");
-    if (!on("facilities") && !S.halls[1].built) { el.innerHTML = ""; return; }
+    if (!on("facilities") && builtHalls().length < 2) { el.innerHTML = ""; return; }
     const hj = S.jobs.find(j => j.kind === "buildHall");
-    el.innerHTML = [1, 2].map(n => {
-      const built = S.halls[n - 1].built;
-      const sub = built ? `${hallRacks(n).filter(r => r.devices.length).length}/18` : hj ? `${Math.ceil(hj.left)} d` : "not built";
+    el.innerHTML = S.halls.map(h => {
+      const n = h.n, built = h.built;
+      const sub = built ? `${hallRacks(n).filter(r => r.devices.length).length}/${K.HALL_RACKS}` : hj && hj.hall === n ? `${Math.ceil(hj.left)} d` : "not built";
       return `<button data-hall="${n}" aria-pressed="${V.hall === n}">${icon("building")}Hall ${n} <small>${sub}</small></button>`;
     }).join("");
   }
@@ -748,7 +773,7 @@
     const keys = list => `<div class="keys">${list.map(([c, n]) => `<span><i style="background:${c}"></i>${n}</span>`).join("")}</div>`;
     if (V.mode === "role") L.innerHTML = keys(["web", "train", "infer", "tank"].filter(k => k !== "tank" || on("disrupt")).filter(k => k === "web" || on("gpu")).map(k => [R[k].color, R[k].name]));
     else if (V.mode === "gen") L.innerHTML = keys([[COL.good, "Current"], [COL.warn, "One behind"], [COL.bad, "Two behind"]]);
-    else if (V.mode === "cluster") L.innerHTML = keys([[COL.row0, "Row A/D spine"], [COL.row1, "Row B/E spine"], [COL.row2, "Row C/F spine"], [COL.none, "No spine"]]) + `<span>${icon("star", `color:${COL.frontier};width:14px;height:14px`)} = frontier cluster (${K.FRONTIER_MIN_GPUS}+ training GPUs)</span>`;
+    else if (V.mode === "cluster") L.innerHTML = keys([0, 1, 2].map(i => [COL["row" + i], `Row ${builtHalls().map(n => hallLetters(n)[i]).join("/")} spine`]).concat([[COL.none, "No spine"]])) + `<span>${icon("star", `color:${COL.frontier};width:14px;height:14px`)} = frontier cluster (${K.FRONTIER_MIN_GPUS}+ training GPUs)</span>`;
     else {
       const lab = { heat: ["22 °C", "36 °C"], power: ["0 kW", "30 kW"], free: ["Full", "20U free"], fail: ["Safe", "1 %/day"] }[V.mode];
       L.innerHTML = `<span>${lab[0]}</span><span class="ramp" style="background:linear-gradient(90deg,${RP[V.mode].join(",")})"></span><span>${lab[1]}</span>${V.mode === "fail" ? `<span>${icon("cross", `color:${COL.fail};width:14px;height:14px`)} failed part</span>` : ""}`;
@@ -783,18 +808,24 @@
     return [icon("wrench"), `${Math.ceil(j.left)}d`];
   }
 
+  /* placeholder for a hall that is not built yet: cost/days from the sim, one generic build button */
+  function unbuiltHallHTML(n) {
+    const hj = S.jobs.find(j => j.kind === "buildHall"), hc = Sim.hallCost(n), L = hallLetters(n);
+    const body = hj && hj.hall === n ? `<span>Under construction: ${Math.ceil(hj.left)} days left</span><div class="bar"><i style="width:${Math.round((1 - jobFrac(hj)) * 100)}%"></i></div>`
+      : hj ? `<span>Hall ${hj.hall} is under construction: ${Math.ceil(hj.left)} days left. One hall at a time.</span>`
+      : `<span>${K.HALL_RACKS} more racks (${L[0]}1–${L[2]}${K.COLS}) on the same grid. ${money(hc.cost)}, ${hc.days} days to build.</span>${n > 1 && !S.halls[n - 2].built ? `<span class="sub">Build Hall ${n - 1} first.</span>` : ""}${actBtn({ type: "buildHall", hall: n }, `Build Hall ${n} · ${money(hc.cost)}`, { confirm: true, cls: "primary", icon: "building" })}`;
+    return `<div class="hall2">${icon("building", "width:40px;height:40px")}<span class="big">Hall ${n}</span>${body}</div>`;
+  }
   function renderFloor(st) {
     const F = $("floor");
-    if (V.hall === 2 && !S.halls[1].built) {
-      const hj = S.jobs.find(j => j.kind === "buildHall");
-      F.innerHTML = `<div class="hall2">${icon("building", "width:40px;height:40px")}<span class="big">Hall 2</span>
-        ${hj ? `<span>Under construction: ${Math.ceil(hj.left)} days left</span><div class="bar"><i style="width:${Math.round((1 - jobFrac(hj)) * 100)}%"></i></div>`
-          : `<span>18 more racks on the same grid. $${K.HALL_COST / 1000}M, ${K.HALL_DAYS} days to build.</span>${actBtn({ type: "buildHall" }, `Build Hall 2 · ${money(K.HALL_COST)}`, { confirm: true, cls: "primary", icon: "building" })}`}</div>`;
+    const curHall = S.halls[V.hall - 1];
+    if (!curHall || !curHall.built) {
+      F.innerHTML = unbuiltHallHTML(V.hall);
       return;
     }
     let h = "";
     const nowMs = performance.now();
-    const L = V.hall === 1 ? "ABC" : "DEF";
+    const L = hallLetters(V.hall);
     [[1, "cold", "Cold aisle"], [3, "hot", "Hot aisle"], [5, "cold", "Cold aisle"], [7, "hot", "Hot aisle"]].forEach(([row, k, l]) =>
       h += `<div class="aisle ${k}" style="grid-row:${row}">${icon(k === "cold" ? "snow" : "flame")}${l}</div>`);
     const hall = S.halls[V.hall - 1];
@@ -988,7 +1019,7 @@
 
   function renderDetail(st) {
     const r = V.selected && rack(V.selected);
-    if (!r) { $("detail").innerHTML = `<h2>${icon("building")}Hall 2</h2><div class="sub" style="margin-top:6px">Not built yet. ${on("facilities") ? "Build it from the Hall 2 tab or the Energy drawer." : ""}</div>`; return; }
+    if (!r) { $("detail").innerHTML = `<h2>${icon("building")}Hall ${V.hall}</h2><div class="sub" style="margin-top:6px">Not built yet. ${on("facilities") ? `Build it from the Hall ${V.hall} tab or the Energy drawer.` : ""}</div>`; return; }
     const role = rackRole(r), pr = st.perRack[r.id], unit = 10.2;
     let elev = "";
     r.devices.forEach(d => {
@@ -1023,7 +1054,7 @@
       ? `<div style="margin-top:10px">${actBtn({ type: "tank", rack: r.id }, `Convert to immersion tank · ${money(K.TANK_COST)}`, { confirm: true, icon: "drop" })}</div>` : "";
     const armedItem = V.armed && V.armed.kind === "new" ? V.armed.item : null;
     $("detail").innerHTML = `
-      <h2><span style="width:14px;height:14px;border-radius:3px;background:${role === "empty" ? "var(--line)" : R[role].color};display:inline-block"></span>${r.id}<span class="sub" style="font-family:var(--sans);font-weight:400">${R[role].name}${S.halls[1].built ? ` · Hall ${r.hall}` : ""}</span></h2>
+      <h2><span style="width:14px;height:14px;border-radius:3px;background:${role === "empty" ? "var(--line)" : R[role].color};display:inline-block"></span>${r.id}<span class="sub" style="font-family:var(--sans);font-weight:400">${R[role].name}${builtHalls().length > 1 ? ` · Hall ${r.hall}` : ""}</span></h2>
       <div class="sub" style="display:flex;align-items:center;gap:6px;margin-top:4px">${status}</div>
       <div class="rack-detail">
         <div class="elev" data-drop-rack="${r.id}" title="Front view, 20U">${elev}</div>
@@ -1141,9 +1172,21 @@
       const g = Sim.gridNext(S), job = S.jobs.find(j => j.kind === "grid");
       pop.innerHTML = `<h3>${icon("bolt", "color:var(--pow-c)")}Grid</h3>
         <div class="kv"><span>Drawing now</span><b>${st.kw.toFixed(0)} kW</b></div><div class="kv"><span>With orders</span><b>${Sim.gridKwAll(S).toFixed(0)} kW</b></div><div class="kv"><span>Grid limit</span><b>${S.gridKw} kW</b></div>
+        ${gridLadder()}
         ${job ? `<div class="sub">${icon("wrench")} Upgrade to ${job.kw} kW: ${Math.ceil(job.left)} days left</div>` : g ? actBtn({ type: "grid" }, `Upgrade to ${g.kw} kW · ${money(g.cost)} · ${g.days} d`, { confirm: true, cls: "primary", icon: "bolt" })
-          : `<div class="sub">${S.gridTier >= 2 ? "Fully upgraded." : "The next tier (700 kW) unlocks with chapter 11."}</div>`}`;
+          : `<div class="sub">${gridNote()}</div>`}`;
     }
+  }
+
+  /* the four grid tiers (250 / 400 / 700 / 1000 kW) as a ladder: owned, under way, next */
+  const GRID_TIERS = () => [[K.GRID_KW, 0, 0], [K.GRID_KW_UP, K.GRID_COST, K.GRID_DAYS], [K.GRID_KW_UP2, K.GRID_COST2, K.GRID_DAYS2], [K.GRID_KW_UP3, K.GRID_COST3, K.GRID_DAYS3]];
+  function gridNote() { return S.gridTier >= 3 ? "Fully upgraded (top tier)." : `The ${GRID_TIERS()[S.gridTier + 1][0]} kW tier unlocks with chapter 11.`; }
+  function gridLadder() {
+    const job = S.jobs.find(j => j.kind === "grid");
+    return `<div class="gridladder" role="list" aria-label="Grid tiers">${GRID_TIERS().map(([kw, cost, days], i) => {
+      const st = i <= S.gridTier ? "own" : job && i === S.gridTier + 1 ? "busy" : "";
+      return `<span role="listitem" class="gt ${st}" title="${i === 0 ? "Starting feed" : `${money(cost)}, ${days} days${i >= 2 ? ", from chapter 11" : ""}`}">${st === "own" ? icon("check") : st === "busy" ? icon("wrench") : icon("bolt")}<b>${kw}</b><small>kW</small></span>`;
+    }).join("")}</div>`;
   }
 
   /* ================= drawers ================= */
@@ -1172,18 +1215,27 @@
     const offers = S.offers.map(o => {
       const up = o.price >= o.spot, diff = (o.price / o.spot - 1) * 100, spare = st.supply[o.w] - committed[o.w];
       const daysLeft = Math.max(0, o.expires - S.day);
-      return `<div class="offer dragsrc" data-drag="offer" data-id="${o.id}" title="Drag onto Sign or Decline">
+      const bts = o.bts ? `<div class="btsrow"><span class="bts-badge">${icon("building")}BUILD-TO-SUIT</span><span class="sub">dedicated capacity, long term</span></div>
+        <div class="facts bts"><span>${icon("coin")}Fit-out <b>${money(o.fitout)}</b> now</span><span>${icon("truck")}Delivery from <b>day ${Math.round(S.day + o.lead)}</b> (in ${Math.round(o.lead)} d)</span><span>${icon("doc")}Term <b>${o.days} d</b></span><span>${icon("warn")}Penalty <b>3×</b> price</span></div>` : "";
+      return `<div class="offer dragsrc${o.bts ? " bts" : ""}" data-drag="offer" data-id="${o.id}" title="Drag onto Sign or Decline">${bts}
         <div class="top"><span class="av" style="background:${R[o.w].color}">${icon(CUST_ICON[o.icon] || "globe")}</span><span><b>${esc(o.cust)}</b>${o.foreign ? ` ${icon("globe", "width:13px;height:13px;vertical-align:-2px")}<small class="sub"> foreign</small>` : ""}<br><small class="sub">${R[o.w].name} · ${o.units} units × ${o.days} days</small></span>
           <span style="margin-left:auto;text-align:right"><b>$${(o.price * 1000).toFixed(0)}</b><small class="sub">/u·d</small><br><small class="${up ? "up" : "down"}">${up ? "▲" : "▼"}${Math.abs(diff).toFixed(0)} % vs spot</small></span></div>
         <div class="facts"><span>${icon("check")}SLA <b>${pct(o.sla)}</b></span><span>${icon("warn")}Penalty <b>$${(o.penalty * 1000).toFixed(0)}</b>/missed u·d</span><span>${icon("coin")}Worth <b>${money(o.units * o.days * o.price)}</b></span></div>
         <div class="kv"><span>${spare >= o.units ? icon("check", `color:${COL.good};width:14px;height:14px`) : icon("warn", `color:${COL.bad};width:14px;height:14px`)} Your uncommitted ${R[o.w].name.toLowerCase()} output: ${Math.max(0, spare).toFixed(1)}</span><span>expires ${Math.ceil(daysLeft)} d</span></div>
-        <div class="meter slim"><i style="width:${daysLeft / K.OFFER_EXPIRY * 100}%;background:${COL.warn}"></i></div>
-        <div class="acts">${actBtn({ type: "signContract", id: o.id }, "Sign", { cls: "good", icon: "hand" })}${actBtn({ type: "declineContract", id: o.id }, "Decline", { icon: "cross" })}</div></div>`;
+        <div class="meter slim"><i style="width:${Math.min(100, daysLeft / (o.bts ? K.BTS_EXPIRY : K.OFFER_EXPIRY) * 100)}%;background:${COL.warn}"></i></div>
+        <div class="acts">${actBtn({ type: "signContract", id: o.id }, o.bts ? `Sign · ${money(o.fitout)}` : "Sign", { cls: "good", icon: "hand", confirm: !!o.bts })}${actBtn({ type: "declineContract", id: o.id }, "Decline", { icon: "cross" })}</div></div>`;
     }).join("");
     const act = S.contracts.map(c => {
+      const head = `<div class="kv"><span>${c.bts ? `<span class="bts-badge sm" title="Build-to-suit">BTS</span> ` : ""}<b>${esc(c.cust)}</b> · ${c.units} ${R[c.w].name.toLowerCase()} u at $${(c.price * 1000).toFixed(0)}</span>`;
+      if (S.day < c.start) {   // build-to-suit before delivery starts: time to buy the hardware
+        const lead = Math.max(1, c.start - (c.signed != null ? c.signed : c.start - (c.lead || K.BTS_LEAD))), f = clamp01(1 - (c.start - S.day) / lead);
+        return `<div class="contract" style="border-color:${R[c.w].color}">${head}<span>starts in ${Math.ceil(c.start - S.day)} days</span></div>
+          <div class="meter slim" title="Lead time until delivery starts"><i style="width:${f * 100}%;background:${COL.warn}"></i></div>
+          <div class="kv"><span>Deliver ${c.units} ${R[c.w].name.toLowerCase()} units from day ${Math.round(c.start)} for ${c.days} d · SLA ${pct(c.sla)}</span><span>ready now ${Math.max(0, Math.min(c.units, st.supply[c.w] - committed[c.w] + c.units)).toFixed(1)} / ${c.units}</span></div></div>`;
+      }
       const el = Math.max(0.01, S.day - c.start), tf = clamp01(el / c.days), delF = c.delivered / (c.units * el);
       const missing = (st.cMiss[c.id] || 0) > 1e-6;
-      return `<div class="contract" style="border-color:${R[c.w].color}"><div class="kv"><span><b>${esc(c.cust)}</b> · ${c.units} ${R[c.w].name.toLowerCase()} u at $${(c.price * 1000).toFixed(0)}</span><span>${Math.ceil(c.end - S.day)} d left</span></div>
+      return `<div class="contract" style="border-color:${R[c.w].color}">${head}<span>${Math.ceil(c.end - S.day)} d left</span></div>
         <div class="meter slim" title="Time elapsed"><i style="width:${tf * 100}%;background:var(--ink-2)"></i></div>
         <div class="meter" title="Delivered vs promised; the line is the SLA"><i style="width:${clamp01(delF) * 100}%;background:${delF + 1e-6 >= c.sla ? COL.good : COL.bad}"></i><em style="left:${c.sla * 100}%"></em></div>
         <div class="kv"><span>Delivered ${pct(Math.min(1, delF))} (SLA ${pct(c.sla)})${missing ? ` · <b style="color:${COL.bad}">missing now</b>` : ""}</span><span>penalties ${money(c.penaltyPaid)}</span></div></div>`;
@@ -1271,10 +1323,14 @@
     const jobOf = (kind, hall) => S.jobs.find(j => j.kind === kind && (hall == null || j.hall === hall));
     const cards = [];
     const g = Sim.gridNext(S);
-    cards.push(facCard("bolt", COL.pow, `Grid ${S.gridKw} kW`, g ? `Next tier: ${g.kw} kW, ${g.days} days` : S.gridTier >= 2 ? "Top tier" : "700 kW tier opens in chapter 11",
-      buildingStatus(jobOf("grid")) || (g ? null : "owned"), g ? actBtn({ type: "grid" }, `${money(g.cost)}`, { confirm: true, cls: "primary" }) : ""));
+    cards.push(facCard("bolt", COL.pow, `Grid ${S.gridKw} kW`, (g ? `Next tier: ${g.kw} kW, ${g.days} days` : S.gridTier >= 3 ? "Top tier (4 of 4)" : gridNote()) + gridLadder(),
+      buildingStatus(jobOf("grid")) || (g || S.gridTier < 3 ? null : "owned"), g ? actBtn({ type: "grid" }, `${money(g.cost)}`, { confirm: true, cls: "primary" }) : ""));
     if (on("facilities")) {
-      cards.push(facCard("building", COL.info, "Hall 2", `18 racks, same grid. ${K.HALL_DAYS} days.`, S.halls[1].built ? "owned" : buildingStatus(jobOf("buildHall")), actBtn({ type: "buildHall" }, money(K.HALL_COST), { confirm: true, cls: "primary" })));
+      for (const h of S.halls.filter(x => x.n > 1)) {
+        const hc = Sim.hallCost(h.n), L = hallLetters(h.n);
+        cards.push(facCard("building", COL.info, `Hall ${h.n}`, `${K.HALL_RACKS} racks (${L[0]}1–${L[2]}${K.COLS}), same grid. ${hc.days} days.${!h.built && !S.halls[h.n - 2].built ? ` Needs Hall ${h.n - 1}.` : ""}`,
+          h.built ? "owned" : buildingStatus(jobOf("buildHall", h.n)), actBtn({ type: "buildHall", hall: h.n }, money(hc.cost), { confirm: true, cls: "primary" })));
+      }
       cards.push(facCard("battery", COL.good, "UPS + generator", "Rides through grid outages. Burns diesel while it runs.", S.ups ? "owned" : buildingStatus(jobOf("ups")), actBtn({ type: "ups" }, money(K.UPS_COST), { confirm: true, cls: "primary" })));
       for (const h of S.halls.filter(x => x.built)) cards.push(facCard("snow", COL.cool, `CRAC upgrade · Hall ${h.n}`, `+${K.CRAC_KW} kW cooling, ${K.CRAC_DAYS} days.`, h.crac ? "owned" : buildingStatus(jobOf("crac", h.n)), actBtn({ type: "crac", hall: h.n }, money(K.CRAC_COST), { confirm: true, cls: "primary" })));
     }
@@ -1413,10 +1469,10 @@
     const drawBots = () => {
       const max = Math.max(1, ...Object.values(rows).map(r => r.score || 0));
       const bar = (k, name, col) => { const r = rows[k]; return `<div class="bar"><span>${name}</span><i style="width:${r.score == null ? 0 : Math.max(1, r.score / max * 100)}%;background:${col}"></i><b>${r.score == null ? "…" : money(r.score)}${r.est ? `<span class="est" title="Stopped at day ${r.day} to keep the page responsive">EST d${r.day}</span>` : ""}</b>${k !== "you" && !r.done ? `<span></span><span class="prog"><i style="display:block;width:${r.day / K.END_DAY * 100}%"></i></span>` : ""}</div>`; };
-      $("bots").innerHTML = `${bar("you", "You", COL.sel)}${bar("greedy", "Greedy bot", COL.net)}${bar("planner", "Planner bot", COL.train)}
+      $("bots").innerHTML = `<div class="sub" style="font-weight:600">Score vs the bots (founder equity, same seed)</div>${bar("you", "You", COL.sel)}${bar("greedy", "Greedy bot", COL.net)}${bar("planner", "Planner bot", COL.train)}
         <div class="sub">Same seed, same events. Greedy buys whatever pays best today. Planner looks ahead: seasons, launches, vendor news, pilots, per-kW upgrades.</div>`;
     };
-    $("obody").innerHTML = `<div class="score"><div class="tally" id="tally"></div><div class="big" id="final-score" style="font-size:38px">${money(sm.score)}</div><div class="sub">${S.over === "bankrupt" ? "Cash fell below your credit line." : S.over === "fired" ? "Two missed board targets in a row. Your equity counts at half." : `Founder equity value after ${Math.floor(S.day)} days.`}</div><div id="bots" style="display:grid;gap:8px"></div></div>
+    $("obody").innerHTML = `<div class="score"><div class="tally" id="tally"></div><div class="scorelabel">${icon("flag")}SCORE <small>founder equity value</small></div><div class="big" id="final-score" style="font-size:38px" title="Score = your ownership × company value. Net worth is only one input.">${money(sm.score)}</div><div class="sub">${S.over === "bankrupt" ? "Cash fell below your credit line." : S.over === "fired" ? "Two missed board targets in a row. Your equity counts at half." : `Founder equity value after ${Math.floor(S.day)} days.`}</div><div id="bots" style="display:grid;gap:8px"></div></div>
       <div class="cols">${breakdown}${lessons}</div>${curtain}`;
     drawBots();
     openDialog($("over"));
@@ -1434,15 +1490,14 @@
     steps[steps.length - 1][2] = sm.score;
     el.innerHTML = steps.map(([a, b], i) => `<div class="trow" data-i="${i}"><span>${esc(a)}</span><b>${esc(b)}</b></div>`).join("");
     const fast = !FXON() || FX.reduced, gap = fast ? 60 : 520;
-    let cur = 0;
-    big.textContent = money(0);
-    steps.forEach(([, , v], i) => setTimeout(() => {
+    // the big number is always the SCORE: it rolls from 0 to the final score while the breakdown rows land
+    // (rolling through the intermediate net worth read as "the result is net worth")
+    if (FXON() && !fast) { big.textContent = money(0); FX.tween(0, sm.score, 250 + steps.length * gap, "outCubic", x => { big.textContent = money(x); }, () => { big.textContent = money(sm.score); }); }
+    else big.textContent = money(sm.score);
+    steps.forEach(([, ,], i) => setTimeout(() => {
       if (!$("tally") || $("tally") !== el) return;   // dialog replaced (replay)
       el.querySelector(`[data-i="${i}"]`).classList.add("in");
       SND("tick", i * 3);
-      const from = cur; cur = v;
-      if (FXON()) FX.tween(from, v, fast ? 60 : 420, "outCubic", x => { big.textContent = money(x); }, () => { big.textContent = money(v); });
-      else big.textContent = money(v);
       if (i === steps.length - 1) setTimeout(() => {
         big.textContent = money(sm.score);
         big.classList.add("landed");

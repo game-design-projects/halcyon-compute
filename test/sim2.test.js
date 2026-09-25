@@ -965,3 +965,76 @@ test("stats stays cheap on a busy late-game state", () => {
   const us = Number(process.hrtime.bigint() - t) / 2000 / 1000;
   assert.ok(us < 200, `stats ${us.toFixed(1)} us`);
 });
+
+/* ============ coyote-time undo: cancel a purchase while it is still shipping (docs/GAME_FEEL.md) ============ */
+test("cancelOrder: full refund while shipping, the pending card is removed, books restored", () => {
+  const s = sb(1);
+  s.cash = 5000;
+  Sim.advance(s, 0.5);
+  const snap = { cash: s.cash, capex: s.totals.capex, dep: s.deprec.length, u: Sim.usedU(s, rack(s, "A1")) };
+  assert.ok(Sim.apply(s, { type: "buy", item: "c1", rack: "A1" }).ok);
+  const job = s.jobs[s.jobs.length - 1], uid = job.dev.uid, price = job.paid;
+  assert.equal(job.phase, "ship");
+  assert.ok(near(snap.cash - s.cash, price) && price > 0);
+  Sim.advance(s, 1);   // mid-shipping
+  const cash1 = s.cash;
+  const chk = Sim.check(s, { type: "cancelOrder", uid });
+  assert.ok(chk.ok && /refund/i.test(chk.msg), chk.msg);
+  assert.ok(Sim.apply(s, { type: "cancelOrder", uid }).ok);
+  assert.ok(near(s.cash - cash1, price), "refund is exactly the price paid");
+  assert.equal(rack(s, "A1").pending.length, 0, "pending card removed");
+  assert.equal(Sim.usedU(s, rack(s, "A1")), snap.u, "rack space freed");
+  assert.ok(!s.jobs.some(j => j.dev && j.dev.uid === uid), "job removed");
+  assert.equal(s.deprec.length, snap.dep, "no depreciation for a cancelled order");
+  assert.ok(near(s.totals.capex, snap.capex));
+  assert.ok(/cancel/.test(s.log[s.log.length - 1]), "log line");
+  assert.ok(!Sim.check(s, { type: "cancelOrder", uid }).ok, "cannot cancel twice");
+});
+
+test("cancelOrder: rejected once shipping ends, for other jobs and for unknown ids", () => {
+  const s = sb(1);
+  s.cash = 5000;
+  assert.ok(Sim.apply(s, { type: "buy", item: "c1", rack: "A1" }).ok);
+  const uid = s.jobs[s.jobs.length - 1].dev.uid;
+  Sim.advance(s, K.SHIP_DAYS + 0.25);   // now waiting for / being installed by a technician
+  assert.notEqual(s.jobs.find(j => j.dev && j.dev.uid === uid).phase, "ship");
+  const r = Sim.check(s, { type: "cancelOrder", uid });
+  assert.ok(!r.ok && /shipped/i.test(r.msg), r.msg);
+  assert.ok(!Sim.check(s, { type: "cancelOrder", uid: 999999 }).ok);
+  assert.ok(!Sim.check(s, { type: "cancelOrder" }).ok);
+  // a forward order (phase "contract") is not a coyote-time purchase
+  assert.ok(Sim.apply(s, { type: "forward", item: "c1" }).ok);
+  const f = s.jobs[s.jobs.length - 1];
+  assert.ok(!Sim.check(s, { type: "cancelOrder", uid: f.dev.uid }).ok);
+});
+
+test("cancelOrder: a lease still shipping can be cancelled (nothing to refund)", () => {
+  const s = sb(1);
+  s.cash = 5000;
+  const cash = s.cash;
+  assert.ok(Sim.apply(s, { type: "lease", item: "c1", rack: "A2" }).ok);
+  const uid = s.jobs[s.jobs.length - 1].dev.uid;
+  assert.ok(Sim.apply(s, { type: "cancelOrder", uid }).ok);
+  assert.equal(rack(s, "A2").pending.length, 0);
+  assert.equal(s.cash, cash);
+});
+
+test("cancelOrder: deterministic, and a cancelled order leaves the game unchanged but for ids", () => {
+  const run = cancel => {
+    const s = sb(5);
+    s.cash = 5000;
+    Sim.advance(s, 3);
+    Sim.apply(s, { type: "buy", item: "c1", rack: "B2" });
+    const uid = s.jobs[s.jobs.length - 1].dev.uid;
+    Sim.advance(s, 2);
+    if (cancel) Sim.apply(s, { type: "cancelOrder", uid });
+    Sim.advance(s, 200);
+    return s;
+  };
+  assert.equal(JSON.stringify(run(true)), JSON.stringify(run(true)), "same actions, same state");
+  const a = run(true), base = sb(5);
+  base.cash = 5000;
+  Sim.advance(base, 200 + 5);
+  assert.ok(near(a.cash, base.cash, 1e-9), `cash ${a.cash} vs never-bought ${base.cash}`);
+  assert.ok(near(Sim.score(a), Sim.score(base), 1e-9), `score ${Sim.score(a)} vs ${Sim.score(base)}`);
+});

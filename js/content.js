@@ -80,7 +80,7 @@
     { day: 660,  key: "finance",     mech: "finance",     title: "Finance",
       bullets: ["Borrow up to 40 % of net worth at 9 %", "Lease cards: no upfront, pay per day", "21 % tax on quarterly profit"] },
     { day: 750,  key: "facilities",  mech: "facilities",  title: "Facilities and resilience",
-      bullets: ["Build Hall 2 (18 more racks)", "Grid outages stop everything", "UPS + generator covers outages", "CRAC upgrade: +45 kW cooling"] },
+      bullets: ["Build Hall 2, then Hall 3 (18 racks each)", "Grid outages stop everything", "UPS + generator covers outages", "CRAC upgrade: +45 kW cooling"] },
     { day: 840,  key: "energy",      mech: "energy",      title: "Energy sourcing",
       bullets: ["Spot power is volatile; heat waves spike it", "PPA: fixed green power for 540 days", "Solar + battery shaves spikes"] },
     { day: 930,  key: "environment", mech: "environment", title: "Environment",

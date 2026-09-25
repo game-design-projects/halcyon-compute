@@ -812,6 +812,7 @@
   const shipDays = (s, it) => on(s, "memory") && s.hbm.shortage && it.role === "gpu" ? K.SHORT_SHIP_DAYS : K.SHIP_DAYS;
   const exportBlocked = (s, it) => s.policyFx.exportCtl && it.role === "gpu" && it.gen === currentGen(s) && s.exportUsed >= K.EXPORT_QUOTA;
   const repairCost = (s, d) => Math.round(BASE_ITEMS[d.type].price * K.REPAIR_FRAC * 10) / 10;
+  const orderJob = (s, uid) => uid == null ? null : s.jobs.find(j => (j.kind === "buy" || j.kind === "lease") && j.dev && j.dev.uid === uid) || null;
   const hasJob = (s, uid) => s.jobs.some(j => j.uid === uid || (j.dev && j.dev.uid === uid));
 
   function fits(s, r, it, mode) {
@@ -858,6 +859,12 @@
         const f = fits(s, r, it); if (f) return no(f);
         const days = shipDays(s, it) + K.INSTALL_DAYS;
         return { ok: true, msg: a.type === "buy" ? `$${it.price}k, online in ${days} days` : `Lease $${round2(it.price * K.LEASE_RATE)}k/day, online in ${days} days` };
+      }
+      case "cancelOrder": {   // coyote time: undo a purchase while it is still on the truck
+        const j = orderJob(s, a.uid);
+        if (!j) return no("No such order");
+        if (j.phase !== "ship") return no("Already shipped: sell it instead");
+        return { ok: true, msg: j.kind === "buy" ? `Order cancelled: $${round2(j.paid)}k refunded` : "Lease cancelled" };
       }
       case "move": {
         const i = findDev(r, a.uid); if (i < 0) return no("Not in that rack");
@@ -1070,17 +1077,40 @@
     switch (a.type) {
       case "buy": case "lease": {
         const it = s.items[a.item], d = dev(s, a.item), days = shipDays(s, it);
-        if (a.type === "buy") spend(s, it.price, "capex");
+        const undo = { day: s.day, paid: 0 };   // what cancelOrder needs to reverse the order exactly
+        if (a.type === "buy") { spend(s, it.price, "capex"); undo.paid = it.price; s.deprec[s.deprec.length - 1].uid = d.uid; }
         else { d.leased = true; d.leaseRate = +(it.price * K.LEASE_RATE).toFixed(4); }
-        if (s.policyFx.exportCtl && it.role === "gpu" && it.gen === currentGen(s)) s.exportUsed++;
+        if (s.policyFx.exportCtl && it.role === "gpu" && it.gen === currentGen(s)) { s.exportUsed++; undo.exportQ = Math.floor(s.day / 90); }
         if (days > K.SHIP_DAYS) {   // measurable shortage cost: extra days x what the card would earn
           const mk = marketAt(s, s.day), w = it.role === "gpu" ? r.workload : it.only || "web";
           const v = it.role === "gpu" ? Math.min(it.F, it.B * INTENSITY[w]) : 1;
-          addLoss(s, "shortage", (days - K.SHIP_DAYS) * v * (mk[w] ? mk[w].price : 0));
+          const loss = (days - K.SHIP_DAYS) * v * (mk[w] ? mk[w].price : 0);
+          addLoss(s, "shortage", loss);
+          if (loss > 0) undo.loss = loss;
         }
         r.pending.push(d);
-        Object.assign(job, { dev: d, to: a.rack, phase: "ship", left: days, total: days, work: K.INSTALL_DAYS });
+        Object.assign(job, { dev: d, to: a.rack, phase: "ship", left: days, total: days, work: K.INSTALL_DAYS, paid: undo.paid, undo });
         s.jobs.push(job); break;
+      }
+      case "cancelOrder": {
+        const j = orderJob(s, a.uid), u = j.undo || { day: s.day, paid: j.paid || 0 }, to = rackById(s, j.to);
+        s.jobs.splice(s.jobs.indexOf(j), 1);
+        const pi = to.pending.findIndex(d => d.uid === a.uid); if (pi >= 0) to.pending.splice(pi, 1);
+        if (u.paid) {
+          s.cash += u.paid; s.totals.capex -= u.paid;
+          const di = s.deprec.findIndex(x => x.uid === a.uid);
+          if (di >= 0) {   // drop the depreciation entry and what it already accrued this quarter
+            if (Math.floor(u.day / 90) === Math.floor(s.day / 90)) s.fin.dep -= s.deprec[di].rate * (s.day - u.day);
+            s.deprec.splice(di, 1);
+          }
+        }
+        if (u.exportQ != null && u.exportQ === Math.floor(s.day / 90)) s.exportUsed = Math.max(0, s.exportUsed - 1);
+        if (u.loss) {
+          s.losses.shortage = Math.max(0, s.losses.shortage - u.loss);
+          const p = periodOf(u.day); if (s.lossBy.shortage[p] != null) s.lossBy.shortage[p] = Math.max(0, s.lossBy.shortage[p] - u.loss);
+        }
+        log(s, `cancel order ${j.dev.type} uid=${a.uid} in ${j.to}, refund ${round2(u.paid)}`);
+        break;
       }
       case "move": {
         const [d] = r.devices.splice(findDev(r, a.uid), 1);
@@ -1630,7 +1660,7 @@
     K, MODES, MARKET, INTENSITY, NET_NEED, CHAPTERS, BASE_ITEMS, SHOP_ORDER, GEN_LAUNCH, WORKLOADS, CONTENT: C, LOSS_LABEL,
     newGame, step, advance, stats, check, apply, project, shallowClone, netWorth, resale, score, summary, companyValue,
     seasonAt, marketAt, rackById, rackIndex, usedU, rackKw, rackKwAll, gridKwAll, shopItems, currentGen, busyTechs, isDead, throttleAt,
-    on, repOf, repFactor, hazard, ppaQuote, creditLimitOf, shelfLoad, transitTarget, trailingRevenue, hbmF, gridNext,
+    on, repOf, repFactor, hazard, ppaQuote, creditLimitOf, shelfLoad, transitTarget, trailingRevenue, hbmF, gridNext, hallCost, HALL_LETTERS,
     setDebug(v) { DEBUG = !!v; },
   };
 });

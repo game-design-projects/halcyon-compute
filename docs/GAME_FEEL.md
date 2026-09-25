@@ -17,7 +17,7 @@ the numbers (for example rubberbanding) is off-limits, because it would erase de
 | Particles | Install complete: green spark burst + LEDs blink on. Money: "+$4.1k" floats up from earning racks every few days, sized by amount. Failure: red sparks + smoke. Heat: shimmer/steam over racks above 30 °C inlet. Confetti at milestones ($1M, $10M, $100M score) and on a chapter card | Where money and trouble come from, spatially |
 | Idle animation / context | Fans spin at a speed ∝ rack load; LEDs blink at a rate ∝ utilisation; cold-aisle dots drift; the night/day tint follows the calendar | The floor looks alive and reads at a glance |
 | Health bar warping | The heat and cash gauges pulse and glow as they approach limits (32 °C, bankruptcy); a damage-ghost bar (the old value fades out behind the new one) on cash drops | Danger reads early (display only, the numbers stay exact) |
-| Coyote time (forgiveness) | Magnetic drop targets: a released card snaps to the nearest valid rack within ~40 px; a toast with an "undo" option for a purchase for 2 real seconds (only while it is still shipping, full refund) | Input feels generous without changing strategy |
+| Coyote time (forgiveness) | Magnetic drop targets: a released card snaps to the nearest valid rack within ~40 px; a toast with an "undo" option for a purchase for 2 real seconds (only while it is still shipping, full refund; `cancelOrder`) | Input feels generous without changing strategy |
 | Last bullet | The final quarter gets a countdown drum-roll and a gold "final quarter" frame; on the last day the total score tallies up like Balatro's chip × mult | The ending feels like a climax |
 | Sound (WebAudio, synthesised, no assets) | Pick-up blip, drop thunk, cha-ching (pitch rises with amount), alarm for outage/throttle, a room hum whose pitch/volume follows total kW, a soft chord on a chapter card; mute toggle (M key + HUD icon), default volume low | A second channel for state; the hum gives a sense of scale |
 | Make losing fun | Bankrupt/fired: racks power down one by one with a descending tone, then the lessons screen ("here is what sank you") | A loss teaches instead of punishing |
@@ -46,18 +46,28 @@ Decisions (and rejected alternatives):
 - **Calendar tint is seasonal, not day/night.** At 8x a day lasts 62 ms, so a day/night cycle would strobe. The floor gets
   a faint warm tint in summer and a cool one in winter (peak around day 200, the same as the goal hint).
 - **M = mute (spec), map-mode cycling moved from M to V.** The how-to text says so.
-- **Coyote-time undo is not implemented.** The sim has no cancel or refund action for a shipping purchase (`sell` only
-  applies to installed devices), and sim.js is out of scope for this pass. Only magnetic drop targets were built: when nothing valid
+- **Coyote-time undo (implemented v3, 2026-09-25).** Sim action `{type:"cancelOrder", uid}` (uid of the ordered device,
+  same key as `sell`/`store`) cancels a `buy` or `lease` job while `phase === "ship"`: exact refund of the price paid
+  (stored on the job as `paid`), the pending card leaves the rack, its depreciation entry and this quarter's accrued
+  depreciation, the export-quota slot and any recorded shortage loss are reversed, and a `cancel order` log line is written.
+  After shipping ends it is rejected ("Already shipped: sell it instead"); forward orders (`phase "contract"`) are not
+  covered. In the UI, `fxAct` shows an `#undo` toast with an Undo button for 2 real seconds after a buy/lease (countdown
+  bar); `undoTick()` in `frame()` also hides it as soon as `check` fails, which matters at 8x (6 shipping days pass in
+  under 0.4 s). Rejected: undo by job id (the UI and other device actions key on uid); undoing any action generically
+  (most actions have no clean inverse and it would invite save-scumming). Tests: `test/sim2.test.js` "cancelOrder: ...".
+  Magnetic drop targets: when nothing valid
   is under the pointer, the nearest valid target within 40 px lights up, the ghost is pulled 35 % toward it, and a
   release commits there. The magnet is deliberately off when the pointer is over an *invalid* target, because showing why
-  it is invalid is more useful than silently retargeting to a neighbour. To add undo later: a sim `cancelOrder` action
-  (full refund while `phase === "ship"`), then a 2 s toast button in `fxAct`.
+  it is invalid is more useful than silently retargeting to a neighbour.
 - **The confetti canvas above modals** is the same canvas shown as a `popover="manual"` after `showModal()`, so it stacks
   above the dialog in the top layer. Rejected: re-parenting the canvas into the dialog (the dialog's pop-in transform
   becomes the containing block and offsets the particles). Re-parenting stays only as a fallback without the Popover API.
 - **Rack animations survive the 1 s floor re-render** by re-applying `animation` with a negative delay in
   `FX.afterFloor()`. Fans and LEDs use the same trick via inline `animation-delay`. The outage blackout uses `hold`
   entries that last until power returns.
+- **End-screen tally (v3):** the big number, labelled SCORE (founder equity value), rolls from 0 straight to the final
+  score while the breakdown rows land. Rejected: rolling through each intermediate subtotal, because the first stop
+  (net worth) read as the result. Bot bars compare `Sim.score` to `Sim.score`.
 - Juice never changes the numbers: no rubberbanding and no catch-up, and the tally shows the exact `Sim.summary` values.
 
 Perf (headless Chrome, 1400×950, sandbox seed 7, 36 populated racks, 8x, 8 s windows, n = 1 run per row, noisy):
