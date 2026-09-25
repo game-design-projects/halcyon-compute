@@ -68,12 +68,14 @@
   <symbol id="minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
   <symbol id="sound" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></symbol>
   <symbol id="mute" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="m17 9 5 6M22 9l-5 6"/></symbol>
+  <symbol id="expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
+  <symbol id="shrink" viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></symbol>
   <symbol id="factory" viewBox="0 0 24 24"><path d="M3 21V10l6 4V10l6 4V6h6v15z"/></symbol>
 </svg>
 
+<div class="stage" id="stage">
 <header class="hud" id="hud">
   <button class="iconbtn" id="menubtn" title="Main menu"><svg class="i"><use href="#burger"/></svg></button>
-  <span class="logo">Halcyon</span>
   <div class="chip" id="h-cashchip" title="Cash and current net income per day"><svg class="i"><use href="#coin"/></svg><div><span class="big" id="h-cash"></span><span class="delta" id="h-cash-d"></span><small id="h-rate" style="display:block"></small><div class="bar runway" id="h-runway"><i class="ghostbar"></i><i class="now"></i></div></div></div>
   <div class="chip click" id="h-techs" title="Technicians install, move, repair and sell hardware. Filled = free"></div>
   <div class="chip" id="h-when"></div>
@@ -87,10 +89,6 @@
   <div class="chip click" id="h-power"></div>
   <div class="chip" id="h-heat"></div>
   <div class="chip click" id="h-transit" hidden></div>
-  <div class="chip click" id="h-debt" data-drawer="finance" hidden></div>
-  <div class="chip click" id="h-rep" data-drawer="affairs" hidden></div>
-  <div class="chip click" id="h-carbon" data-drawer="energy" hidden></div>
-  <div class="chip click" id="h-equity" data-drawer="finance" hidden></div>
   <div class="chip" id="h-score"></div>
   <div class="chip pace" id="h-pace" hidden title="Pace: two bots play your seed alongside you, up to today"></div>
   <span class="spacer"></span>
@@ -100,6 +98,7 @@
     <button class="iconbtn" data-drawer="energy" id="db-energy" title="Energy, facilities and environment" hidden><svg class="i"><use href="#bolt"/></svg><span class="dot" hidden></span></button>
     <button class="iconbtn" data-drawer="affairs" id="db-affairs" title="Reputation and policy" hidden><svg class="i"><use href="#flag"/></svg><span class="dot" hidden></span></button>
   </div>
+  <button class="iconbtn" id="fsbtn" title="Fullscreen (F)" aria-pressed="false"><svg class="i"><use href="#expand"/></svg></button>
   <button class="iconbtn" id="mutebtn" title="Sound (M)"><svg class="i"><use href="#sound"/></svg></button>
   <button class="iconbtn" id="helpbtn" title="Replay the current chapter card"><svg class="i"><use href="#help"/></svg></button>
   <div class="pop" id="pop" hidden></div>
@@ -111,36 +110,49 @@
   <section class="floor-wrap">
     <div class="goal" id="goal"></div>
     <div class="offerstrip" id="offerstrip" hidden aria-live="polite"></div>
-    <div class="floorbar"><div class="halltabs" id="halltabs" role="group" aria-label="Hall"></div><div class="modes" role="group" aria-label="Map mode" id="modes"></div></div>
-    <div class="legend" id="legend"></div>
+    <div class="floorbar"><div class="halltabs" id="halltabs" role="group" aria-label="Hall"></div><div class="modes" role="group" aria-label="Map mode" id="modes"></div><div class="legend" id="legend"></div></div>
     <div class="floor-scroll"><div class="floor" id="floor"></div></div>
     <div class="shelf-wrap" id="shelf-wrap" hidden>
-      <div class="tray-title"><h2>Spares shelf</h2><span id="shelf-sub"></span></div>
+      <div class="shelf-head"><h2>Spares</h2><span id="shelf-n"></span><svg class="i" id="shelf-help"><use href="#help"/></svg></div>
       <div class="shelf" id="shelf" data-drop-shelf></div>
     </div>
     <div class="tray-title" id="tray-title"></div>
     <div class="tray" id="tray"></div>
   </section>
 
-  <aside class="side"><div class="card" id="detail"></div></aside>
-
-  <div class="strip">
-    <div class="card chart">
-      <h2 style="font-size:17px"><svg class="i"><use href="#coin"/></svg>Compute markets</h2>
-      <div class="market-legend" id="market-legend"></div>
-      <svg viewBox="0 0 320 150" id="market-chart" role="img" aria-label="Price and demand history for training and inference"></svg>
+  <aside class="side">
+    <div class="corp" id="corp" aria-label="Company">
+      <div class="chip click" id="h-debt" data-drawer="finance" hidden></div>
+      <div class="chip click" id="h-rep" data-drawer="affairs" hidden></div>
+      <div class="chip click" id="h-carbon" data-drawer="energy" hidden></div>
+      <div class="chip click" id="h-equity" data-drawer="finance" hidden></div>
     </div>
-    <div class="card chart" id="bench-card">
-      <h2 style="font-size:17px"><svg class="i"><use href="#chip"/></svg>Vendor benchmarks</h2>
-      <div class="sub">Performance per kW, as reported by each vendor. Past data only.</div>
-      <svg viewBox="0 0 300 140" id="bench-chart" role="img" aria-label="Vendor-reported benchmarks for emerging accelerators"></svg>
+    <div class="card tabcard" id="infotabs">
+      <div class="tabs" role="tablist" aria-label="Rack panel, news, markets and benchmarks">
+        <button role="tab" id="tab-rack" data-tab="rack" aria-selected="true" aria-controls="pane-rack"><svg class="i"><use href="#cpu"/></svg><span id="tab-rack-lbl">Rack</span></button>
+        <button role="tab" id="tab-news" data-tab="news" aria-selected="false" aria-controls="pane-news"><svg class="i"><use href="#news"/></svg><span>News</span><span class="dot" hidden></span></button>
+        <button role="tab" id="tab-markets" data-tab="markets" aria-selected="false" aria-controls="pane-markets"><svg class="i"><use href="#coin"/></svg><span>Markets</span></button>
+        <button role="tab" id="tab-bench" data-tab="bench" aria-selected="false" aria-controls="pane-bench"><svg class="i"><use href="#chip"/></svg><span>Benchmarks</span></button>
+      </div>
+      <div class="pane rackpane" role="tabpanel" id="pane-rack" aria-labelledby="tab-rack"><div id="detail"></div></div>
+      <div class="pane chart" role="tabpanel" id="pane-markets" aria-labelledby="tab-markets" hidden>
+        <h2><svg class="i"><use href="#coin"/></svg>Compute markets</h2>
+        <div class="market-legend" id="market-legend"></div>
+        <svg viewBox="0 0 320 150" id="market-chart" role="img" aria-label="Price and demand history for training and inference"></svg>
+      </div>
+      <div class="pane chart" role="tabpanel" id="pane-bench" aria-labelledby="tab-bench" hidden>
+        <div id="bench-card">
+          <h2><svg class="i"><use href="#chip"/></svg>Vendor benchmarks</h2>
+          <div class="sub">Performance per kW, as reported by each vendor. Past data only.</div>
+          <svg viewBox="0 0 300 140" id="bench-chart" role="img" aria-label="Vendor-reported benchmarks for emerging accelerators"></svg>
+        </div>
+      </div>
+      <div class="pane newspane" role="tabpanel" id="pane-news" aria-labelledby="tab-news" hidden>
+        <div class="newsfilter" id="newsfilter" role="group" aria-label="Filter news"></div>
+        <div class="news" id="newsfeed"></div>
+      </div>
     </div>
-    <div class="card">
-      <h2 style="font-size:17px"><svg class="i"><use href="#news"/></svg>News</h2>
-      <div class="newsfilter" id="newsfilter" role="group" aria-label="Filter news"></div>
-      <div class="news" id="newsfeed"></div>
-    </div>
-  </div>
+  </aside>
 </div>
 
 <aside class="drawer" id="drawer" aria-hidden="true">
@@ -184,11 +196,13 @@
   <div class="body" id="obody"></div>
   <footer style="gap:8px"><button class="btn" id="same-seed">Replay this seed</button><button class="end" id="new-game">Main menu</button></footer>
 </dialog>
+</div>
 
 <script src="js/content.js"></script>
 <script src="js/sim.js"></script>
 <script src="bots/bots.js"></script>
 <script src="js/pace.js"></script>
+<script src="js/stage.js"></script>
 <script src="js/fx.js"></script>
 <script src="js/audio.js"></script>
 <script src="js/ui.js"></script>

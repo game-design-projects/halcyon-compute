@@ -1,6 +1,6 @@
 # Halcyon Compute
 
-![Halcyon Compute mid-game, heat map mode](./screenshot.png)
+![Halcyon Compute mid-game at 1920×1080](./screenshot.png)
 
 A real-time (pausable) datacenter tycoon prototype for Game Design Week 3: *strategic depth*.
 Drag GPUs onto racks, match cards to workloads, survive summer, time your upgrades, and work out
@@ -13,7 +13,11 @@ Open `index.html` in a browser. It is plain HTML/CSS/JS and also works from `fil
 ```bash
 python3 -m http.server 8765   # then http://localhost:8765/
 ```
-- Space pauses; 1-4 set 1x/2x/4x/8x; V cycles map modes; M mutes; Esc cancels a tapped card.
+- Space pauses; 1-4 set 1x/2x/4x/8x; V cycles map modes; M mutes; F toggles fullscreen; Esc cancels a tapped card.
+- The game is one 1920×1080 screen that scales to fit the window (letterboxed, no scrolling), so any window size works.
+- **itch.io embed:** upload a zip with `index.html` at its root, set the embed size to 1280×720 (or 1920×1080), tick
+  "Fullscreen button" and leave "Enable scrollbars" off. The in-game fullscreen button (F) works when the embed allows it;
+  otherwise use itch's own fullscreen button. The smallest size that stays readable is 960×540.
 - Drag a catalog card onto a rack to buy it. Drag hardware in the rack panel to another rack to move
   it, or onto the bin to sell it. On touch screens, tap a card and then a rack.
 - `?seed=123` replays a specific game; `?debug=1` logs sim and UI events to the console; `?pace=0` turns off the
@@ -22,7 +26,7 @@ python3 -m http.server 8765   # then http://localhost:8765/
 
 ## Develop
 ```bash
-node --test test/*.test.js           # 99 tests: sim rules, determinism, bots, pace ghost
+node --test test/*.test.js           # 103 tests: sim rules, determinism, bots, pace ghost, stage fit
 node bots/run.js --seeds 12 --ablate # depth report -> reports/depth.json
 ```
 
@@ -30,6 +34,7 @@ node bots/run.js --seeds 12 --ablate # depth report -> reports/depth.json
 |---|---|
 | `js/sim.js` | Deterministic simulation core (seeded, 0.25-day substeps, no DOM). Loads in the browser and in Node |
 | `js/ui.js` | Rendering, drag and drop, dialogs. Contains no game rules |
+| `js/stage.js` | Fixed 1920×1080 game screen: scale-to-fit with CSS `zoom`, letterbox, fullscreen |
 | `bots/bots.js` | Greedy and planner reference players, used for depth measurement and the end-screen comparison |
 | `bots/run.js` | Ablation runner |
 | `css/style.css` | Visual style, adapted from the reference artifact |

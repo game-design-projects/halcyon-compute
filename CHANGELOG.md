@@ -5,10 +5,37 @@ Versions are milestones of the week-3 project; there are no tagged releases.
 
 ## [Unreleased]
 
+### Added
+- **Fixed game screen that fits any window.** The UI is one 1920×1080 screen (authored at 1440×810, zoom 4/3) scaled
+  uniformly to the window with letterbox bars. It fits an itch.io embed of any size (960×540 up), a fullscreen monitor
+  or an odd window with no page scrolling, and rescales on resize and fullscreen change (`js/stage.js`).
+- **Fullscreen button** in the HUD and the **F** key (Fullscreen API). When the page cannot go fullscreen (an embed
+  without permission) the button is dimmed and a toast points to the page's own fullscreen button.
+- Right-column **tabs: Rack / News / Markets / Benchmarks**. The News tab shows a count of items that arrived while
+  another tab was open. Clicking a rack brings the Rack tab forward. The chosen tab is remembered.
+- Playtest driver: optional viewport (`node tools/playtest-driver.js <port> <seed> <outDir> 1280x720` or `VIEWPORT=`).
+- `test/stage.test.js`: fit math (no overflow at any size, centred letterbox, 16:9 has no bars). 103 tests.
+
 ### Changed
+- 16:9 layout. The HUD is one row. Debt, reputation, carbon and equity moved from the HUD into a company strip above
+  the right column. The Contracts button is icon-only; its count badge, its pulse and the offer strip show waiting
+  offers. The floor fills the height left after the other rows, so racks are larger than before
+  (≈119 px tall on a 1080p screen, were 78). Map modes show the label of the active mode only (the rest have
+  tooltips). The legend sits on the same row. The spares shelf header moved to the left of the slots; its
+  instructions are in its tooltip. The Markets / Benchmarks / News bottom strip moved into the right-column tabs.
+- Text sizes: nothing under 12 px of regular text in the stylesheet (bold badges 11 px); on a 1080p screen the body
+  text renders at 18.7 px.
+- Banners (outage, heat wave, shortage, …) sit side by side; the floor gives up the height they need.
 - `DESIGN.md` rewritten for the full game: the 17-chapter table, characteristics and 14 heuristics, the playtest
   round 1 summary and new playtest questions. The v3 depth-evidence section is kept.
-- README screenshot retaken from v0.3 (mid-game heat map, pace chip, cluster meter, HBM shortage).
+- README screenshot retaken for the 1920×1080 game screen.
+
+### Removed
+- The phone/narrow-window layouts (media queries at 980/700/560 px): the stage scales instead. Desktop only.
+
+### Fixed
+- On the itch.io embed the game rendered as a long web page: the bottom strip was cut off and the iframe could not be
+  scrolled. Everything is reachable in the frame now.
 
 ## [0.3.0] - 2026-09-24
 Post-playtest fix round (playtest round 1: three AI personas and a code review; see `docs/playtests/SYNTHESIS.md`).

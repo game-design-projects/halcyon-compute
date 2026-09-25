@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /* Browser driver for AI playtesters: one persistent headless Chrome page, controlled over HTTP.
- * usage: node tools/playtest-driver.js <port> <seed> <outDir>
+ * usage: node tools/playtest-driver.js <port> <seed> <outDir> [WxH]
+ *        viewport: 4th arg or env VIEWPORT=1920x1080 (default 1400x950); the seed arg can carry params ("21&play=campaign")
  * GET  /shot?name=x      -> screenshot saved to outDir/x.png, returns the path
  * GET  /text             -> visible text of HUD, goal banner, news and any open dialog
  * POST /click  {selector} | {x,y}
@@ -18,18 +19,19 @@ const fs = require("fs");
 const PW = process.env.PW_PATH || "/Users/lishuyu/.npm/_npx/e41f203b7505f1fb/node_modules/playwright";
 const { chromium } = require(PW);
 const [port, seed, outDir] = [+process.argv[2] || 9301, process.argv[3] || "1", process.argv[4] || "/tmp/playtest"];
+const [VW, VH] = (process.argv[5] || process.env.VIEWPORT || "1400x950").split("x").map(Number);
 fs.mkdirSync(outDir, { recursive: true });
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: true });
-  const page = await browser.newPage({ viewport: { width: 1400, height: 950 } });
+  const page = await browser.newPage({ viewport: { width: VW || 1400, height: VH || 950 } });
   const errors = [];
   page.on("pageerror", e => errors.push(String(e)));
   page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
   const url = "file://" + path.resolve(__dirname, "..", "index.html") + `?seed=${seed}`;
   await page.goto(url);
-  log("driver up", port, url);
+  log("driver up", port, url, `${VW}x${VH}`);
 
   const point = async t => {
     if (t.selector) { const b = await page.locator(t.selector).first().boundingBox(); if (!b) throw new Error("not visible: " + t.selector); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }

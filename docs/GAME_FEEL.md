@@ -69,6 +69,19 @@ Decisions (and rejected alternatives):
   score while the breakdown rows land. Rejected: rolling through each intermediate subtotal, because the first stop
   (net worth) read as the result. Bot bars compare `Sim.score` to `Sim.score`.
 - Juice never changes the numbers: no rubberbanding and no catch-up, and the tally shows the exact `Sim.summary` values.
+- **Fixed-resolution stage (v0.4).** The UI is one 1440×810 stage (1920×1080 design at zoom 4/3) scaled to fit the
+  window with CSS `zoom` (`js/stage.js`). The juice layer stays correct because everything it measures is viewport px
+  under `zoom`: the fx canvas lives outside the stage, covers the window, takes viewport px from
+  `getBoundingClientRect` and divides by `Stage.z` internally (context scaled by DPR×z), so particles and "+$4.1k" land
+  on the racks and scale with the UI at any window size. The drag ghost also stays outside the stage (its transform
+  follows `clientX/Y`; its children get `zoom: var(--z)`); the magnet radius is 40 stage px (`40 × z` viewport px).
+  Screen shake still transforms `.game` inside the stage (translate px are stage px, so the shake scales too).
+  Rejected: `transform: scale()` on the stage. It keeps rects in viewport px too, but modal dialogs (chapter cards,
+  decision cards, end screen) render in the top layer outside the transform and would stay unscaled, and the confetti
+  popover trick would need a second coordinate system. Also rejected: re-authoring every px value for 1920 (hundreds of
+  sizes, inline SVG and JS-built markup) instead of one zoom factor. Verified 2026-09-25 with the playtest driver at
+  1920×1080, 1600×900, 1366×768, 1280×720, 1152×648, 960×540: no page scroll, ghost anchor exactly at the pointer,
+  magnet drop onto the intended rack, fx canvas ink at the rack centre (659 px) vs 0 px 200 px away.
 
 Perf (headless Chrome, 1400×950, sandbox seed 7, 36 populated racks, 8x, 8 s windows, n = 1 run per row, noisy):
 | | rAF interval med / p95 / max (ms) | frame() JS cost med / p95 / max (ms) |
@@ -78,5 +91,9 @@ Perf (headless Chrome, 1400×950, sandbox seed 7, 36 populated racks, 8x, 8 s wi
 | before, 4x CPU throttle (days 268–396) | 16.7 / 17.6 / 17.7 | 0.8 / 12.1 / 16.1 |
 | after, 4x CPU throttle (two windows; the first includes the d274 outage + d390 launch) | 16.7 / 18.6 / 35.4 | 3.2–3.3 / 17–18 / 24–27 |
 With no CPU throttle, no frames are dropped. Under 4x throttle, one or two frames per 8 s drop, during the outage/launch effects.
+Stage change (v0.4), headless Chrome 1920×1080, same setup (sandbox seed 7, 36 racks, 8x), 3 × 8 s windows per row,
+before n = 1 run, after n = 3 runs: before rAF 16.7 / 16.7 / 16.8, frame() 0.5 / 1.2 / 11.9 ms; after rAF
+16.7 / 16.7 / 16.8 in two runs (one run had a single 83 ms rAF gap with frame() max 9.6 ms, so not game code; it did not
+recur), frame() 0.4 / 1.2 / 8.6–9.8 ms (med / p95 / max). No measurable difference.
 Measures taken: dirty-rect canvas clears, rack rects cached per floor render, steam/smoke batched into 8 alpha-bucket
 paths, `.game` promoted to a layer only while shaking. Harness: `.playwright-mcp/perf.js`; verification run: `.playwright-mcp/juice.js`.

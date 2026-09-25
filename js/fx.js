@@ -27,7 +27,10 @@
   };
 
   /* ---------- overlay canvas (created lazily, one for the whole page) ---------- */
-  let cv = null, cx = null, W = 0, H = 0, DPR = 1;
+  /* The canvas lives outside #stage and covers the window, but it draws in stage units: every public API takes viewport px
+   * (getBoundingClientRect / clientX), divides by Z = Stage.z, and the context is scaled by DPR * Z. So sizes, speeds and
+   * floating text scale with the UI, and positions land exactly on the racks at any window size. W, H = window in stage units. */
+  let cv = null, cx = null, W = 0, H = 0, DPR = 1, Z = 1;
   // dirty rectangle: only the area drawn last frame is cleared (a full clear of a big canvas every frame is the main cost)
   let dx0 = 0, dy0 = 0, dx1 = 0, dy1 = 0, dirty = false;
   function clearDirty() {
@@ -45,13 +48,17 @@
     cx = cv.getContext("2d");
     resize();
     addEventListener("resize", resize);
+    if (window.Stage && Stage.onChange) Stage.onChange(resize);
   }
   function resize() {
     if (!cv) return;
     DPR = Math.min(2, window.devicePixelRatio || 1);
-    W = innerWidth; H = innerHeight;
-    cv.width = Math.round(W * DPR); cv.height = Math.round(H * DPR);
-    cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    Z = (window.Stage && Stage.z) || 1;
+    W = innerWidth / Z; H = innerHeight / Z;
+    cv.width = Math.round(innerWidth * DPR); cv.height = Math.round(innerHeight * DPR);
+    cx.setTransform(DPR * Z, 0, 0, DPR * Z, 0, 0);
+    dirty = false;
+    dlog("canvas", innerWidth + "x" + innerHeight, "dpr", DPR, "zoom", Z);
   }
   /* A modal <dialog> sits in the browser's top layer, above any z-index. To draw confetti over a chapter card or the
    * end screen while keeping ONE canvas, the canvas becomes a manual popover shown after the dialog (so it stacks above
@@ -87,7 +94,7 @@
     if (reduced) return;
     ensureCanvas();
     const p = takeP();
-    p.on = true; p.kind = kind; p.x = x; p.y = y; p.vx = o.vx || 0; p.vy = o.vy || 0; p.g = o.g || 0; p.drag = o.drag || 0;
+    p.on = true; p.kind = kind; p.x = x / Z; p.y = y / Z; p.vx = o.vx || 0; p.vy = o.vy || 0; p.g = o.g || 0; p.drag = o.drag || 0;
     p.life = 0; p.max = o.life || 0.8; p.size = o.size || 2; p.grow = o.grow || 0; p.color = o.color || "#fff";
     p.rot = o.rot || 0; p.vr = o.vr || 0; p.a = o.a == null ? 1 : o.a;
   }
@@ -126,7 +133,7 @@
     let t = null;
     for (let n = 0; n < MAXT; n++) { const c = T[tHead]; tHead = (tHead + 1) % MAXT; if (!c.on) { t = c; liveT++; break; } }
     if (!t) { t = T[tHead]; tHead = (tHead + 1) % MAXT; }
-    t.on = true; t.x = x; t.y = y; t.vy = -34; t.life = 0; t.max = 1.25; t.size = size || 13; t.color = color || "#7FE0A8"; t.text = text;
+    t.on = true; t.x = x / Z; t.y = y / Z; t.vy = -34; t.life = 0; t.max = 1.25; t.size = size || 13; t.color = color || "#7FE0A8"; t.text = text;
   }
 
   /* ---------- shake (trauma model: offset ∝ trauma², decays linearly) ---------- */

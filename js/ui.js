@@ -18,7 +18,7 @@
   const V = {
     speed: 1, lastSpeed: 1, mode: "role", hall: 1, selected: "A1", selDev: null, armed: null, lease: false,
     seenChapter: -1, chapQueue: [], newsKey: "", acc: 0, overShown: false, sig: "", drawer: null, pop: null,
-    newsCat: "all", menu: true, ppaKw: 100, confirm: null, confirmT: 0, saveBucket: -1, sandbox: false,
+    newsCat: "all", tab: "rack", newsSeen: -1, newsSeenFor: null, menu: true, ppaKw: 100, confirm: null, confirmT: 0, saveBucket: -1, sandbox: false,
     down: false, lastFull: 0, wfLast: false, perf: { frames: 0, worst: 0, samples: [] },
     // game feel (display only): previous-state snapshot for the event diff, rolling counters, gauge ghosts
     fxPrev: null, cashOff: 0, scoreOff: 0, cashT: null, scoreT: null, cashPeak: 0, ghostFrac: 1, ghostHold: 0,
@@ -27,6 +27,7 @@
     ghost: null, pace: null, firsts: {}, cardQueue: [], warned: {}, offersSeen: new Set(), cashSeen: 0, flowPrev: null,
   };
   const PACE_ON = params.get("pace") !== "0";      // ?pace=0 turns the ghost off (A/B frame-time measurement)
+  const STZ = () => (window.Stage && Stage.z) || 1;   // current stage zoom: viewport px = stage px x STZ()
   const FXON = () => !!window.FX, SND = (name, arg, gap) => { if (window.SFX) SFX.play(name, arg, gap); };
 
   /* ================= palette: read from CSS tokens (single source of truth) ================= */
@@ -827,7 +828,7 @@
     const el = $("modes");
     const ms = MAP_MODES.filter(m => on(m.ch));
     if (!ms.some(m => m.key === V.mode)) V.mode = "role";
-    el.innerHTML = ms.map(m => `<button data-mode="${m.key}" aria-pressed="${V.mode === m.key}">${icon(m.icon)}${m.label}</button>`).join("");
+    el.innerHTML = ms.map(m => `<button data-mode="${m.key}" aria-pressed="${V.mode === m.key}" title="${m.label} map (V cycles)" aria-label="${m.label}">${icon(m.icon)}<span class="mlab">${m.label}</span></button>`).join("");
     renderLegend();
   }
   function renderLegend() {
@@ -995,7 +996,9 @@
     }
     for (let i = S.shelf.length + incoming.length; i < K.SHELF; i++) h += `<div class="slot"></div>`;
     $("shelf").innerHTML = h;
-    $("shelf-sub").textContent = `${Sim.shelfLoad(S)}/${K.SHELF}. Drag a card from a rack to store it; drag a spare onto a failed part to swap it in 1 day.${on("memory") ? " Drag a GPU from the catalog here to order it forward (today's price, 45 days)." : ""}`;
+    // compact header (the stage has no room for the hint line): count inline, the how-to in the tooltip
+    $("shelf-n").textContent = `${Sim.shelfLoad(S)}/${K.SHELF}`;
+    $("shelf-wrap").querySelector(".shelf-head").title = `Spares shelf, ${Sim.shelfLoad(S)}/${K.SHELF}. Drag a card from a rack to store it; drag a spare onto a failed part to swap it in 1 day.${on("memory") ? " Drag a GPU from the catalog here to order it forward (today's price, 45 days)." : ""}`;
   }
 
   function renderTray() {
@@ -1093,6 +1096,7 @@
 
   function renderDetail(st) {
     const r = V.selected && rack(V.selected);
+    $("tab-rack-lbl").textContent = r ? `Rack ${r.id}` : "Rack";
     if (!r) { $("detail").innerHTML = `<h2>${icon("building")}Hall ${V.hall}</h2><div class="sub" style="margin-top:6px">Not built yet. ${on("facilities") ? `Build it from the Hall ${V.hall} tab or the Energy drawer.` : ""}</div>`; return; }
     const role = rackRole(r), pr = st.perRack[r.id], unit = 10.2;
     let elev = "";
@@ -1211,6 +1215,11 @@
     if (V.newsCat !== "all" && !cats.includes(V.newsCat)) V.newsCat = "all";
     $("newsfilter").innerHTML = cats.length > 1 ? `<button data-newscat="all" aria-pressed="${V.newsCat === "all"}">All</button>` +
       cats.map(c => `<button data-newscat="${c}" aria-pressed="${V.newsCat === c}" title="${NEWS_CAT[c][1]}">${icon(NEWS_CAT[c][0])}<span class="nlab">${NEWS_CAT[c][1]}</span></button>`).join("") : "";
+    // the News tab shows a dot with the number of items that arrived while another tab was open
+    const newest = S.news.length ? S.news[0].day : -1;
+    if (V.newsSeenFor !== S || V.tab === "news") { V.newsSeenFor = S; V.newsSeen = newest; }
+    const unseen = S.news.filter(n => n.day > V.newsSeen).length, dot = $("tab-news").querySelector(".dot");
+    dot.hidden = !unseen; dot.textContent = unseen > 9 ? "9+" : String(unseen);
     const list = S.news.filter(n => V.newsCat === "all" || (n.cat || "general") === V.newsCat).slice(0, 14);
     $("newsfeed").innerHTML = list.map(n => {
       const [c, ic] = TONE[n.tone] || TONE.info;
@@ -1222,11 +1231,12 @@
   function openPop(kind, anchor) {
     if (V.pop === kind) { closePop(); return; }
     V.pop = kind;
-    const pop = $("pop"), hud = $("hud").getBoundingClientRect(), a = anchor.getBoundingClientRect();
+    const pop = $("pop"), hud = $("hud").getBoundingClientRect(), a = anchor.getBoundingClientRect(), z = STZ();
     pop.hidden = false;
     renderPop(Sim.stats(S));
-    const w = pop.offsetWidth, left = Math.max(8, Math.min(a.left - hud.left, hud.width - w - 8));
-    pop.style.left = left + "px"; pop.style.top = (a.bottom - hud.top) + "px";
+    // rects are viewport px; the popover lives inside the zoomed #stage, so its left/top are stage px (÷ zoom)
+    const w = pop.offsetWidth, left = Math.max(8, Math.min((a.left - hud.left) / z, $("hud").offsetWidth - w - 8));
+    pop.style.left = left + "px"; pop.style.top = ((a.bottom - hud.top) / z) + "px";
     dlog("pop", kind);
   }
   function closePop() { V.pop = null; const p = $("pop"); if (p) p.hidden = true; }
@@ -1853,7 +1863,7 @@
       ["flag", "Chapters unlock one mechanic at a time: power, GPUs, heat, generations, failures, networks, contracts, memory, finance, facilities, energy, environment, investors, reputation, policy, disruption."],
       ["news", "Vendors, investors and politicians are biased. Trust the news that follows up, measure with pilots, and watch time."],
       ["trend", "Score = your equity × company value after 5 years. At the end, two bots replay your seed so you can compare."],
-      ["pause", "Space pauses. Keys 1-4 set 1x/2x/4x/8x. V cycles map modes. M mutes sound. Esc closes drawers."]]
+      ["pause", "Space pauses. Keys 1-4 set 1x/2x/4x/8x. V cycles map modes. M mutes sound. F toggles fullscreen. Esc closes drawers."]]
       .map(([ic, t]) => `<div>${icon(ic)}<span>${t}</span></div>`).join("");
   });
   $("menubtn").addEventListener("click", () => showMenu(true));
@@ -2016,10 +2026,11 @@
   function magnet(x, y, under) {
     if (!drag.cands) drag.cands = [...document.querySelectorAll(TARGETS)].map(el => ({ el, r: el.getBoundingClientRect() })).filter(c => c.r.width > 0);
     let best = null;
+    const rad = MAGNET * STZ();   // rects and pointer are viewport px; the radius is 40 stage px at any zoom
     for (const c of drag.cands) {
       if (c.el === under) continue;
       const dx = Math.max(c.r.left - x, 0, x - c.r.right), dy = Math.max(c.r.top - y, 0, y - c.r.bottom), d = Math.hypot(dx, dy);
-      if (d > MAGNET || (best && d >= best.d)) continue;
+      if (d > rad || (best && d >= best.d)) continue;
       const ev = evaluate(drag.p, c.el);
       if (ev.res && ev.res.ok) best = { el: c.el, ev, d, cx: (c.r.left + c.r.right) / 2, cy: (c.r.top + c.r.bottom) / 2 };
     }
@@ -2123,6 +2134,8 @@
     if (wf) { V.wfLast = wf.dataset.wf === "1"; renderAll(); return; }
     const pp = t.closest("[data-ppa]");
     if (pp) { V.ppaKw = Math.max(K.PPA_STEP, Math.min(K.PPA_MAX, V.ppaKw + (+pp.dataset.ppa) * K.PPA_STEP)); renderAll(); return; }
+    const tb = t.closest("[data-tab]");
+    if (tb) { setTab(tb.dataset.tab); return; }
     const nc = t.closest("[data-newscat]");
     if (nc) { V.newsCat = nc.dataset.newscat; renderNews(); return; }
     // tap-to-place targets
@@ -2147,7 +2160,7 @@
       return;
     }
     const rk = t.closest("#floor [data-rack]");
-    if (rk) { V.selected = rk.dataset.rack; V.selDev = null; renderAll(); return; }
+    if (rk) { V.selected = rk.dataset.rack; V.selDev = null; if (V.tab !== "rack") setTab("rack"); renderAll(); return; }
     const pm = t.closest("[data-pmode]");
     if (pm) { act({ type: "mode", rack: V.selected, mode: pm.dataset.pmode }); return; }
     const wl = t.closest("[data-wl]");
@@ -2157,6 +2170,7 @@
   });
   document.addEventListener("keydown", e => {
     if (e.target.closest && e.target.closest("input, textarea")) return;
+    if ((e.key === "f" || e.key === "F") && !e.metaKey && !e.ctrlKey && !e.altKey) { toggleFullscreen(); return; }   // also on the menu and over cards
     if (V.menu || anyDialogOpen() || !S) return;
     const SPEEDS = { "1": 1, "2": 2, "3": 4, "4": 8 };
     if (e.code === "Space") { e.preventDefault(); setSpeed(V.speed ? 0 : V.lastSpeed); }
@@ -2198,6 +2212,48 @@
   }
   function toggleMute() { if (!window.SFX) return; SFX.toggle(); renderMute(); toast(SFX.muted ? "Sound off" : "Sound on"); }
   if ($("mutebtn")) $("mutebtn").addEventListener("click", toggleMute);
+
+  /* ================= stage: tabs in the right column, fullscreen ================= */
+  /* right-column card: News / Markets / Benchmarks. All three panes stay rendered (cheap, once a second); only one shows. */
+  const TABS = ["rack", "news", "markets", "bench"];
+  function setTab(k) {
+    if (!TABS.includes(k)) k = "rack";
+    V.tab = k;
+    for (const t of TABS) {
+      const b = $("tab-" + t), pane = $("pane-" + t);
+      b.setAttribute("aria-selected", String(t === k)); b.tabIndex = t === k ? 0 : -1; pane.hidden = t !== k;
+    }
+    try { localStorage.setItem("halcyon.tab", k); } catch (e) { /* storage blocked */ }
+    if (S && k === "news") renderNews();
+    dlog("tab", k);
+  }
+  let tab0 = "rack";
+  try { tab0 = localStorage.getItem("halcyon.tab") || "rack"; } catch (e) { /* storage blocked */ }
+  setTab(tab0);
+  // arrow keys move between tabs (WAI-ARIA tabs pattern)
+  $("infotabs").querySelector(".tabs").addEventListener("keydown", e => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    const i = (TABS.indexOf(V.tab) + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length;
+    setTab(TABS[i]); $("tab-" + TABS[i]).focus(); e.preventDefault();
+  });
+  function renderFs() {
+    const b = $("fsbtn"); if (!b) return;
+    const fs = Stage.isFullscreen();
+    b.innerHTML = icon(fs ? "shrink" : "expand");
+    b.setAttribute("aria-pressed", String(fs));
+    b.title = !Stage.canFullscreen() ? "Fullscreen is not available here (use the page's own fullscreen button)" : fs ? "Exit fullscreen (F)" : "Fullscreen (F)";
+    b.classList.toggle("off", !Stage.canFullscreen());
+  }
+  function toggleFullscreen() {
+    if (!Stage.canFullscreen()) { toast("Fullscreen is not available in this frame: use the page's fullscreen button"); dlog("fullscreen unavailable"); return; }
+    Stage.toggleFullscreen().then(ok => { if (!ok) toast("Fullscreen was blocked by the browser"); dlog("fullscreen", ok, Stage.isFullscreen()); renderFs(); });
+  }
+  if ($("fsbtn")) $("fsbtn").addEventListener("click", toggleFullscreen);
+  document.addEventListener("fullscreenchange", renderFs);
+  document.addEventListener("webkitfullscreenchange", renderFs);
+  renderFs();
+  // a new zoom moves every rect: drop the drag's cached drop-target rects and re-measure the HUD
+  Stage.onChange(f => { if (drag) drag.cands = null; dlog("stage zoom", f.z); });
   renderMute();
   let cashT;
   function flashCash(d) {
