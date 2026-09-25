@@ -11,7 +11,10 @@
   Sim.setDebug(DEBUG);
   const dlog = (...a) => { if (DEBUG) console.log("[ui]", ...a); };
   const DAYS_PER_SEC = 2;
-  const SAVE_KEY = "halcyon.save.v2", META_KEY = "halcyon.meta.v2";
+  const SAVE_KEY = "halcyon.save.v2", META_KEY = "halcyon.meta.v2", SLOT_KEY = n => `halcyon.slot.${n}`, SET_KEY = "halcyon.settings";
+  /* every new user-visible string goes through L(key, params) (js/strings.js; pass B swaps in the i18n layer) */
+  const L = window.L || ((k, p) => k);
+  const QOL = window.QOL;
 
   let S = null;
   let seed = params.has("seed") ? (+params.get("seed") >>> 0) : Math.floor(Math.random() * 1e6);
@@ -25,8 +28,21 @@
     fillPrev: {}, earnAcc: {}, earnLast: {}, earnT: 0, steamT: 0, finalQ: false, lastCount: -1, tilt: 0,
     // v0.3: pace ghost rows, one-time cards (first offer / scare / proposal / VC round), warnings, seen offers + cash events
     ghost: null, pace: null, firsts: {}, cardQueue: [], warned: {}, offersSeen: new Set(), cashSeen: 0, flowPrev: null,
+    // v0.4 pass A: multi-select, blueprint clipboard, last order (R), undo stack, skip-to-event, hover, board highlight
+    multi: new Set(), clip: null, lastOrder: null, undo: null, skip: null, hover: null, hoverRack: null, affT: 0, alertsT: 0, alerts: [],
+    apSeen: null, beatT: 0, hl: null, boardSeen: new Set(),
   };
+  const UNDO = QOL ? QOL.undoStack(20) : null;
+  /* ================= settings (localStorage, guarded) ================= */
+  const SET_DEFAULT = { master: 1, sfx: 1, hum: 1, reduced: null, cb: false, scale: 1, ap: { offer: true, fail: true, cash: true, sla: true }, apTouched: false, campaigns: 0 };
+  let SET = JSON.parse(JSON.stringify(SET_DEFAULT));
+  try { const raw = JSON.parse(localStorage.getItem(SET_KEY) || "null"); if (raw) SET = Object.assign(SET, raw, { ap: Object.assign({}, SET.ap, raw.ap || {}) }); } catch (e) { /* storage blocked */ }
+  function saveSettings() { try { localStorage.setItem(SET_KEY, JSON.stringify(SET)); } catch (e) { /* storage blocked */ } }
   const PACE_ON = params.get("pace") !== "0";      // ?pace=0 turns the ghost off (A/B frame-time measurement)
+  /* the pace chip compares you with the HUMAN-PACED bots (Casual = humanized greedy, Expert = humanized planner); the
+     full-speed greedy/planner are measurement tools and are not shown to players (UI_BACKLOG bug 5) */
+  const PACE_POLS = ["casual", "expert"];
+  const BOTNAME = k => (window.Bots && Bots.LABELS && Bots.LABELS[k]) || k;
   const STZ = () => (window.Stage && Stage.z) || 1;   // current stage zoom: viewport px = stage px x STZ()
   const FXON = () => !!window.FX, SND = (name, arg, gap) => { if (window.SFX) SFX.play(name, arg, gap); };
 
@@ -55,7 +71,9 @@
   let R = ROLE();
   const ITEM_COLOR = it => it.role === "cpu" ? COL.web : it.role === "net" ? COL.net : it.role === "cool" ? COL.cool
     : it.role === "mem" ? COL.mem : it.role === "exotic" ? COL.tank : it.fam === "C" ? COL.train : COL.infer;
-  const MODE_ICON = { eco: "leaf", std: "gauge", boost: "rocket" };
+  const MODE_ICON = { eco: "leaf", std: "gauge", boost: "rocket", off: "power" };
+  const KIND = { web: ["globe", "web"], infer: ["bubble", "infer"], train: ["brain", "train"], frontier: ["star", "frontier"], bts: ["building", "contract"] };
+  const kindOf = o => o.bts ? "bts" : o.kind || o.w;
   const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const MAP_MODES = [
     { key: "role", label: "Role", icon: "layers", ch: "racks" },
@@ -175,7 +193,9 @@
     const key = JSON.stringify(a), res = Sim.check(S, a);
     const armed = opts.confirm && V.confirm === key && performance.now() - V.confirmT < CONFIRM_MS;
     const cls = ["btn", opts.cls || "", armed ? "confirm" : "", res.ok ? "" : "dim"].join(" ");
-    return `<button class="${cls}" data-act='${esc(key)}'${opts.confirm ? " data-confirm" : ""} title="${esc(res.msg)}"${res.ok ? "" : ' aria-disabled="true"'}>${opts.icon ? icon(opts.icon) : ""}${armed ? `Tap again: ${label}` : label}</button>`;
+    // unaffordable / invalid = rendered disabled (dim, price red via CSS, aria-disabled, the reason as tooltip); a click still
+    // reaches act(), which refuses it with show-not-tell feedback. refreshAfford() re-checks these live as cash moves.
+    return `<button class="${cls}" data-act='${esc(key)}'${opts.confirm ? " data-confirm" : ""} title="${esc(res.msg)}"${res.ok ? "" : ' aria-disabled="true"'}${!label && opts.title ? ` aria-label="${esc(opts.title)}"` : ""}>${opts.icon ? icon(opts.icon) : ""}${armed ? `Tap again: ${label || opts.title || ""}` : label}</button>`;
   }
 
   /* ================= storage (optional: every call guarded) ================= */
@@ -191,12 +211,13 @@
       store.set(META_KEY, JSON.stringify({ seed: S.seed, sandbox: S.sandbox, day: Math.floor(S.day), score: Math.round(Sim.score(S)), at: Date.now() }));
     dlog("autosave", reason, "day", Math.floor(S.day), ok ? "ok" : "failed", (performance.now() - t0).toFixed(1) + "ms");
   }
+  /* a resumable save: v2/v3 saves are migrated by the sim (ensureCashLog → v4); v4 is current */
+  function validSave(st) { return !!st && typeof st === "object" && [2, 3, 4].includes(st.v) && !st.over && Array.isArray(st.racks) && Array.isArray(st.jobs) && st.items != null; }
   function readMeta() { try { const m = JSON.parse(store.get(META_KEY) || "null"); return m && store.get(SAVE_KEY) ? m : null; } catch (e) { return null; } }
   function loadGame() {
     try {
       const st = JSON.parse(store.get(SAVE_KEY) || "null");
-      if (!st || st.v !== 2 || st.over) return null;
-      return st;
+      return validSave(st) ? st : null;
     } catch (e) { dlog("load failed", e && e.message); return null; }
   }
 
@@ -205,7 +226,12 @@
     Object.assign(V, { hall: 1, selected: "A1", selDev: null, armed: null, lease: false, chapQueue: [], overShown: false, acc: 0,
       drawer: null, pop: null, newsCat: "all", confirm: null, wfLast: false,
       fxPrev: null, cashOff: 0, scoreOff: 0, cashT: null, scoreT: null, cashPeak: S.cash, ghostFrac: 1, ghostHold: 0,
-      fillPrev: {}, earnAcc: {}, earnLast: {}, finalQ: false, lastCount: -1 });
+      fillPrev: {}, earnAcc: {}, earnLast: {}, finalQ: false, lastCount: -1,
+      apSeen: null, hl: null, hover: null, hoverRack: null, boardSeen: new Set(), keepItem: null });
+    V.multi = new Set();
+    if (V.skip) { V.skip = null; $("skipbtn").setAttribute("aria-pressed", "false"); document.body.classList.remove("skipping"); }
+    $("hovercard").hidden = true;
+    if (UNDO) UNDO.clear();
     if (FXON()) { FX.clearAll(); FX.clearRackAnims(); }
     document.body.classList.remove("blackout", "finalq");
     V.newsKey = newsKey();
@@ -226,7 +252,7 @@
     V.pace = null;
     if (!PACE_ON || !window.Pace || !window.Bots) { renderPace(); return; }
     const s0 = S;
-    V.ghost = Pace.start({ seed: S.seed, sandbox: !!S.sandbox, day: S.day,
+    V.ghost = Pace.start({ seed: S.seed, sandbox: !!S.sandbox, day: S.day, pols: PACE_POLS,
       onRows: m => {
         if (S !== s0) return;
         const first = !V.pace;
@@ -255,15 +281,22 @@
   }
   function continueGame() {
     const st = loadGame();
-    if (!st) { toast("No saved game"); return; }
+    if (!st) { nope("No saved game", $("m-continue")); return; }
+    resumeState(st, "autosave");
+  }
+  /* resume a saved state (autosave, a manual slot or an imported file). The telemetry log starts a new "continued" session. */
+  function resumeState(st, how) {
     S = st; seed = S.seed; V.sandbox = !!S.sandbox;
+    if (V.ghost) { V.ghost.stop(); V.ghost = null; }
+    if (UNDO) UNDO.clear();
     TELE.start(seed, { sandbox: V.sandbox, continued: true, day: S.day });
+    TELE.event(S.day, "load", { how, v: S.v });
     TELE.snap(S, Sim.score(S));
     V.teleSnap = Math.floor(S.day / 10);
     resetView();
     V.seenChapter = S.chapter;
     setUrl();
-    dlog("continue day", S.day);
+    dlog("resume", how, "day", S.day, "v", S.v);
     hideMenu();
     V.speed = 0;
     renderAll();
@@ -282,14 +315,20 @@
     const w = key && Sim.naturalWorkload(S, rid, key);
     return w && rack(rid) && rack(rid).workload !== w ? { type: "workload", rack: rid, workload: w } : null;
   }
-  function act(a) {
+  /* every state change goes through here (telemetry records it). opts: src = the element that asked (for "no" feedback),
+     quiet = part of a batch (blueprint paste, fill, bulk): no toast / render, the caller renders once; noUndo = an undo itself */
+  function act(a, opts) {
+    opts = opts || {};
     const res = Sim.check(S, a);
-    if (!res.ok) { TELE.action(S.day, a, false, res.msg); toast(res.msg); dlog("rejected", a, res.msg); SND("nope", null, 150); return false; }
+    if (!res.ok) { TELE.action(S.day, a, false, res.msg); nope(res.msg, opts.src, a); dlog("rejected", a, res.msg); return false; }
     const cash0 = S.cash;
     const wl = wlDefault(a);
     if (wl) { TELE.action(S.day, wl, true); Sim.apply(S, wl); dlog("workload default", wl); }
+    const pre = UNDO && !opts.noUndo ? QOL.undoPre(S, a) : null;
     TELE.action(S.day, a, true);
     Sim.apply(S, a);
+    if (pre) { const e = QOL.undoEntry(pre, a, S); if (e) { if (opts.group) e.group = opts.group; UNDO.push(e); dlog("undo push", e.kind, a.type, opts.group || ""); } }
+    if ((a.type === "buy" || a.type === "lease") && a.item) V.lastOrder = { type: a.type, item: a.item };
     V.cashSeen = S.cashSeq || 0;      // the player's own action explains its cash change and any event it caused (its toast says so)
     V.flowPrev = { cash: S.cash, flow: S.totals.flow || 0 };
     const d = S.cash - cash0;
@@ -298,15 +337,52 @@
     if (["sell", "store", "returnLease"].includes(a.type) || (a.type === "repair" && false)) V.selDev = null;
     V.confirm = null;
     dlog("action", a, res.msg);
+    sr(res.msg);
     if ((a.type === "buy" || a.type === "lease") && a.item) {
       const it = item(a.item);
-      toast(`${it.name} ${a.type === "lease" ? "leased" : "ordered"} for ${a.rack}: ${res.msg}${wl ? ` · rack set to ${R[wl.workload].name} (suits this card)` : ""}`);
-      if (a.type === "buy" && FXON()) fxAtRack(a.rack, c => FX.floatText(c.x, c.top, `−${money(it.price)}`, "#FF8466", 15));
-    } else if (!["transit", "hire", "fire", "borrow", "repay", "repairPolicy", "mode", "workload"].includes(a.type)) toast(res.msg + (wl ? ` · ${a.to || a.rack} set to ${R[wl.workload].name}` : ""));
-    renderAll();
-    fxAct(a);
+      if (a.type === "buy" && FXON() && !opts.quiet) fxAtRack(a.rack, c => FX.floatText(c.x, c.top, `−${money(it.price)}`, "#FF8466", 15));
+    } else if (!opts.quiet && !QUIET_ACTS.has(a.type)) toast(res.msg + (wl ? ` · ${a.to || a.rack} set to ${R[wl.workload].name}` : ""));
+    if (!opts.quiet) renderAll();
+    fxAct(a, opts);
     return true;
   }
+  /* actions whose result is shown on screen (floats, links, the rack itself), not in a toast */
+  const QUIET_ACTS = new Set(["transit", "hire", "fire", "borrow", "repay", "repairPolicy", "mode", "workload", "reorder", "cancelJob", "undoSell", "buyBack",
+    "policy", "signContract", "declineContract", "cancelOrder", "sell", "store", "unstore", "move", "repair", "returnLease"]);
+
+  /* ================= show, don't tell: "no" feedback (docs/I18N.md feel table) =================
+   * No sentence: the element wobbles, a low bonk, and the missing resource flashes (cash chip / rack / grid chip / shelf).
+   * The reason stays available as the element's tooltip and in an aria-live region (#sr) for screen readers. */
+  function nope(msg, el, a) {
+    const why = QOL ? QOL.reason(msg) : "other";
+    SND("bonk", null, 110);
+    sr(msg);
+    if (S) TELE.event(S.day, "nope", { why, msg: String(msg).slice(0, 80) });
+    dlog("nope", why, msg);
+    wobble(el);
+    if (why === "cash") {
+      pulse($("h-cashchip"), "fx-nocash", 520);
+      const pr = el && el.querySelector ? el.querySelector(".price") : null;
+      if (pr) pulse(pr, "fx-pricebad", 800);
+    }
+    const rid = a && (a.to || a.rack);
+    if ((why === "space" || why === "kw") && rid) {
+      if (FXON()) FX.rackAnim(rid, "fx-nope", 420);
+      if (V.selected === rid) pulse(document.querySelector(`#detail .g[data-g="${why === "space" ? "u" : "kw"}"]`), "fx-gpulse", 900);
+    }
+    if (why === "grid") pulse($("h-power"), "fx-nogrid", 900);
+    if (why === "shelf") pulse($("shelf-wrap"), "fx-nope-el", 450);
+  }
+  function pulse(el, cls, ms) {
+    if (!el) return;
+    el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls);
+    clearTimeout(el["_t" + cls]); el["_t" + cls] = setTimeout(() => el.classList.remove(cls), ms);
+  }
+  function wobble(el) {
+    if (!el || !el.animate || (FXON() && FX.reduced)) return;
+    try { el.animate([0, -6, 5, -3, 0].map(x => ({ translate: `${x}px 0` })), { duration: 250, easing: "ease-out" }); } catch (e) { /* no WAAPI */ }
+  }
+  function sr(t) { const el = $("sr"); if (el) el.textContent = String(t || ""); }
   /* feedback for a successful player action: physical placement gets a squash "thunk" + dust + drop sound */
   const PLACE = new Set(["buy", "lease", "move", "unstore"]), STAMP = new Set(["signContract", "acceptRound", "buildHall", "grid", "ups", "solar", "ppa", "pr", "lobby", "spine", "crac", "cooling", "buyback", "tank", "forward"]);
   /* coyote time: after a purchase, an "Undo" toast for 2 real seconds while the order is still shipping (full refund) */
@@ -329,9 +405,12 @@
     if (now > V.undo.until) hideUndo("timeout");
     else if (!Sim.check(S, V.undo.op).ok) hideUndo("shipped");
   }
-  function fxAct(a) {
+  function fxAct(a, opts) {
+    opts = opts || {};
     if (a.type === "cancelOrder") { hideUndo("used"); SND("pickup"); return; }
-    if (a.type === "buy" || a.type === "lease") showUndo(a);
+    if (a.type === "signContract") { linkFx(a.id); return; }
+    if (a.type === "declineContract") { SND("pickup"); return; }
+    if ((a.type === "buy" || a.type === "lease") && !opts.quiet) showUndo(a);
     if (PLACE.has(a.type)) {
       const id = a.to || a.rack;
       SND("drop");
@@ -344,6 +423,132 @@
     else if (a.type === "borrow") SND("chaching", a.amount || K.LOAN_STEP);
     else if (["sell", "store", "returnLease", "repair"].includes(a.type)) SND("pickup");
     else SND("tick", 4, 40);
+  }
+
+  /* signing: the new contract's link colour flies from the board to every rack that will serve it (its start day, today's
+     hardware), and those racks pulse. No rack yet = the catalog pulses (build capacity before the start date). */
+  function linkFx(cid) {
+    const c = S.contracts.find(x => x.id === cid);
+    if (!c) return;
+    const st2 = Sim.stats(S, { day: Math.max(S.day, c.start || S.day) + 0.01 });
+    const racks = [...new Set(st2.alloc.filter(l => l.id === cid).map(l => l.rack))];
+    const col = QOL ? QOL.linkColor(cid) : "#5AD1E6";
+    dlog("[board] signed", cid, c.cust, "served by", racks.join(",") || "none yet");
+    TELE.event(S.day, "linked", { id: cid, racks });
+    SND("link");
+    const b = $("offerstrip").getBoundingClientRect();
+    const pill = document.querySelector(`[data-contract="${cid}"]`);
+    if (pill) pulse(pill, "fx-newpill", 900);
+    if (!racks.length) { pulse($("tray"), "fx-hint", 1200); return; }
+    racks.forEach((rid, i) => {
+      if (!FXON()) return;
+      const el = FX.rackEl(rid);
+      if (!el) return;
+      setTimeout(() => FX.fly(b.left + 70 * STZ(), b.top + b.height / 2, el, "link", col, () => FX.rackAnim(rid, "fx-link", 800)), i * 90);
+    });
+  }
+
+  /* ================= skip to the next event (fast-forward until something needs you) ================= */
+  const SKIP_MAX_DAYS = 120, SKIP_DAYS_PER_FRAME = 3;
+  function skipSnap() {
+    let failed = 0;
+    for (const r of S.racks) for (const d of r.devices) if (d.failed) failed++;
+    const cm = Sim.stats(S).cMiss || {};
+    return { offers: new Set(S.offers.map(o => o.id)), failed, chapter: S.chapter, contracts: S.contracts.map(c => c.id).join(), cashSeq: S.cashSeq || 0,
+      miss: Object.keys(cm).filter(k => cm[k] > 1e-6).length };
+  }
+  function toggleSkip() {
+    if (!S || S.over) return;
+    if (V.skip) { stopSkip("button"); return; }
+    V.skip = { until: S.day + SKIP_MAX_DAYS, snap: skipSnap(), d0: S.day };
+    $("skipbtn").setAttribute("aria-pressed", "true");
+    document.body.classList.add("skipping");
+    TELE.event(S.day, "skip", { on: true });
+    dlog("[skip] start", S.day.toFixed(1));
+  }
+  function stopSkip(why, el) {
+    if (!V.skip) return;
+    dlog("[skip] stop", why, "after", (S.day - V.skip.d0).toFixed(1), "days");
+    TELE.event(S.day, "skip", { on: false, why, days: +(S.day - V.skip.d0).toFixed(1) });
+    V.skip = null;
+    $("skipbtn").setAttribute("aria-pressed", "false");
+    document.body.classList.remove("skipping");
+    setSpeed(0);
+    if (el) pulse(el, "fx-attn", 1400);
+  }
+  /* what changed since the skip began → the element to point at (or null = keep going) */
+  function skipReason() {
+    const P = V.skip.snap;
+    if (S.over) return ["over", null];
+    if (S.chapter !== P.chapter) return ["chapter", $("goal")];
+    if (S.offers.some(o => !P.offers.has(o.id))) return ["offer", $("offerstrip")];
+    let failed = 0;
+    for (const r of S.racks) for (const d of r.devices) if (d.failed) failed++;
+    if (failed > P.failed) return ["failure", $("alertbtn")];
+    if (S.contracts.map(c => c.id).join() !== P.contracts) return ["contract", $("offerstrip")];
+    if ((S.cashEvents || []).some(e => e.n > P.cashSeq && Math.abs(e.amt) >= 10)) return ["cash", $("h-cashchip")];
+    const st = Sim.stats(S), miss = Object.keys(st.cMiss || {}).filter(k => st.cMiss[k] > 1e-6).length;
+    if (miss > P.miss) return ["sla", $("offerstrip")];
+    if (S.cash < 0 || S.day >= V.skip.until) return [S.cash < 0 ? "cash<0" : "max", $("h-cashchip")];
+    if (V.cardQueue.length) return ["card", null];
+    return null;
+  }
+  function skipFrame() {
+    for (let i = 0; i < SKIP_DAYS_PER_FRAME && V.skip; i++) {
+      Sim.advance(S, 1);
+      const tb = Math.floor(S.day / 10);
+      if (tb !== V.teleSnap) { V.teleSnap = tb; TELE.snap(S, Sim.score(S)); }
+      const why = skipReason();
+      if (why) stopSkip(why[0], why[1]);
+    }
+  }
+
+  /* ================= auto-pause (settings): stop time when something needs you ================= */
+  function autoPause(st) {
+    if (!S || S.over || !V.speed || V.skip) return;
+    const ap = SET.ap || {};
+    const prev = V.apSeen;
+    let failed = 0;
+    for (const r of S.racks) for (const d of r.devices) if (d.failed) failed++;
+    const miss = Object.keys(st.cMiss || {}).some(k => st.cMiss[k] > 1e-6);
+    const now = { offers: new Set(S.offers.map(o => o.id)), failed, neg: S.cash < 0, miss };
+    V.apSeen = now;
+    if (!prev) return;
+    let why = null, el = null;
+    if (ap.offer && S.offers.some(o => !prev.offers.has(o.id))) { why = "offer"; el = $("offerstrip"); }
+    else if (ap.fail && failed > prev.failed) { why = "fail"; el = $("alertbtn"); }
+    else if (ap.cash && now.neg && !prev.neg) { why = "cash"; el = $("h-cashchip"); }
+    else if (ap.sla && miss && !prev.miss) { why = "sla"; el = $("offerstrip"); }
+    if (!why) return;
+    setSpeed(0);
+    pulse(el, "fx-attn", 1400);
+    pulse(document.querySelector('.speed [data-speed="0"]'), "fx-attn", 1400);
+    sr(L("fb.paused", { why }));
+    TELE.event(S.day, "autopause", { why });
+    dlog("[autopause]", why);
+  }
+
+  /* ================= live affordability: every cost-bearing control re-checks while cash moves ================= */
+  function refreshAfford(force) {
+    const now = performance.now();
+    if (!force && now - V.affT < 250) return;
+    V.affT = now;
+    for (const b of document.querySelectorAll("#stage [data-act]")) {
+      if (b._k !== b.dataset.act) { b._k = b.dataset.act; try { b._a = JSON.parse(b._k); } catch (e) { b._a = null; } }
+      if (!b._a) continue;
+      const res = Sim.check(S, b._a), dim = !res.ok;
+      if (b.classList.contains("dim") !== dim) {
+        b.classList.toggle("dim", dim);
+        if (dim) b.setAttribute("aria-disabled", "true"); else b.removeAttribute("aria-disabled");
+      }
+      if (b.title !== res.msg && !b.hasAttribute("data-keep-title")) b.title = res.msg;
+    }
+    const leasing = V.lease && on("finance");
+    for (const el of document.querySelectorAll("#tray .item[data-item]")) {
+      const it = item(el.dataset.item);
+      const bad = !(leasing && it.role === "gpu") && S.cash < it.price;
+      if (el.classList.contains("unaff") !== bad) { el.classList.toggle("unaff", bad); if (bad) el.setAttribute("aria-disabled", "true"); else el.removeAttribute("aria-disabled"); }
+    }
   }
 
   /* ================= loop ================= */
@@ -361,6 +566,7 @@
         if (tb !== V.teleSnap) { V.teleSnap = tb; TELE.snap(S, Sim.score(S)); }
       }
     }
+    if (S && V.skip && !S.over && !anyModal() && !(drag && drag.started)) skipFrame();
     if (S) {
       const dragging = drag && drag.started;
       let st = null;
@@ -369,6 +575,10 @@
         if ((sig !== V.sig && now - V.lastFull > 200) || now - V.lastFull > 1000) st = renderAll();
         else { st = Sim.stats(S); renderHUD(st); renderProgress(); }
         afterTick();
+        autoPause(st);
+        refreshAfford();
+        if (now - V.alertsT > 500) { V.alertsT = now; renderAlerts(st); }
+        if (V.hover && now - V.hover.t > 1000) refreshHover();
       }
       fxFrame(st || Sim.stats(S), dtSec, now);
       undoTick(now);
@@ -424,17 +634,18 @@
   const MILESTONES = [[1000, "$1M"], [10000, "$10M"], [100000, "$100M"]];
   const outageOn = () => on("facilities") && !!S.outage && S.day >= S.outage.start;
   function fxSnap(st) {
-    const inst = new Map(), pend = new Set(), failed = new Set(), thr = new Set();
+    const inst = new Map(), pend = new Set(), failed = new Set(), thr = new Set(), nosw = new Set();
     for (const r of S.racks) {
       for (const d of r.devices) { inst.set(d.uid, r.id); if (d.failed) failed.add(d.uid); }
       for (const d of r.pending) pend.add(d.uid);
       const pr = st.perRack[r.id];
       if (pr && pr.throttle < 1) thr.add(r.id);
+      if (pr && r.devices.some(d => NEEDS_NET(item(d.type))) && !(pr.netF > 0)) nosw.add(r.id);   // dark: no switch carries it
     }
     const sells = new Map();
     for (const j of S.jobs) if (j.kind === "sell") sells.set(j.id, j);
     const dead = Object.keys(S.vendors).filter(v => S.vendors[v].dead);
-    return { day: S.day, inst, pend, failed, thr, sells, dead, gen: Sim.currentGen(S), q: S.lastQuarter ? S.lastQuarter.q : null,
+    return { day: S.day, inst, pend, failed, thr, nosw, sells, dead, gen: Sim.currentGen(S), q: S.lastQuarter ? S.lastQuarter.q : null,
       outage: outageOn(), dark: outageOn() && !S.ups, score: Sim.score(S), cash: S.cash };
   }
   function rackOrder(hall) {   // column-major sweep: the wave runs along the rows like a breaker trip
@@ -448,6 +659,13 @@
     for (const [uid, rid] of N.inst) if (!P.inst.has(uid) && P.pend.has(uid) && n++ < 6) {
       SND("install", null, 120);
       if (fx) { FX.rackAnim(rid, "fx-on", 700); fxAtRack(rid, c => FX.sparks(c.x, c.y, "#7FE0A8", 22, 240)); }
+    }
+    // a switch plugged in: the dark rack powers up with a light sweep
+    n = 0;
+    for (const rid of P.nosw) if (!N.nosw.has(rid) && n++ < 6) {
+      SND("powerUp", null, 300);
+      if (fx) FX.rackAnim(rid, "fx-sweep", 750);
+      dlog("fx: power-up sweep", rid);
     }
     // failures: red sparks + smoke where it broke
     n = 0;
@@ -556,6 +774,10 @@
     if (big) SND("tick", 2, 70);   // Balatro-style ticking while a big change rolls
     $("h-cash").textContent = money(S.cash - V.cashOff);
     runway(dt, now);
+    // bankruptcy danger: a screen-edge vignette that deepens as the runway shrinks; a heartbeat under 30 days
+    const rwd = runwayDays(st), rdays = rwd ? rwd.days : Infinity;
+    if (FXON()) FX.danger(rdays < 60 ? Math.min(1, (60 - rdays) / 60) : 0);
+    if (rdays < 30 && running()) SND("heartbeat", null, 1100);
     // final quarter: gold frame, drum-roll countdown over the last 10 days
     const left = K.END_DAY - S.day;
     if (left <= 90 && !V.finalQ && !S.over) {
@@ -771,7 +993,7 @@
     document.body.classList.toggle("paused", V.speed === 0);
   }
   function renderDrawerBtns() {
-    const vis = { contracts: on("contracts"), finance: true, energy: on("facilities") || on("energy") || on("environment"), affairs: on("reputation") || on("policy") };
+    const vis = { contracts: Sim.contractsOn(S), finance: true, energy: on("facilities") || on("energy") || on("environment"), affairs: on("reputation") || on("policy") };
     const dots = {
       contracts: S.offers.length, finance: S.roundOffer ? 1 : 0, energy: (S.outage ? 1 : 0) + (S.heatWave ? 1 : 0) + (S.drought ? 1 : 0),
       affairs: S.policies.filter(p => p.announced && p.status === "proposed").length,
@@ -781,7 +1003,7 @@
       b.setAttribute("aria-pressed", V.drawer === k);
       const dot = b.querySelector(".dot");
       if (dots[k]) { dot.hidden = false; dot.textContent = dots[k]; } else dot.hidden = true;
-      b.classList.toggle("hot", k === "contracts" && dots[k] > 0);
+      b.classList.toggle("hot", false);   // v0.4: the order board on screen carries "offers waiting" (badge + fly-in)
     }
   }
 
@@ -803,7 +1025,7 @@
     const ch = CH[S.chapter].key, left = K.END_DAY - Math.floor(S.day);
     let tip;
     switch (ch) {
-      case "racks": tip = st.supply.web < st.mk.web.demand - 1 ? `Web demand ${st.mk.web.demand.toFixed(0)}, you serve ${st.supply.web.toFixed(0)}. Add web servers (each rack needs a switch).` : "Web market is full. Save cash: bigger things are coming."; break;
+      case "racks": tip = S.offers.length ? "Sign offers you can deliver, then build the racks to serve them." : "Idle racks earn nothing: switch them Off."; break;
       case "power": tip = "Power is money. Idle racks cost nothing; eco mode trades output for power."; break;
       case "gpu": tip = "Match cards to work: compute cards to training, bandwidth cards to inference. Check the roofline in the rack panel."; break;
       case "heat": tip = S.day % 360 < 210 ? `Summer peaks around day ${360 * Math.floor(S.day / 360) + 200}. Heat builds slowly: prepare before it arrives.` : "Heat is easing. Watch your inlet temperatures next summer."; break;
@@ -821,7 +1043,12 @@
       case "policy": tip = "Proposals pass or fail on a vote date. Signals hint at the odds; lobbying shifts them."; break;
       default: tip = "Read the benchmarks and the news before you bet. A pilot card costs little and tells the truth.";
     }
-    $("goal").innerHTML = `${icon("flag", "color:var(--c-warn)")}<b>${CH[S.chapter].title}</b><span>${tip}</span><span style="margin-left:auto;color:var(--ink-2);white-space:nowrap">${S.sandbox ? "Sandbox · " : ""}${left} days left</span>`;
+    // player-triggered chapters: the next unlock and its milestone (content.js `hint`), so progress is something you do
+    const ni = Sim.nextChapter(S), nc = ni != null ? CH[ni] : null;
+    const next = S.sandbox ? `<span class="nextch">Sandbox</span>` : nc ? `<span class="nextch" title="${esc(L("goal.next"))}: ${esc(nc.title)}. ${esc(nc.hint)}${S.day < nc.day ? ` (${esc(L("goal.nextFrom", { d: nc.day }))})` : ""}">${icon("lock")}<b>${esc(nc.title)}</b><span>${esc(nc.hint)}</span></span>`
+      : `<span class="nextch">${icon("check")}${esc(L("goal.last"))}</span>`;
+    $("goal").innerHTML = `<span class="gflag">${icon("flag", "color:var(--c-warn)")}</span><b>${CH[S.chapter].title}</b><span class="gtip" title="${esc(tip)}">${tip}</span>${next}`;
+    $("goal").title = `${left} days left`;
   }
 
   function renderHallTabs() {
@@ -928,10 +1155,10 @@
       const row = [2, 4, 6][r.row], col = r.col + 2;
       const role = rackRole(r), free = K.RACK_U - Sim.usedU(S, r), job = jobFor(r.id), pr = st.perRack[r.id];
       const pos = `grid-row:${row};grid-column:${col}`;
-      const prog = job ? `<span class="prog" data-prog="${r.id}">${jobLabel(job).join("")}<i style="width:${Math.round((1 - jobFrac(job)) * 100)}%"></i></span>` : "";
-      const tgt = V.armed ? " armed-target" : "";
+      const prog = job ? `<span class="prog" data-prog="${r.id}">${progInner(job)}</span>` : "";
+      const tgt = V.armed ? " armed-target" : "", ms = V.multi.has(r.id) ? " msel" : "";
       if (role === "empty" || (r.tank && !r.devices.length && !r.pending.length)) {
-        h += `<button class="rack empty${r.tank ? " tank" : ""}${tgt}" style="${pos}" data-rack="${r.id}" aria-pressed="${r.id === V.selected}" title="${r.id}: ${r.tank ? "empty immersion tank" : "empty rack"}, ${free}U free"><span class="plus">${icon(r.tank ? "drop" : "plus")}</span><span class="id">${r.id}</span>${prog}</button>`;
+        h += `<button class="rack empty${r.tank ? " tank" : ""}${tgt}${ms}" style="${pos}" data-rack="${r.id}" aria-pressed="${r.id === V.selected}" aria-label="${r.id}: ${r.tank ? "empty immersion tank" : "empty rack"}, ${free}U free"><span class="plus">${icon(r.tank ? "drop" : "plus")}</span><span class="id">${r.id}</span>${prog}</button>`;
         continue;
       }
       const flags = [];
@@ -942,7 +1169,13 @@
       if (pr.frontier && pr.trainGpus) flags.push("star");
       const nFail = r.devices.filter(d => d.failed).length, nLease = r.devices.concat(r.pending).filter(d => d.leased).length;
       const nosw = noSwitch(r, pr);
-      const tip = `${nosw ? "NO SWITCH: this rack earns nothing until a switch is installed. " : ""}${r.id}: ${R[role].name}. ${perDay(pr.rev)}, ${pr.kw.toFixed(1)} kW, inlet ${pr.inlet.toFixed(1)} °C, ${free}U free${pr.netF < 1 ? `, network short (${Math.round(pr.netF * 100)} %)` : ""}${pr.throttle < 1 ? `, throttled to ${Math.round(pr.throttle * 100)} %` : ""}${nFail ? `, ${nFail} failed` : ""}${nLease ? `, ${nLease} leased` : ""}`;
+      // v4 links: the contracts this rack's output goes to, as coloured segments (width = units); unallocated output = idle
+      const to = {};
+      for (const x of pr.to || []) to[x.id] = (to[x.id] || 0) + x.u;
+      const made = (pr.out ? pr.out.web + pr.out.train + pr.out.infer : 0), used = Object.values(to).reduce((a, x) => a + x, 0);
+      const idle = r.mode !== "off" && Sim.contractsOn(S) && made - used >= Math.max(1.5, 0.25 * made) && !nosw;
+      const links = Object.keys(to).length || idle ? `<span class="links">${Object.entries(to).map(([id, u]) => `<i style="background:${QOL.linkColor(id)};flex:${u.toFixed(2)}"></i>`).join("")}${idle ? `<i class="idle" style="flex:${(made - used).toFixed(2)}"></i>` : ""}</span>` : "";
+      const tip = `${r.id}: ${R[role].name}. ${perDay(pr.rev)}, ${pr.kw.toFixed(1)} kW, inlet ${pr.inlet.toFixed(1)} °C, ${free}U free${nosw ? ". No switch: delivers nothing" : ""}${r.mode === "off" ? ". Off" : idle ? `. ${L("rack.idle")}` : ""}${pr.netF < 1 && !nosw ? `, network short (${Math.round(pr.netF * 100)} %)` : ""}${pr.throttle < 1 ? `, throttled to ${Math.round(pr.throttle * 100)} %` : ""}${nFail ? `, ${nFail} failed` : ""}${nLease ? `, ${nLease} leased` : ""}`;
       // idle life (display only): fan speed follows the rack's kW, LED blink rate follows how much of it is delivered.
       // Negative animation-delay keeps the phase continuous across the floor's re-renders.
       const load = clamp01(pr.kw / K.RACK_KW), util = pr.rev > 0.01 ? clamp01(pr.throttle * Math.min(1, pr.netF == null ? 1 : pr.netF)) : 0;
@@ -952,11 +1185,12 @@
       const fillCol = rackColor(r, st), prevCol = V.fillPrev[r.id];
       V.fillPrev[r.id] = fillCol;
       const fillStyle = prevCol && prevCol !== fillCol ? `background:${prevCol}" data-fill="${fillCol}` : `background:${fillCol}`;   // cross-fade: start at the old colour
-      h += `<button class="rack ${r.row === 1 ? "front-bottom" : "front-top"}${r.tank ? " tank" : ""}${tgt}" style="${pos}" data-rack="${r.id}" aria-pressed="${r.id === V.selected}" title="${esc(tip)}">
+      const st8 = `${nosw ? " nosw" : ""}${pr.throttle < 1 ? " hot" : ""}${r.mode === "off" ? " off" : ""}${idle ? " idle" : ""}`;
+      h += `<button class="rack ${r.row === 1 ? "front-bottom" : "front-top"}${r.tank ? " tank" : ""}${tgt}${ms}${st8}" style="${pos}" data-rack="${r.id}" aria-pressed="${r.id === V.selected}" aria-label="${esc(tip)}">
         <span class="fill" style="${fillStyle}"></span>${fan}<span class="front${util > 0 ? " blink" : ""}${nFail ? " bad" : ""}"${led}></span>
         ${pr.rev > 0.05 ? `<span class="earn">$${pr.rev.toFixed(1)}k</span>` : ""}${nLease ? `<span class="leasetag">LEASE</span>` : ""}
         <span class="flags">${flags.map(f => icon(f, f === "star" ? `color:${COL.frontier}` : "")).join("")}</span><span class="id">${r.id}</span>${free ? `<span class="free">${free}U</span>` : ""}
-        ${nFail ? `<span class="xmark" title="${nFail} failed">${icon("cross")}</span>` : ""}${nosw ? `<span class="noswitch">${icon("switch")}NO SWITCH<b>$0</b></span>` : ""}${prog}</button>`;
+        ${nFail ? `<span class="xmark" title="${nFail} failed">${icon("cross")}</span>` : ""}${nosw ? `<span class="noswitch" aria-hidden="true">${icon("unplug")}</span>` : ""}${r.mode === "off" ? `<span class="offmark" aria-hidden="true">${icon("power")}</span>` : ""}${links}${prog}</button>`;
     }
     F.innerHTML = h;
     floorLife(F, nowMs);
@@ -979,15 +1213,27 @@
     const fades = F.querySelectorAll("[data-fill]");
     if (fades.length) requestAnimationFrame(() => fades.forEach(el => { el.style.background = el.dataset.fill; el.removeAttribute("data-fill"); }));
     if (FXON()) FX.afterFloor(F);
+    if (V.hl) applyHighlight();
   }
 
+  /* a job's progress chip on the floor: icon, days, bar, and a ✕ that cancels it (sim cancelJob) when that is allowed */
+  function cancelX(j) {
+    const res = Sim.check(S, { type: "cancelJob", id: j.id });
+    return res.ok ? `<span class="jx" role="button" tabindex="0" data-canceljob="${j.id}" title="${esc(L("job.cancel"))}: ${esc(res.msg)}" aria-label="${esc(L("job.cancel"))}">${icon("cross")}</span>` : "";
+  }
+  function progInner(j) {
+    const [ic, txt] = jobLabel(j);
+    return `${ic}${txt}${cancelX(j)}<i style="width:${Math.round((1 - jobFrac(j)) * 100)}%"></i>`;
+  }
   function renderProgress() {
     document.querySelectorAll("[data-prog]").forEach(el => {
       const j = jobFor(el.dataset.prog); if (!j) return;
-      const [ic, txt] = jobLabel(j);
-      el.innerHTML = `${ic}${txt}<i style="width:${Math.round((1 - jobFrac(j)) * 100)}%"></i>`;
+      const html = progInner(j);
+      if (el._h !== html) { el._h = html; el.innerHTML = html; }
     });
-    const jl = $("jobs"); if (jl) jl.innerHTML = jobsHTML();
+    const jl = $("jobs");
+    if (jl) { const html = jobsHTML(); if (jl._h !== html) { jl._h = html; jl.innerHTML = html; } }
+    renderSold();
   }
 
   function renderShelf() {
@@ -1003,7 +1249,7 @@
     for (const j of incoming) {
       const it = item(j.dev.type);
       const what = j.kind === "forward" ? `Forward order ${it.name}: arrives in ${Math.ceil(j.left)} days` : j.kind === "swap" ? `Failed part returning after swap` : `${it.name} coming to the shelf`;
-      h += `<div class="slot incoming" title="${esc(what)}">${icon(j.kind === "forward" ? "truck" : "wrench")}<span>${j.kind === "swap" ? "swap" : esc(it.name.split(" ").pop())}</span><span>${Math.ceil(j.left)}d</span><span class="sp" style="width:${Math.round((1 - jobFrac(j)) * 100)}%"></span></div>`;
+      h += `<div class="slot incoming" title="${esc(what)}">${icon(j.kind === "forward" || j.kind === "restock" ? "truck" : "wrench")}<span>${j.kind === "swap" ? "swap" : esc(it.name.split(" ").pop())}</span><span>${Math.ceil(j.left)}d</span>${cancelX(j)}<span class="sp" style="width:${Math.round((1 - jobFrac(j)) * 100)}%"></span></div>`;
     }
     for (let i = S.shelf.length + incoming.length; i < K.SHELF; i++) h += `<div class="slot"></div>`;
     $("shelf").innerHTML = h;
@@ -1021,7 +1267,7 @@
       tools += `<span class="hbm" title="HBM memory price index. GPU prices = base x (0.55 + 0.45 x index).">${icon("layers", `color:${COL.mem}`)}HBM <b>${S.hbm.index.toFixed(2)}</b>${spark(hv, 90, 24, COL.mem, { ref: 1, label: "HBM index" })}${S.hbm.shortage ? `<span class="badge-short">SHORTAGE</span>` : ""}</span>`;
     }
     if (on("finance")) tools += `<span class="buylease" role="group" aria-label="Buy or lease"><button data-lease="0" aria-pressed="${!leasing}">${icon("coin")}Buy</button><button data-lease="1" aria-pressed="${leasing}">${icon("tag")}Lease</button></span>`;
-    $("tray-title").innerHTML = `<h2>Catalog</h2><span>${leasing ? `Leasing: no upfront cost, ${(K.LEASE_RATE * 100).toFixed(2)} % of list price per day. GPUs only.` : `Drag onto a rack (or tap a card, then a rack). Ships in ${K.SHIP_DAYS} days, then a technician installs it in ${K.INSTALL_DAYS}.`}</span><span class="tools">${tools}</span>`;
+    $("tray-title").innerHTML = `<h2>Catalog</h2><span class="soldbar" id="soldbar" aria-live="polite"></span><span class="tthint">${leasing ? `Leasing: no upfront cost, ${(K.LEASE_RATE * 100).toFixed(2)} % of list price per day. GPUs only.` : `Drag onto a rack (or tap a card, then a rack). Ships in ${K.SHIP_DAYS} days, then a technician installs it in ${K.INSTALL_DAYS}.`}</span><span class="tools">${tools}</span>`;
     let h = shop.map(k => {
       const it = item(k), color = ITEM_COLOR(it), canLease = it.role === "gpu";
       let badge = "";
@@ -1048,6 +1294,24 @@
         <span class="row"><span>${icon("bolt", "color:var(--pow-c)")}${K.SPINE_KW}</span><span class="price">${money(K.SPINE_COST)}</span></span></button>`;
     }
     $("tray").innerHTML = h;
+    $("soldbar")._h = null;
+    renderSold();
+    refreshAfford(true);
+  }
+  /* "Sold · Undo" chips: a sale can be bought back for exactly its price within K.UNSELL_DAYS (sim undoSell); the bar is
+     the countdown in game days. Next to the shelf and catalog, so the fix sits where the mistake is noticed. */
+  function renderSold() {
+    const el = $("soldbar"); if (!el || !S) return;
+    const list = (S.recentlySold || []).filter(x => x.until > S.day).slice(-3).reverse();
+    const html = list.map(x => {
+      const it = item(x.type), f = clamp01((x.until - S.day) / K.UNSELL_DAYS);
+      return `<span class="soldchip">${icon("coin")}<span>${esc(L("sold.chip", { name: it.name.split(" ").pop() }))}</span>${actBtn({ type: "undoSell", uid: x.uid, rack: x.rack }, L("sold.undo"), { cls: "slim2", icon: "undoarrow" })}<i style="width:${(f * 100).toFixed(1)}%"></i></span>`;
+    }).join("");
+    // rebuild only when the list or a rounded countdown changes (buttons must not be replaced under the pointer)
+    const key = list.map(x => x.uid + ":" + Math.ceil(x.until - S.day)).join() + "|" + (S.cash >= 0);
+    if (el._h === key) { el.querySelectorAll(".soldchip").forEach((c, i) => { const x = list[i]; if (x) c.querySelector("i").style.width = (clamp01((x.until - S.day) / K.UNSELL_DAYS) * 100).toFixed(1) + "%"; }); return; }
+    if (V.down) return;
+    el._h = key; el.innerHTML = html;
   }
 
   function jobsHTML() {
@@ -1057,7 +1321,7 @@
       const [ic, txt] = jobLabel(j);
       const verb = { sell: "Selling", move: "Moving in", tank: "Building tank", store: "To the shelf", unstore: "From the shelf", returnLease: "Returning lease",
         repair: j.phase === "parts" ? "Waiting for parts" : "Repairing", swap: "Swapping in a spare" }[j.kind] || (j.phase === "ship" ? "Shipping" : "Installing");
-      return `<div>${ic}<span>${verb}${j.dev ? " " + esc(item(j.dev.type).name) : ""}</span><span style="text-align:right">${txt}</span><span class="t"><i style="width:${Math.round((1 - jobFrac(j)) * 100)}%"></i></span></div>`;
+      return `<div>${ic}<span>${verb}${j.dev ? " " + esc(item(j.dev.type).name) : ""}</span><span style="text-align:right">${txt}</span>${cancelX(j) || "<span></span>"}<span class="t"><i style="width:${Math.round((1 - jobFrac(j)) * 100)}%"></i></span></div>`;
     }).join("");
   }
 
@@ -1105,6 +1369,15 @@
       ${btns.length ? `<div class="row">${btns.join("")}</div>` : ""}</div>`;
   }
 
+  /* the contracts a rack serves, in their link colours (or "idle: no contract") */
+  function serveLine(pr) {
+    if (!Sim.contractsOn(S)) return "";
+    const to = {};
+    for (const x of pr.to || []) to[x.id] = (to[x.id] || 0) + x.u;
+    const ids = Object.keys(to);
+    if (!ids.length) return (pr.out && pr.out.web + pr.out.train + pr.out.infer > 0.05) ? ` · <span class="idletag">${esc(L("rack.idle"))}</span>` : "";
+    return " · " + ids.map(id => { const c = S.contracts.find(x => x.id === id); return `<span class="servetag" style="--lc:${QOL.linkColor(id)}">${esc(c ? c.cust.split(" ")[0] : id)} ${to[id].toFixed(1)}u</span>`; }).join(" ");
+  }
   function renderDetail(st) {
     const r = V.selected && rack(V.selected);
     $("tab-rack-lbl").textContent = r ? `Rack ${r.id}` : "Rack";
@@ -1119,7 +1392,7 @@
     r.pending.forEach(d => { const it = item(d.type); elev += `<div class="pend" style="height:${it.u * unit}px" title="${esc(it.name)}, on its way">${it.u > 1 ? icon("truck") : ""}</div>`; });
     const free = K.RACK_U - Sim.usedU(S, r);
     if (free) elev += `<div class="e" style="height:${free * unit}px"></div>`;
-    const g = (ic, col, v, label) => `<div class="g">${icon(ic, `color:${col}`)}<div class="track"><i style="width:${Math.round(clamp01(v) * 100)}%;background:${col}"></i></div><small>${label}</small></div>`;
+    const g = (ic, col, v, label, key) => `<div class="g"${key ? ` data-g="${key}"` : ""}>${icon(ic, `color:${col}`)}<div class="track"><i style="width:${Math.round(clamp01(v) * 100)}%;background:${col}"></i></div><small>${label}</small></div>`;
     const hasGpu = r.devices.concat(r.pending).some(d => item(d.type).role === "gpu");
     const nFail = r.devices.filter(d => d.failed).length;
     const nosw = noSwitch(r, pr);
@@ -1129,9 +1402,12 @@
       : pr.penalty < 1 ? `${icon("warn")} Unsupported part is crashing this rack (60 %)`
       : pr.throttle < 1 ? `${icon("flame")} Too hot: running at ${Math.round(pr.throttle * 100)} %`
       : pr.netF < 1 && pr.netNeed > 0 ? `${icon("net")} Network short: ${pr.netProv} of ${pr.netNeed} needed`
-      : `${perDay(pr.rev)} revenue${pr.frontier && pr.trainGpus ? " · frontier cluster" : ""}`;
+      : r.mode === "off" ? `${icon("power")} ${esc(L("rack.off"))}`
+      : `${perDay(pr.rev)} revenue${pr.frontier && pr.trainGpus ? " · frontier cluster" : ""}${serveLine(pr)}`;
     const wl = on("gpu") && hasGpu && !r.tank ? `<div class="wl" role="group" aria-label="Workload">${Sim.WORKLOADS.map(w => `<button data-wl="${w}" aria-pressed="${r.workload === w}" style="${r.workload === w ? `background:${R[w].color}` : ""}">${icon(R[w].icon, "width:14px;height:14px")}${R[w].name}</button>`).join("")}</div>` : "";
-    const modes = on("power") && r.devices.length ? `<div class="seg" role="group" aria-label="Power mode">${Object.entries(Sim.MODES).map(([k, m]) => `<button data-pmode="${k}" aria-pressed="${r.mode === k}" title="${m.label}: ${Math.round(m.out * 100)} % output, ${Math.round(m.kw * 100)} % power">${icon(MODE_ICON[k])}${m.label}</button>`).join("")}</div>` : "";
+    // power modes: Off (park idle hardware: 0 kW, 0 output) from chapter 1; Eco / Boost with the power chapter
+    const modeKeys = Object.keys(Sim.MODES).filter(k => on("power") || k === "std" || k === "off");
+    const modes = r.devices.length || r.pending.length ? `<div class="seg" role="group" aria-label="Power mode">${modeKeys.map(k => { const m = Sim.MODES[k]; return `<button data-pmode="${k}" aria-pressed="${r.mode === k}" title="${m.label}: ${Math.round(m.out * 100)} % output, ${Math.round(m.kw * 100)} % power">${icon(MODE_ICON[k] || "gauge")}${m.label}</button>`; }).join("")}</div>` : "";
     const meas = [], seen = new Set();
     for (const d of r.devices) {
       const it = item(d.type);
@@ -1151,15 +1427,15 @@
       clusterLine = `<div class="clusterline" title="${esc(cm.tip)}">${icon(cm.n >= K.FRONTIER_MIN_GPUS && cm.hasSpine ? "star" : "net", `color:${COL.frontier}`)}<span>Row ${cm.L} cluster <b>${cm.n}/${K.FRONTIER_MIN_GPUS}</b> training GPUs → frontier ×${K.FRONTIER_PRICE}${cm.hasSpine ? "" : " <small>(needs a spine)</small>"}</span><span class="cmeter wide${cm.n >= K.FRONTIER_MIN_GPUS ? " full" : ""}"><i style="width:${Math.round(cm.f * 100)}%"></i></span></div>`;
     }
     $("detail").innerHTML = `
-      <h2><span style="width:14px;height:14px;border-radius:3px;background:${role === "empty" ? "var(--line)" : R[role].color};display:inline-block"></span>${r.id}<span class="sub" style="font-family:var(--sans);font-weight:400">${R[role].name}${builtHalls().length > 1 ? ` · Hall ${r.hall}` : ""}</span></h2>
+      <h2><span style="width:14px;height:14px;border-radius:3px;background:${role === "empty" ? "var(--line)" : R[role].color};display:inline-block"></span>${r.id}<span class="sub" style="font-family:var(--sans);font-weight:400">${R[role].name}${builtHalls().length > 1 ? ` · Hall ${r.hall}` : ""}</span>${role !== "empty" ? `<span class="rtools"><button class="btn slim2" data-dup="${r.id}" title="${esc(L("rack.duplicateTip"))}">${icon("copy")}${esc(L("rack.duplicate"))}</button></span>` : ""}</h2>
       <div class="sub" style="display:flex;align-items:center;gap:6px;margin-top:4px">${status}</div>${swBtn}
       <div class="rack-detail">
         <div class="elev" data-drop-rack="${r.id}" title="Front view, 20U">${elev}</div>
         <div class="gauges">
           ${g("temp", ramp(ramps().heat, (pr.inlet - 22) / 14), (pr.inlet - 18) / 18, `Inlet ${pr.inlet.toFixed(1)} °C${pr.throttle < 1 ? " · throttling" : ""}`)}
-          ${g("bolt", "var(--pow-c)", pr.kw / K.RACK_KW, `${pr.kw.toFixed(1)} of ${K.RACK_KW} kW`)}
+          ${g("bolt", "var(--pow-c)", pr.kw / K.RACK_KW, `${pr.kw.toFixed(1)} of ${K.RACK_KW} kW`, "kw")}
           ${g("net", "#8FC4FF", pr.netNeed ? Math.min(1, pr.netProv / pr.netNeed) : pr.netProv ? 1 : 0, `Network ${pr.netProv} / ${pr.netNeed.toFixed(0)}${pr.spine ? " (row spine)" : ""}`)}
-          ${g("plus", "var(--ok-c)", free / K.RACK_U, `${free}U free`)}
+          ${g("plus", "var(--ok-c)", free / K.RACK_U, `${free}U free`, "u")}
           ${wl}${modes}
         </div>
       </div>
@@ -1251,8 +1527,10 @@
     dlog("pop", kind);
   }
   function closePop() { V.pop = null; const p = $("pop"); if (p) p.hidden = true; }
+  document.addEventListener("change", e => { if (e.target && e.target.id === "keep-item") { V.keepItem = e.target.value; if (V.pop) renderPop(Sim.stats(S)); } });
   function renderPop(st) {
     const pop = $("pop");
+    if (document.activeElement && document.activeElement.id === "keep-item") return;   // don't close an open dropdown
     if (V.pop === "techs") {
       const busy = Sim.busyTechs(S), queue = S.jobs.filter(j => j.phase === "wait").length, parts = S.jobs.filter(j => j.phase === "parts").length;
       pop.innerHTML = `<h3>${icon("wrench")}Technicians</h3>
@@ -1260,7 +1538,11 @@
           <div class="val"><span class="big">${S.techs}${S.hires.length ? ` <small>+${S.hires.length} hiring</small>` : ""}</span><small>$${(S.techs * K.SALARY).toFixed(2)}k/day in salaries</small></div>
           <button data-act='{"type":"hire"}' title="Hire one: arrives in ${K.HIRE_DAYS} days" aria-label="Hire a technician">${icon("plus")}</button></div>
         <div class="kv"><span>Busy</span><b>${busy} / ${S.techs}</b></div><div class="kv"><span>Jobs queued</span><b>${queue}</b></div><div class="kv"><span>Waiting for parts</span><b>${parts}</b></div>
-        <button class="toggle" data-act='${JSON.stringify({ type: "repairPolicy", on: !S.repairAuto })}' aria-pressed="${S.repairAuto}"><span class="sw"></span><span><b>Auto-repair</b><br><small>${S.repairAuto ? "Failed parts are swapped (spare) or repaired automatically" : "You decide what to repair"}</small></span></button>`;
+        <button class="toggle" data-act='${JSON.stringify({ type: "repairPolicy", on: !S.repairAuto })}' data-keep-title aria-pressed="${S.repairAuto}"><span class="sw"></span><span><b>Auto-repair</b><br><small>${S.repairAuto ? "Failed parts are swapped (spare) or repaired automatically" : "You decide what to repair"}</small></span></button>
+        <button class="toggle" data-act='${esc(JSON.stringify({ type: "policy", key: "autoSwap", on: !S.policy.autoSwap }))}' data-keep-title aria-pressed="${!!S.policy.autoSwap}" title="${esc(L("pol.autoSwapTip"))}"><span class="sw"></span><span><b>${esc(L("pol.autoSwap"))}</b></span></button>
+        ${keepSparesHTML()}`;
+    } else if (V.pop === "alerts") {
+      pop.innerHTML = alertsHTML();
     } else if (V.pop === "transit") {
       const need = transitNeed(st), cap = S.transit + K.TRANSIT_FREE, tgt = Sim.transitTarget(S);
       pop.innerHTML = `<h3>${icon("globe")}Internet transit</h3>
@@ -1282,6 +1564,15 @@
     }
   }
 
+  /* policy keepSpares: pick a part, keep N on the shelf (auto-ordered at list price) */
+  function keepSparesHTML() {
+    const shop = Sim.shopItems(S).filter(k => { const it = item(k); return it.role !== "exotic" && k !== "pm9"; });
+    if (!V.keepItem || !shop.includes(V.keepItem)) V.keepItem = Object.keys(S.policy.keepSpares)[0] || shop.find(k => item(k).role === "gpu") || shop[0];
+    const k = V.keepItem, n = S.policy.keepSpares[k] || 0;
+    const act = d => JSON.stringify({ type: "policy", key: "keepSpares", item: k, n: Math.max(0, Math.min(K.SHELF, n + d)) });
+    return `<div class="keep" title="${esc(L("pol.keepTip"))}"><b>${esc(L("pol.keep"))}</b><select id="keep-item" aria-label="${esc(L("pol.keep"))}">${shop.map(x => `<option value="${x}"${x === k ? " selected" : ""}>${esc(item(x).name)}${S.policy.keepSpares[x] ? ` (${S.policy.keepSpares[x]})` : ""}</option>`).join("")}</select>
+      <div class="stepper sm"><button data-act='${esc(act(-1))}' data-keep-title aria-label="Fewer">${icon("minus")}</button><div class="val"><span class="big">${n}</span></div><button data-act='${esc(act(1))}' data-keep-title aria-label="More">${icon("plus")}</button></div></div>`;
+  }
   /* the four grid tiers (250 / 400 / 700 / 1000 kW) as a ladder: owned, under way, next */
   const GRID_TIERS = () => [[K.GRID_KW, 0, 0], [K.GRID_KW_UP, K.GRID_COST, K.GRID_DAYS], [K.GRID_KW_UP2, K.GRID_COST2, K.GRID_DAYS2], [K.GRID_KW_UP3, K.GRID_COST3, K.GRID_DAYS3]];
   function gridNote() { return S.gridTier >= 3 ? "Fully upgraded (top tier)." : `The ${GRID_TIERS()[S.gridTier + 1][0]} kW tier unlocks with chapter 11.`; }
@@ -1315,41 +1606,35 @@
   const sect = (ic, title, sub, inner, cls) => `<section class="sect ${cls || ""}"><h3>${icon(ic)}${title}${sub ? `<span class="sub">${sub}</span>` : ""}</h3>${inner}</section>`;
 
   function contractsHTML(st) {
-    const committed = { web: 0, train: 0, infer: 0 };
-    for (const c of S.contracts) committed[c.w] += c.units;
-    const offers = S.offers.map(o => {
-      const up = o.price >= o.spot, diff = (o.price / o.spot - 1) * 100, spare = st.supply[o.w] - committed[o.w];
-      const daysLeft = Math.max(0, o.expires - S.day);
-      const bts = o.bts ? `<div class="btsrow"><span class="bts-badge">${icon("building")}BUILD-TO-SUIT</span><span class="sub">dedicated capacity, long term</span></div>
-        <div class="facts bts"><span>${icon("coin")}Fit-out <b>${money(o.fitout)}</b> now</span><span>${icon("truck")}Delivery from <b>day ${Math.round(S.day + o.lead)}</b> (in ${Math.round(o.lead)} d)</span><span>${icon("doc")}Term <b>${o.days} d</b></span><span>${icon("warn")}Penalty <b>3×</b> price</span></div>` : "";
-      return `<div class="offer dragsrc${o.bts ? " bts" : ""}" data-drag="offer" data-id="${o.id}" title="Drag onto Sign or Decline">${bts}
-        <div class="top"><span class="av" style="background:${R[o.w].color}">${icon(CUST_ICON[o.icon] || "globe")}</span><span><b>${esc(o.cust)}</b>${o.foreign ? ` ${icon("globe", "width:13px;height:13px;vertical-align:-2px")}<small class="sub"> foreign</small>` : ""}<br><small class="sub">${R[o.w].name} · ${o.units} units × ${o.days} days</small></span>
-          <span style="margin-left:auto;text-align:right"><b>$${(o.price * 1000).toFixed(0)}</b><small class="sub">/u·d</small><br><small class="${up ? "up" : "down"}">${up ? "▲" : "▼"}${Math.abs(diff).toFixed(0)} % vs spot</small></span></div>
-        <div class="facts"><span>${icon("check")}SLA <b>${pct(o.sla)}</b></span><span>${icon("warn")}Penalty <b>$${(o.penalty * 1000).toFixed(0)}</b>/missed u·d</span><span>${icon("coin")}Worth <b>${money(o.units * o.days * o.price)}</b></span></div>
-        <div class="kv"><span>${spare >= o.units ? icon("check", `color:${COL.good};width:14px;height:14px`) : icon("warn", `color:${COL.bad};width:14px;height:14px`)} Your uncommitted ${R[o.w].name.toLowerCase()} output: ${Math.max(0, spare).toFixed(1)}</span><span>expires ${Math.ceil(daysLeft)} d</span></div>
-        <div class="meter slim"><i style="width:${Math.min(100, daysLeft / (o.bts ? K.BTS_EXPIRY : K.OFFER_EXPIRY) * 100)}%;background:${COL.warn}"></i></div>
-        <div class="acts">${actBtn({ type: "signContract", id: o.id }, o.bts ? `Sign · ${money(o.fitout)}` : "Sign", { cls: "good", icon: "hand", confirm: !!o.bts })}${actBtn({ type: "declineContract", id: o.id }, "Decline", { icon: "cross" })}</div></div>`;
-    }).join("");
+    const offers = S.offers.slice().sort((a, b) => a.expires - b.expires).map(o => offerCard(o, st)).join("");
     const act = S.contracts.map(c => {
-      const head = `<div class="kv"><span>${c.bts ? `<span class="bts-badge sm" title="Build-to-suit">BTS</span> ` : ""}<b>${esc(c.cust)}</b> · ${c.units} ${R[c.w].name.toLowerCase()} u at $${(c.price * 1000).toFixed(0)}</span>`;
-      if (S.day < c.start) {   // build-to-suit before delivery starts: time to buy the hardware
+      const k = kindOf(c), col = QOL.linkColor(c.id);
+      const racks = [...new Set((st.alloc || []).filter(l => l.id === c.id).map(l => l.rack))];
+      const head = `<div class="kv"><span><i class="swatch" style="background:${col}"></i>${icon((KIND[k] || KIND.web)[0], "width:14px;height:14px;vertical-align:-2px")} <b>${esc(c.cust)}</b> · ${esc(L("kind." + k))}${Sim.isJob(c) ? "" : ` · ${c.units}u at $${(c.price * 1000).toFixed(0)}`}</span>`;
+      const served = `<div class="sub">${icon("link", "width:13px;height:13px;vertical-align:-2px")} ${esc(racks.length ? L("board.served", { racks: racks.join(", ") }) : L("board.unserved"))}</div>`;
+      if (Sim.isJob(c)) {
+        const f = clamp01(c.done / c.work), tf = clamp01((S.day - c.signed) / Math.max(1, c.deadline - c.signed)), late = S.day > c.deadline;
+        return `<div class="contract" style="border-color:${col}">${head}<span>${late ? `<b style="color:${COL.bad}">late ${Math.ceil(S.day - c.deadline)} d</b>` : `due in ${Math.ceil(c.deadline - S.day)} d`}</span></div>
+          <div class="meter" title="Work done vs time elapsed (the line)"><i style="width:${f * 100}%;background:${f + 1e-6 >= tf ? COL.good : COL.warn}"></i><em style="left:${tf * 100}%"></em></div>
+          <div class="kv"><span>${Math.round(c.done)} / ${Math.round(c.work)} u·d · pays ${money(c.pay)}</span><span>${(st.cDel[c.id] || 0).toFixed(1)} u/d now</span></div>${served}</div>`;
+      }
+      if (S.day < c.start) {
         const lead = Math.max(1, c.start - (c.signed != null ? c.signed : c.start - (c.lead || K.BTS_LEAD))), f = clamp01(1 - (c.start - S.day) / lead);
-        return `<div class="contract" style="border-color:${R[c.w].color}">${head}<span>starts in ${Math.ceil(c.start - S.day)} days</span></div>
-          <div class="meter slim" title="Lead time until delivery starts"><i style="width:${f * 100}%;background:${COL.warn}"></i></div>
-          <div class="kv"><span>Deliver ${c.units} ${R[c.w].name.toLowerCase()} units from day ${Math.round(c.start)} for ${c.days} d · SLA ${pct(c.sla)}</span><span>ready now ${Math.max(0, Math.min(c.units, st.supply[c.w] - committed[c.w] + c.units)).toFixed(1)} / ${c.units}</span></div></div>`;
+        return `<div class="contract" style="border-color:${col}">${head}<span>starts in ${Math.ceil(c.start - S.day)} d</span></div>
+          <div class="meter slim" title="Lead time until delivery starts"><i style="width:${f * 100}%;background:${COL.warn}"></i></div>${served}</div>`;
       }
       const el = Math.max(0.01, S.day - c.start), tf = clamp01(el / c.days), delF = c.delivered / (c.units * el);
       const missing = (st.cMiss[c.id] || 0) > 1e-6;
-      return `<div class="contract" style="border-color:${R[c.w].color}">${head}<span>${Math.ceil(c.end - S.day)} d left</span></div>
+      return `<div class="contract" style="border-color:${col}">${head}<span>${Math.ceil(c.end - S.day)} d left</span></div>
         <div class="meter slim" title="Time elapsed"><i style="width:${tf * 100}%;background:var(--ink-2)"></i></div>
         <div class="meter" title="Delivered vs promised; the line is the SLA"><i style="width:${clamp01(delF) * 100}%;background:${delF + 1e-6 >= c.sla ? COL.good : COL.bad}"></i><em style="left:${c.sla * 100}%"></em></div>
-        <div class="kv"><span>Delivered ${pct(Math.min(1, delF))} (SLA ${pct(c.sla)})${missing ? ` · <b style="color:${COL.bad}">missing now</b>` : ""}</span><span>penalties ${money(c.penaltyPaid)}</span></div></div>`;
+        <div class="kv"><span>Delivered ${pct(Math.min(1, delF))} (SLA ${pct(c.sla)})${missing ? ` · <b style="color:${COL.bad}">missing now</b>` : ""}</span><span>penalties ${money(c.penaltyPaid)}</span></div>${served}</div>`;
     }).join("");
-    const L = S.contractLog;
-    return sect("doc", "Offers", `${S.offers.length} waiting`, `<div class="dropzones"><div class="dz sign" data-drop-sign>${icon("hand")}Sign</div><div class="dz decline" data-drop-decline>${icon("cross")}Decline</div></div>
-        <div class="sub">Quotes track today's spot price. Signing just before a generation launch is a hedge; signing just after one is a trap.</div>${offers || `<div class="sub">No offers right now. New ones arrive every ~${K.OFFER_EVERY} days.</div>`}`)
-      + sect("hand", "Active contracts", `${S.contracts.length}`, act || `<div class="sub">None. Contracts are served first, before spot.</div>`)
-      + sect("flag", "Track record", "", `<div class="kv"><span>Signed</span><b>${L.signed}</b></div><div class="kv"><span>Fulfilled</span><b>${L.fulfilled}</b></div><div class="kv"><span>Ended short</span><b>${L.failed}</b></div>`);
+    const Lg = S.contractLog;
+    const renew = `<button class="toggle" data-act='${esc(JSON.stringify({ type: "policy", key: "autoRenew", on: !S.policy.autoRenew }))}' data-keep-title aria-pressed="${!!S.policy.autoRenew}" title="${esc(L("board.autoRenewTip"))}"><span class="sw"></span><span><b>${esc(L("board.autoRenew"))}</b></span></button>`;
+    return sect("doc", "Offers", `${S.offers.length}`, `<div class="ocards">${offers || `<div class="sub">${esc(L("board.none"))}</div>`}</div>${renew}`)
+      + sect("hand", "Active contracts", `${S.contracts.length}`, act || `<div class="sub">—</div>`)
+      + sect("flag", "Track record", "", `<div class="kv"><span>Signed</span><b>${Lg.signed}</b></div><div class="kv"><span>Fulfilled</span><b>${Lg.fulfilled}</b></div><div class="kv"><span>Ended short</span><b>${Lg.failed}</b></div><div class="kv"><span>Cancelled / late</span><b>${Lg.cancelled || 0} / ${Lg.late || 0}</b></div>`);
   }
 
   function waterfallSVG(L) {
@@ -1508,54 +1793,93 @@
     return out || `<div class="sub">Unlocks with chapter 15.</div>`;
   }
 
-  /* ================= v0.3: offers on the main screen (P0-1) ================= */
+  /* ================= v4 order board: THE primary element (CONTRACTS_CORE.md) =================
+   * Visible from day 0. Each offer shows its kind, its terms (serving: units × days, start; jobs: work, pay, deadline),
+   * its price vs the market index, whether you can deliver it (spare capacity vs need) and big Sign / Decline buttons.
+   * Below the offers: every active contract as a pill in its link colour; the racks serving it carry the same colour. */
   const OFFER_STRIP_MAX = 3;
-  function offerFacts(o, st) {
-    const spot = st.mk[o.w].price, diff = (o.price / spot - 1) * 100, committed = S.contracts.filter(c => c.w === o.w).reduce((a, c) => a + c.units, 0);
-    const spare = st.supply[o.w] - committed;
-    return { diff, spare, fits: spare >= o.units, left: Math.max(0, o.expires - S.day) };
+  const kindCol = k => k === "frontier" ? COL.frontier : k === "bts" ? COL.contract : R[k] ? R[k].color : COL.contract;
+  function offerTerms(o) {
+    const lead = Math.round(o.lead || 0);
+    if (Sim.isJob(o)) return [L("board.work", { w: Math.round(o.work) }), money(o.pay), L("board.due", { d: o.days })];
+    const t = [L("board.term", { u: o.units, d: o.days })];
+    if (o.bts) t.push(L("board.fitout", { x: money(o.fitout) }));
+    else if (lead > 0) t.push(L("board.starts", { d: lead }));
+    return t;
+  }
+  function offerCard(o, st) {
+    const k = kindOf(o), [ic] = KIND[k] || KIND.web, f = QOL.offerFit(Sim, S, o, st);
+    const diff = o.spot ? (o.price / o.spot - 1) * 100 : 0, up = diff >= 0, left = Math.max(0, o.expires - S.day);
+    const ttl = o.ttl || (o.bts ? K.BTS_EXPIRY : K.OFFER_EXPIRY);
+    const kindName = L("kind." + k);
+    const tip = `${o.cust}: ${kindName}. ${offerTerms(o).join(" · ")}. SLA ${pct(o.sla)}, penalty $${(o.penalty * 1000).toFixed(0)}/missed u·d${Sim.isJob(o) ? `, late fee ${money(o.lateFee || 0)}/d` : ""}.`;
+    const fresh = !V.boardSeen.has(o.id);        // only a new card slides in (the board re-renders every second)
+    V.boardSeen.add(o.id);
+    return `<div class="ocard k-${k}${o.stretch ? " stretch" : ""}${fresh ? " fresh" : ""}" style="--wc:${kindCol(k)}" data-offer="${o.id}" title="${esc(tip)}">
+      <div class="ot"><span class="av" style="background:${kindCol(k)}" title="${esc(kindName)}">${icon(ic)}</span><span class="on"><b>${esc(o.cust)}</b><small><em>${esc(kindName)}</em> · ${offerTerms(o).map(esc).join(" · ")}</small></span>
+        <span class="op"><b>$${(o.price * 1000).toFixed(0)}</b><small>/u·d</small><small class="${up ? "up" : "down"}" title="${esc(L("board.vsIndex", { sign: up ? "+" : "−", p: Math.abs(diff).toFixed(0) }))}">${up ? "▲" : "▼"}${Math.abs(diff).toFixed(0)} %</small></span></div>
+      <div class="ofit ${f.level}" title="${esc(L("board.freeTip"))}"><span class="bar"><i style="width:${Math.min(100, f.frac * 100).toFixed(0)}%"></i></span><span>${esc(L("board.free", { free: f.free < 10 ? f.free.toFixed(1).replace(/\.0$/, "") : Math.round(f.free), need: +f.need.toFixed(1) }))}</span></div>
+      <div class="oa">${actBtn({ type: "signContract", id: o.id }, o.bts ? `${L("board.sign")} · ${money(o.fitout)}` : L("board.sign"), { cls: "good sign", icon: "hand", confirm: !!o.bts })}${actBtn({ type: "declineContract", id: o.id }, "", { cls: "decl", icon: "cross", title: L("board.decline") })}<span class="exp" title="${esc(L("board.expires", { d: Math.ceil(left) }))}"><i style="width:${Math.min(100, left / ttl * 100).toFixed(0)}%"></i></span><small>${Math.ceil(left)}d</small></div></div>`;
+  }
+  function contractPill(c, st) {
+    const k = kindOf(c), [ic] = KIND[k] || KIND.web, col = QOL.linkColor(c.id), miss = (st.cMiss[c.id] || 0) > 1e-6;
+    let f, left, sub;
+    if (Sim.isJob(c)) { f = clamp01(c.done / c.work); left = c.deadline - S.day; sub = `${Math.round(f * 100)} %`; }
+    else if (S.day < c.start) { f = 0; left = c.start - S.day; sub = `${c.units}u`; }
+    else { const el = Math.max(0.01, S.day - c.start); f = clamp01(c.delivered / (c.units * el)); left = c.end - S.day; sub = `${c.units}u`; }
+    const racks = [...new Set((st.alloc || []).filter(l => l.id === c.id).map(l => l.rack))];
+    const tip = `${c.cust} · ${L("kind." + k)} · ${Sim.isJob(c) ? `${Math.round(c.done)}/${Math.round(c.work)} u·d, due in ${Math.ceil(c.deadline - S.day)} d` : S.day < c.start ? `starts in ${Math.ceil(c.start - S.day)} d` : `delivered ${pct(Math.min(1, f))} (SLA ${pct(c.sla)}), ${Math.ceil(c.end - S.day)} d left`}. ${racks.length ? L("board.served", { racks: racks.join(", ") }) : L("board.unserved")}`;
+    return `<button class="cpill${miss ? " miss" : ""}${S.day < c.start ? " soon" : ""}${c.anchor ? " anchor" : ""}" data-contract="${c.id}" style="--lc:${col}" title="${esc(tip)}"><i class="sw"></i>${icon(ic)}<span>${esc(c.cust.split(" ")[0])}</span><small>${sub}</small><span class="m"><i style="width:${(f * 100).toFixed(0)}%"></i>${Sim.isJob(c) ? "" : `<em style="left:${c.sla * 100}%"></em>`}</span><small class="d">${Math.max(0, Math.ceil(left))}d</small></button>`;
   }
   function renderOffers(st) {
     const el = $("offerstrip");
-    const vis = on("contracts") && S.offers.length > 0;
+    const vis = Sim.contractsOn(S);
     show(el, vis);
     if (!vis) { el.innerHTML = ""; return; }
     const list = S.offers.slice().sort((a, b) => a.expires - b.expires).slice(0, OFFER_STRIP_MAX);
-    el.innerHTML = `<div class="oshead">${icon("hand")}<b>${S.offers.length} offer${S.offers.length > 1 ? "s" : ""}</b><small>Contracts lock your price for their term.</small>${S.offers.length > OFFER_STRIP_MAX ? `<button class="btn slim" data-drawer="contracts">+${S.offers.length - OFFER_STRIP_MAX} more</button>` : `<button class="btn slim" data-drawer="contracts">Details</button>`}</div>` +
-      list.map(o => {
-        const f = offerFacts(o, st), up = f.diff >= 0;
-        return `<div class="ocard${o.bts ? " bts" : ""}" style="--wc:${R[o.w].color}" data-offer="${o.id}">
-          <div class="ot"><span class="av" style="background:${R[o.w].color}">${icon(CUST_ICON[o.icon] || "globe")}</span><span class="on"><b>${esc(o.cust)}</b>${o.bts ? `<span class="bts-badge sm">BUILD-TO-SUIT</span>` : ""}<small>${o.units} ${R[o.w].name.toLowerCase()} units × ${o.days} days${o.bts ? ` · from day ${Math.round(S.day + o.lead)}` : ""}</small></span>
-            <span class="op"><b>$${(o.price * 1000).toFixed(0)}</b><small>/u·d</small><small class="${up ? "up" : "down"}">${up ? "▲" : "▼"}${Math.abs(f.diff).toFixed(0)} % vs spot</small></span></div>
-          <div class="of"><span title="Delivery promise: share of the units you must deliver every day">${icon("check")}SLA ${pct(o.sla)}</span><span title="Paid per missed unit-day">${icon("warn")}penalty $${(o.penalty * 1000).toFixed(0)}</span>${o.bts ? `<span>${icon("coin")}fit-out ${money(o.fitout)}</span>` : `<span>${icon("coin")}${money(o.units * o.days * o.price)}</span>`}
-            <span class="${f.fits ? "okc" : "badc"}" title="Your ${R[o.w].name.toLowerCase()} output not yet promised to other contracts">${icon(f.fits ? "check" : "warn")}spare ${Math.max(0, f.spare).toFixed(0)}/${o.units}</span></div>
-          <div class="oa">${actBtn({ type: "signContract", id: o.id }, o.bts ? `Sign · ${money(o.fitout)}` : "Sign", { cls: "good", icon: "hand", confirm: !!o.bts })}${actBtn({ type: "declineContract", id: o.id }, "Decline", { icon: "cross" })}<span class="exp" title="Expires in ${Math.ceil(f.left)} days"><i style="width:${Math.min(100, f.left / (o.bts ? K.BTS_EXPIRY : K.OFFER_EXPIRY) * 100)}%"></i></span><small>${Math.ceil(f.left)} d</small></div></div>`;
-      }).join("");
+    const nextIn = S.nextOffer != null ? Math.max(0, Math.ceil(S.nextOffer - S.day)) : null;
+    const head = `<div class="oshead"><span class="bt">${icon("hand")}<b>${esc(L("board.title"))}</b><span class="badge" id="board-badge">${S.offers.length}</span></span>
+      ${S.offers.length > OFFER_STRIP_MAX ? `<button class="btn slim" data-drawer="contracts">${esc(L("board.more", { n: S.offers.length - OFFER_STRIP_MAX }))}</button>` : nextIn != null ? `<small>${esc(L("board.next", { d: nextIn }))}</small>` : ""}
+      <button class="toggle mini" data-act='${esc(JSON.stringify({ type: "policy", key: "autoRenew", on: !S.policy.autoRenew }))}' data-keep-title aria-pressed="${!!S.policy.autoRenew}" title="${esc(L("board.autoRenewTip"))}"><span class="sw"></span><small>${esc(L("board.autoRenew"))}</small></button></div>`;
+    const cards = list.map(o => offerCard(o, st)).join("") + Array.from({ length: OFFER_STRIP_MAX - list.length }, (_, i) => `<div class="ocard empty">${i === 0 && !list.length ? `${icon("mail")}<small>${esc(L("board.none"))}</small>` : ""}</div>`).join("");
+    const pills = S.contracts.map(c => contractPill(c, st)).join("");
+    el.innerHTML = head + cards + `<div class="cpills" role="list" aria-label="${esc(L("board.active"))}">${pills}</div>`;
+    if (V.hl) applyHighlight();
   }
-  /* new offers: a toast (+ sound) every time, and the very first one pauses the game with a short explainer */
+  /* hover an offer = the racks that would serve it light up; hover a contract pill = the racks serving it */
+  function highlightRacks(racks, col, key) {
+    V.hl = racks && Object.keys(racks).length ? { racks, col, key } : null;
+    applyHighlight();
+  }
+  function applyHighlight() {
+    document.querySelectorAll("#floor .rack.hl").forEach(e => e.classList.remove("hl"));
+    if (!V.hl) return;
+    for (const id of Object.keys(V.hl.racks)) { const e = document.querySelector(`#floor [data-rack="${id}"]:not([data-drag])`); if (e) { e.classList.add("hl"); e.style.setProperty("--hl", V.hl.col); } }
+  }
+  const previewCache = new Map();
+  function offerPreview(id) {
+    const o = S.offers.find(x => x.id === id);
+    if (!o) return null;
+    const c = previewCache.get(id);
+    if (c && c.day === Math.floor(S.day) && c.sig === V.sig) return c.racks;
+    const racks = QOL.servePreview(Sim, S, o);
+    previewCache.set(id, { day: Math.floor(S.day), sig: V.sig, racks });
+    return racks;
+  }
+  /* new offers fly into the board's badge with a chime (no toast sentence) */
   function checkOffers() {
-    if (!on("contracts")) return;
-    const st = Sim.stats(S);
+    if (!Sim.contractsOn(S)) return;
+    let n = 0;
     for (const o of S.offers) {
       if (V.offersSeen.has(o.id)) continue;
       V.offersSeen.add(o.id);
-      const f = offerFacts(o, st);
-      toast(`New ${o.bts ? "build-to-suit request" : "contract offer"}: ${o.cust}, ${o.units} ${R[o.w].name.toLowerCase()} units × ${o.days} d, ${f.diff >= 0 ? "+" : "−"}${Math.abs(f.diff).toFixed(0)} % vs spot`, "keep");
+      dlog("[offer] new", o.id, o.kind, o.cust, o.units, o.days, o.price, o.bts ? "bts" : "");
+      if (n++) continue;
       SND("chime", null, 400);
-      if (FXON()) { const b = $("db-contracts").getBoundingClientRect(); if (b.width) FX.sparks(b.left + b.width / 2, b.top + b.height / 2, COL.contract, 14, 160); }
-      dlog("[offer] new", o.id, o.cust, o.w, o.units, o.days, o.price, o.bts ? "bts" : "");
-      if (!V.firsts.offer) { V.firsts.offer = true; queueCard(firstOfferCard(o, f)); }
+      const b = $("board-badge"), st = $("stage").getBoundingClientRect();
+      if (FXON() && b) FX.fly(st.right - 40 * STZ(), st.top + 90 * STZ(), b, (KIND[kindOf(o)] || KIND.web)[0], kindCol(kindOf(o)));
+      sr(`${o.cust}: ${L("kind." + kindOf(o))}`);
     }
-  }
-  function firstOfferCard(o, f) {
-    const launches = Sim.GEN_LAUNCH.filter(d => d > S.day);
-    return { key: "offer", sound: "chime", title: "Your first contract offer", sub: `${dateOf(S.day)} · game paused`,
-      body: `<div class="kv big"><span>${icon(CUST_ICON[o.icon] || "globe")} <b>${esc(o.cust)}</b> wants ${o.units} ${R[o.w].name.toLowerCase()} units × ${o.days} days</span><b>$${(o.price * 1000).toFixed(0)}/u·d (${f.diff >= 0 ? "+" : "−"}${Math.abs(f.diff).toFixed(0)} % vs spot)</b></div>
-        <ul class="plain"><li>${icon("lock")}<span><b>A contract locks your price</b> for its whole term. The market price falls at every generation launch${launches.length ? ` (next: day ${launches[0]})` : ""}, so signing before one is a hedge.</span></li>
-        <li>${icon("check")}<span>Contracts are served first. Deliver at least <b>${pct(o.sla)}</b> of the units every day, or pay <b>$${(o.penalty * 1000).toFixed(0)}</b> per missed unit-day.</span></li>
-        <li>${icon(f.fits ? "check" : "warn", `color:${f.fits ? COL.good : COL.bad}`)}<span>You have <b>${Math.max(0, f.spare).toFixed(0)}</b> spare ${R[o.w].name.toLowerCase()} units right now: ${f.fits ? "enough" : "not enough yet; build capacity first or decline"}.</span></li>
-        <li>${icon("help")}<span>New offers appear above the floor with <b>Sign</b> / <b>Decline</b>. The <b>Contracts</b> button (top right) has details.</span></li></ul>`,
-      foot: `${actBtn({ type: "signContract", id: o.id }, "Sign", { cls: "good", icon: "hand" })}${actBtn({ type: "declineContract", id: o.id }, "Decline", { icon: "cross" })}<button class="end" data-close>Decide later</button>` };
   }
 
   /* ================= v0.3: one-time cards (pause + explain; first event of a system is a decision) ================= */
@@ -1574,12 +1898,17 @@
     dlog("card", c.key);
   }
   const SCARE_TITLES = new Set(C.SCARES.map(x => x.title));
-  function bestForwardCard() {   // the current-generation card of the family the player runs most (C by default)
-    const cg = Sim.currentGen(S);
+  /* the GPU to forward-order on a scare card: the current-generation card of the family the player runs most, or the
+     cheapest GPU you can AFFORD; null when none is affordable (then the card only offers "Wait and see") */
+  function bestForwardCard() {
+    const cg = Sim.currentGen(S), shop = Sim.shopItems(S);
     let c = 0, m = 0;
     for (const r of S.racks) for (const d of r.devices) { const it = item(d.type); if (it.role === "gpu") it.fam === "C" ? c++ : m++; }
     const fam = m > c ? "m" : "c";
-    return S.items[fam + cg] && Sim.shopItems(S).includes(fam + cg) ? fam + cg : Sim.shopItems(S).find(k => item(k).role === "gpu" && item(k).fam === fam.toUpperCase()) || null;
+    const ok = k => k && shop.includes(k) && Sim.check(S, { type: "forward", item: k }).ok;
+    if (ok(fam + cg)) return fam + cg;
+    const cheap = shop.filter(k => item(k).role === "gpu" && ok(k)).sort((a, b) => item(a).price - item(b).price);
+    return cheap[0] || null;
   }
   function checkFirsts() {
     if (on("memory") && !V.firsts.scare) {
@@ -1656,12 +1985,11 @@
     let logged = 0;
     const news = (S.cashEvents || []).filter(e => e.n > V.cashSeen);
     for (const e of news) logged += e.amt;
-    const big = news.filter(e => Math.abs(e.amt) >= 10);
-    if (big.length) {
-      toast(big.slice(0, 3).map(e => `${e.amt >= 0 ? "+" : "−"}${money(Math.abs(e.amt))}: ${e.label}`).join(" · "), "keep");
-      if (FXON()) { const r = $("h-cashchip").getBoundingClientRect(); const tot = big.reduce((a, e) => a + e.amt, 0); if (r.width) FX.floatText(r.left + r.width / 2, r.bottom + 6, `${tot >= 0 ? "+" : "−"}${money(Math.abs(tot))}`, tot >= 0 ? "#7FE0A8" : "#FF8466", 15); }
-      dlog("[cash] events", big.map(e => `${e.kind} ${e.amt}`).join(", "));
-    }
+    cashEventFx(news);
+    // v0.3 kinds keep a short explanation toast (tax, repair, sale); the v4 kinds are shown, not told (cashEventFx)
+    const big = news.filter(e => Math.abs(e.amt) >= 10 && TOLD.has(e.kind));
+    if (big.length) toast(big.slice(0, 3).map(e => `${e.amt >= 0 ? "+" : "−"}${money(Math.abs(e.amt))}: ${e.label}`).join(" · "), "keep");
+    if (news.length) dlog("[cash] events", news.map(e => `${e.kind} ${e.amt}`).join(", "));
     V.cashSeen = seq;
     const P = V.flowPrev;
     if (P) {   // anything left over is a jump nobody logged: say so, never stay silent (and flag it in debug)
@@ -1671,16 +1999,43 @@
     V.flowPrev = { cash: S.cash, flow };
   }
 
+  /* v4 cash events as signals: money floats from where it happened, losses get a short red screen-edge vignette,
+     contract outcomes fly to / flash on the order board, all with a sound; no sentences (tooltips keep the label) */
+  const TOLD = new Set(["tax", "repair", "sale"]);
+  function cashEventFx(list) {
+    if (!list.length) return;
+    const fx = FXON(), cr = $("h-cashchip").getBoundingClientRect(), br = $("offerstrip").getBoundingClientRect();
+    const floatAt = (r, txt, col, size) => { if (fx && r && r.width) FX.floatText(r.left + r.width / 2, r.bottom + 6, txt, col, size || 15); };
+    let tot = 0, lossBig = 0;
+    for (const e of list) {
+      const amt = e.amt || 0;
+      if (e.kind === "contract") { SND("chaching", amt || 1); floatAt(br, `+${money(amt)}`, "#7FE0A8", 18); if (fx) FX.sparks(br.left + br.width / 2, br.top + 10, "#7FE0A8", 18, 220); }
+      else if (e.kind === "contractLost" || e.kind === "contractCancel") {
+        SND(e.kind === "contractLost" ? "crunch" : "fail", null, 300);
+        const cust = (e.label || "").split(/ terminated| cancelled/)[0];
+        floatAt(br, `✕ ${cust || L("fb.cancelled")}`, "#FF8466", 16);
+        if (fx) FX.vignette(0.7);
+        pulse($("offerstrip"), "fx-nope-el", 450);
+      } else if (e.kind === "renew") { SND("chime", null, 400); floatAt(br, `↻ ${L("fb.renewed")}`, "#5AD1E6", 15); }
+      else if (e.kind === "restock") { floatAt($("shelf-wrap").getBoundingClientRect(), `−${money(-amt)}`, "#FF8466", 13); SND("drop", null, 300); }
+      else if (e.kind === "refund") SND("chaching", amt || 1, 300);
+      tot += amt;
+      if (amt < 0 && e.kind !== "restock") lossBig += -amt;
+    }
+    if (Math.abs(tot) >= 10) floatAt(cr, `${tot >= 0 ? "+" : "−"}${money(Math.abs(tot))}`, tot >= 0 ? "#7FE0A8" : "#FF8466", 15);
+    if (fx && lossBig >= Math.max(40, 0.08 * Math.max(0, S.cash))) FX.vignette(Math.min(1, 0.4 + lossBig / Math.max(200, S.cash)));
+  }
+
   /* ================= v0.3: pace chip (P0-3) ================= */
   function renderPace(sc) {
     const el = $("h-pace"); if (!el) return;
     const vis = !!S && PACE_ON && !!window.Pace;
     show(el, vis);
     if (!vis) return;
-    const you = sc != null ? sc : Sim.score(S), P = (V.pace && V.pace.rows) || {}, g = P.greedy, p = P.planner, today = Math.floor(S.day);
+    const you = sc != null ? sc : Sim.score(S), P = (V.pace && V.pace.rows) || {}, g = P[PACE_POLS[0]], p = P[PACE_POLS[1]], today = Math.floor(S.day);
     const lag = x => x && !x.over && x.day < today - 2;
     const vals = [you, g ? g.score : 0, p ? p.score : 0], max = Math.max(1, ...vals.map(v => Math.abs(v)));
-    const verdict = !g ? "…" : you >= g.score ? "ahead of Greedy" : "behind Greedy";
+    const verdict = !g ? "…" : L(you >= g.score ? "pace.ahead" : "pace.behind", { a: BOTNAME(PACE_POLS[0]) });
     const col = !g ? COL.hudGood : you >= g.score ? COL.hudGood : COL.hudBad;
     const bar = (v, c, t) => `<i title="${esc(t)}" style="width:${Math.max(2, Math.abs(v) / max * 100).toFixed(1)}%;background:${c}"></i>`;
     const key = [Math.round(you), g && Math.round(g.score), g && g.day, p && Math.round(p.score), p && p.day, today].join("|");
@@ -1688,9 +2043,9 @@
     el._k = key;
     const fmt = x => x ? money(x.score) + (lag(x) ? `<span class="lag"> d${x.day}</span>` : "") : "…";
     el.innerHTML = `${icon("trend", `color:${col}`)}<div><span class="big" style="color:${col}">${verdict}</span>
-      <small class="pr">G ${fmt(g)} · P ${p ? fmt(p) : V.ghost && V.ghost.mode === "main" ? "n/a" : "…"}</small>
-      <div class="pacebars">${bar(vals[0], COL.sel, `You ${money(you)}`)}${bar(vals[1], COL.net, `Greedy ${g ? money(g.score) : "…"}`)}${bar(vals[2], COL.train, `Planner ${p ? money(p.score) : "…"}`)}</div></div>`;
-    el.title = `Pace: two bots play your seed (${S.sandbox ? "sandbox" : "campaign"}) alongside you, up to today and never ahead.\nYou ${money(you)} · Greedy ${g ? money(g.score) + ` (day ${g.day})` : "…"} · Planner ${p ? money(p.score) + ` (day ${p.day})` : "…"}\nGreedy buys whatever pays best today. Planner looks ahead: seasons, launches, contracts, vendor news.`;
+      <small class="pr">${BOTNAME(PACE_POLS[0])[0]} ${fmt(g)} · ${BOTNAME(PACE_POLS[1])[0]} ${p ? fmt(p) : V.ghost && V.ghost.mode === "main" ? "n/a" : "…"}</small>
+      <div class="pacebars">${bar(vals[0], COL.sel, `You ${money(you)}`)}${bar(vals[1], COL.net, `${BOTNAME(PACE_POLS[0])} ${g ? money(g.score) : "…"}`)}${bar(vals[2], COL.train, `${BOTNAME(PACE_POLS[1])} ${p ? money(p.score) : "…"}`)}</div></div>`;
+    el.title = `${L("pace.vs", { a: BOTNAME(PACE_POLS[0]), b: BOTNAME(PACE_POLS[1]) })}: two human-paced bots play your seed (${S.sandbox ? "sandbox" : "campaign"}) alongside you, up to today and never ahead.\nYou ${money(you)} · ${BOTNAME(PACE_POLS[0])} ${g ? money(g.score) + ` (day ${g.day})` : "…"} · ${BOTNAME(PACE_POLS[1])} ${p ? money(p.score) + ` (day ${p.day})` : "…"}\n${BOTNAME(PACE_POLS[0])} plays like a busy greedy player; ${BOTNAME(PACE_POLS[1])} like an attentive planner. Both act a few times a month.`;
   }
 
   /* ================= dialogs: chapter cards ================= */
@@ -1715,6 +2070,7 @@
     dlog("chapter card", i, c.key);
     if (fresh && i > 0) {   // a newly unlocked chapter is a small celebration: confetti over the card + a soft chord
       SND("chord");
+      V.chapFly = true;
       if (FXON()) { const r = $("chapter").getBoundingClientRect(); FX.confetti(r.left + r.width / 2, r.top + 8, 80, 0.9); }
     }
     renderAll();
@@ -1738,11 +2094,155 @@
   $("card").addEventListener("close", () => { if (!S) return; dlog("card closed", $("card").dataset.key); renderAll(); setTimeout(() => { maybeChapter(); maybeCard(); }, 0); });
   document.querySelectorAll("dialog [data-close]").forEach(b => b.addEventListener("click", () => b.closest("dialog").close()));
   $("chapter").addEventListener("close", () => { renderAll(); setTimeout(() => { maybeChapter(); maybeCard(); }, 0); });
-  $("helpbtn").addEventListener("click", () => showChapter(S.chapter));
+  $("helpbtn").addEventListener("click", () => { if (S) openKeys(); });
+  $("chapter").addEventListener("close", () => {   // a newly unlocked chapter: its flag flies into the goal bar
+    if (!V.chapFly || !S) return;
+    V.chapFly = false;
+    const g = $("goal").querySelector(".gflag"), r = $("stage").getBoundingClientRect();
+    if (FXON() && g) FX.fly(r.left + r.width / 2, r.top + r.height / 2, g, "flag", COL.warn, () => pulse($("goal"), "fx-attn", 1200));
+  });
+
+  /* ================= keyboard overlay (?) ================= */
+  function openKeys() {
+    const K2 = [["Space", "key.space"], ["1 2 3 4", "key.speed"], ["N", "key.skip"], ["V", "key.v"], ["M", "key.m"], ["F", "key.f"], ["R", "key.r"],
+      ["Ctrl/⌘ C", "key.copy"], ["Ctrl/⌘ V", "key.paste"], ["Ctrl/⌘ D", "key.dup"], ["Ctrl/⌘ Z", "key.undo"], ["A", "key.alerts"], ["O", "key.settings"],
+      ["Esc", "key.esc"], ["?", "key.help"], ["Shift", "key.shift"], ["Shift", "key.shiftClick"], ["🖱 R", "key.right"]];
+    $("ky-t").textContent = L("keys.title");
+    $("ky-body").innerHTML = `<div class="keys">${K2.map(([k, t]) => `<div><kbd>${esc(k)}</kbd><span>${esc(L(t))}</span></div>`).join("")}</div>`;
+    $("ky-foot").innerHTML = S ? `<button class="btn" id="ky-chap">${icon("help")}${esc(L("keys.chapter"))}</button><button class="end" data-close>OK</button>` : `<button class="end" data-close>OK</button>`;
+    openDialog($("keys"));
+    TELE.event(S ? S.day : null, "keys", {});
+  }
+  $("keys").addEventListener("click", e => {
+    if (e.target.closest("#ky-chap")) { $("keys").close(); showChapter(S.chapter); }
+    else if (e.target.closest("[data-close]")) $("keys").close();
+  });
+
+  /* ================= settings: sound, display, auto-pause, saves ================= */
+  function applySettings(why) {
+    if (window.SFX) { SFX.setVolume("master", SET.master); SFX.setVolume("sfx", SET.sfx); SFX.setVolume("hum", SET.hum); }
+    if (FXON()) FX.setReduced(SET.reduced);
+    document.documentElement.toggleAttribute("data-cb", !!SET.cb);
+    if (window.Stage && Stage.setScale) Stage.setScale(SET.scale || 1);
+    loadColors();
+    dlog("[settings] apply", why || "", JSON.stringify(SET));
+  }
+  const slotMeta = n => { try { const x = JSON.parse(store.get(SLOT_KEY(n)) || "null"); return x && x.meta ? x.meta : null; } catch (e) { return null; } };
+  function settingsHTML() {
+    const rng = (k, lbl) => `<label class="srow"><span>${esc(L(lbl))}</span><input type="range" min="0" max="100" step="5" data-set="${k}" value="${Math.round((SET[k] == null ? 1 : SET[k]) * 100)}"><b>${Math.round((SET[k] == null ? 1 : SET[k]) * 100)}</b></label>`;
+    const tog = (path, lbl, val) => `<button class="toggle" data-settog="${path}" aria-pressed="${!!val}"><span class="sw"></span><span>${esc(L(lbl))}</span></button>`;
+    const slots = [1, 2, 3].map(n => {
+      const m = slotMeta(n);
+      return `<div class="slotrow"><b>${esc(L("set.slot", { n }))}</b><small>${m ? `${m.sandbox ? "Sandbox" : "Campaign"} · seed ${m.seed} · ${esc(dateOf(m.day))} · ${money(m.score)}` : esc(L("set.empty"))}</small>
+        <button class="btn" data-slot-save="${n}"${S && !S.over ? "" : " disabled"}>${icon("download")}${esc(L("set.save"))}</button><button class="btn" data-slot-load="${n}"${m ? "" : " disabled"}>${icon("play1")}${esc(L("set.load"))}</button></div>`;
+    }).join("");
+    return `<section class="sect"><h3>${icon("sound")}${esc(L("set.sound"))}</h3>${rng("master", "set.master")}${rng("sfx", "set.sfx")}${rng("hum", "set.hum")}</section>
+      <section class="sect"><h3>${icon("expand")}${esc(L("set.display"))}</h3>
+        <label class="srow"><span>${esc(L("set.reduced"))}</span><select data-setsel="reduced"><option value=""${SET.reduced == null ? " selected" : ""}>System</option><option value="1"${SET.reduced === true ? " selected" : ""}>On</option><option value="0"${SET.reduced === false ? " selected" : ""}>Off</option></select></label>
+        <label class="srow"><span>${esc(L("set.scale"))}</span><select data-setsel="scale">${[[1, L("set.scaleAuto")], [0.9, "90 %"], [0.8, "80 %"], [0.7, "70 %"]].map(([v, t]) => `<option value="${v}"${+SET.scale === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
+        <label class="srow"><span>${esc(L("set.lang"))}</span><select disabled><option>${esc(L("set.langSoon"))}</option></select></label>
+        ${tog("cb", "set.cb", SET.cb)}</section>
+      <section class="sect"><h3>${icon("pause")}${esc(L("set.autopause"))}</h3><div class="togs">${tog("ap.offer", "set.ap.offer", SET.ap.offer)}${tog("ap.fail", "set.ap.fail", SET.ap.fail)}${tog("ap.cash", "set.ap.cash", SET.ap.cash)}${tog("ap.sla", "set.ap.sla", SET.ap.sla)}</div></section>
+      <section class="sect"><h3>${icon("box")}${esc(L("set.saves"))}</h3>${slots}
+        <div class="buyrow"><button class="btn" id="st-export"${S && !S.over ? "" : " disabled"}>${icon("download")}${esc(L("set.export"))}</button><button class="btn" id="st-import">${icon("box")}${esc(L("set.import"))}</button><button class="btn" id="st-log"${TELE.log ? "" : " disabled"}>${icon("doc")}${esc(L("set.log"))}</button></div></section>`;
+  }
+  function openSettings() {
+    $("st-t").textContent = L("set.title");
+    $("st-body").innerHTML = settingsHTML();
+    openDialog($("settings"));
+    TELE.event(S ? S.day : null, "settings", {});
+  }
+  $("settings").addEventListener("input", e => {
+    const k = e.target.dataset && e.target.dataset.set;
+    if (!k) return;
+    SET[k] = +e.target.value / 100;
+    e.target.nextElementSibling.textContent = e.target.value;
+    saveSettings(); applySettings("volume");
+    if (k !== "hum") SND("tick", 4, 60);
+  });
+  $("settings").addEventListener("change", e => {
+    const k = e.target.dataset && e.target.dataset.setsel;
+    if (!k) return;
+    SET[k] = k === "reduced" ? (e.target.value === "" ? null : e.target.value === "1") : +e.target.value;
+    saveSettings(); applySettings(k);
+    if (S) renderAll();
+  });
+  $("settings").addEventListener("click", e => {
+    const t = e.target;
+    const tg = t.closest("[data-settog]");
+    if (tg) {
+      const path = tg.dataset.settog.split(".");
+      if (path[0] === "ap") { SET.ap[path[1]] = !SET.ap[path[1]]; SET.apTouched = true; } else SET[path[0]] = !SET[path[0]];
+      tg.setAttribute("aria-pressed", String(path[0] === "ap" ? SET.ap[path[1]] : SET[path[0]]));
+      saveSettings(); applySettings(tg.dataset.settog);
+      if (S) { R = ROLE(); renderAll(); }
+      return;
+    }
+    const sv = t.closest("[data-slot-save]");
+    if (sv && S && !S.over) {
+      const n = +sv.dataset.slotSave, meta = { seed: S.seed, sandbox: S.sandbox, day: Math.floor(S.day), score: Math.round(Sim.score(S)), at: Date.now() };
+      const ok = store.set(SLOT_KEY(n), JSON.stringify({ meta, s: S }));
+      TELE.event(S.day, "saveSlot", { n, ok });
+      dlog("[save] slot", n, ok ? "ok" : "failed");
+      if (ok) { $("st-body").innerHTML = settingsHTML(); pulse($("st-body").querySelector(`[data-slot-load="${n}"]`), "fx-attn", 900); sr(L("set.saved")); SND("stamp"); }
+      else nope("Storage blocked", sv);
+      return;
+    }
+    const ld = t.closest("[data-slot-load]");
+    if (ld) {
+      let st = null;
+      try { const x = JSON.parse(store.get(SLOT_KEY(+ld.dataset.slotLoad)) || "null"); st = x && x.s; } catch (err) { st = null; }
+      if (!validSave(st)) { nope(L("set.bad"), ld); return; }
+      $("settings").close();
+      resumeState(st, "slot" + ld.dataset.slotLoad);
+      return;
+    }
+    if (t.closest("#st-export")) { exportSave(); return; }
+    if (t.closest("#st-import")) { $("st-file").value = ""; $("st-file").click(); return; }
+    if (t.closest("#st-log")) { exportLog(); return; }
+    if (t.closest("[data-close]")) $("settings").close();
+  });
+  /* export / import the whole state as JSON (a save is just JSON.stringify(S); the sim migrates old versions) */
+  async function exportSave() {
+    if (!S) return;
+    const name = `halcyon-save-seed${S.seed}-d${Math.floor(S.day)}.json`, body = JSON.stringify(S);
+    TELE.event(S.day, "exportSave", { bytes: body.length });
+    try {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([body], { type: "application/json" })); a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+      sr(name); SND("stamp");
+      dlog("[save] exported", name, body.length);
+    } catch (e) {
+      try { await navigator.clipboard.writeText(body); toast("Download blocked here: save copied to the clipboard"); } catch (e2) { nope("Export failed", $("st-export")); }
+    }
+  }
+  $("st-file").addEventListener("change", e => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const rd = new FileReader();
+    rd.onload = () => {
+      let st = null;
+      try { const x = JSON.parse(String(rd.result)); st = x && x.s && x.meta ? x.s : x; } catch (err) { st = null; }
+      if (!validSave(st)) { nope(L("set.bad"), $("st-import")); dlog("[save] import rejected"); return; }
+      if ($("settings").open) $("settings").close();
+      dlog("[save] import", f.name, "v", st.v, "day", st.day);
+      resumeState(st, "import");
+    };
+    rd.readAsText(f);
+  });
+  $("m-load").addEventListener("click", openSettings);
 
   /* ================= end screen ================= */
+  /* end-screen lesson icons by loss key (Sim.summary lessonKeys; v4 adds idle, cancelled, sla) */
+  const LESSON_ICON = { idle: "power", cancelled: "cross", sla: "warn", throttle: "flame", failures: "wrench", shortage: "truck", bricked: "rocket",
+    fines: "flag", outage: "bolt", transit: "globe", taxes: "coin" };
   function showOver() {
     try { TELE.snap(S, Sim.score(S)); TELE.end(S, Sim.summary(S)); } catch (e) { dlog("tele end", e); }
+    if (V.skip) stopSkip("over");
+    // auto-pause is on by default for the first campaign only (unless the player changed it)
+    if (!S.sandbox) { SET.campaigns = (SET.campaigns || 0) + 1; if (!SET.apTouched) SET.ap = { offer: false, fail: false, cash: true, sla: false }; saveSettings(); }
     const sm = Sim.summary(S), H = sm.hidden, NAME = { lattice: "Lattice", photon: "Photon" };
     $("ot").textContent = S.over === "bankrupt" ? "Bankrupt" : S.over === "fired" ? "The board fired you" : "Five years are up";
     $("osub").textContent = `seed ${seed}${S.sandbox ? " · sandbox" : ""}`;
@@ -1751,11 +2251,11 @@
       ${kvs("Net worth (cash + resale − debt)", money(sm.netWorth))}${kvs("+ Earnings multiple (2 years of profit)", money(sm.earnings))}
       ${kvs(`× Reputation factor (${Math.round(sm.reputation)} rep)`, "×" + sm.repFactor.toFixed(2))}${kvs("= Company value", money(sm.companyValue))}
       ${kvs("× Your ownership", pct(sm.own))}${S.over === "fired" ? kvs("× Fired penalty", "×" + K.FIRED_SCORE) : ""}${kvs("<b>Score</b>", money(sm.score))}
-      <div class="kv"><span>Contracts signed / fulfilled / short</span><b>${sm.contracts.signed} / ${sm.contracts.fulfilled} / ${sm.contracts.failed}</b></div>
+      <div class="kv"><span>${esc(L("end.contracts"))}</span><b>${sm.contracts.signed} / ${sm.contracts.fulfilled} / ${sm.contracts.failed} / ${sm.contracts.cancelled || 0} / ${sm.contracts.late || 0}</b></div>
       <div class="kv"><span>Carbon · water</span><b>${Math.round(sm.carbon)} t · ${Math.round(sm.water)} m³</b></div></div>`;
     const maxLoss = Math.max(1, ...sm.losses.map(l => l.total));
     const lessons = `<div class="sect"><h3>${icon("warn")}Your three biggest lessons</h3>
-      ${sm.lessons.map((t, i) => `<div class="lesson"><span class="av">${icon(["flame", "cross", "coin"][i] || "warn")}</span><span>${esc(t)}</span></div>`).join("") || `<div class="sub">No measurable losses. Impressive.</div>`}
+      ${sm.lessons.map((t, i) => `<div class="lesson" data-lesson="${esc((sm.lessonKeys || [])[i] || "")}"><span class="av">${icon(LESSON_ICON[(sm.lessonKeys || [])[i]] || "warn")}</span><span>${esc(t)}</span></div>`).join("") || `<div class="sub">No measurable losses. Impressive.</div>`}
       ${sm.losses.slice(0, 6).map(l => `<div class="kv"><span>${esc(l.label)}</span><b>${money(l.total)}</b></div><div class="meter slim"><i style="width:${l.total / maxLoss * 100}%;background:${COL.bad}"></i></div>`).join("")}</div>`;
     const truths = [
       ["rocket", `<b>${NAME[H.realExotic]}</b> was the real thing; <b>${NAME[H.fakeExotic]}</b> was hype (60 % of its spec sheet in the field, then shut down on day 1500).`],
@@ -1766,12 +2266,13 @@
       ["person", `The VC pitch promised board targets of +${pct(H.vcPitchGrowth)} per half-year; the board actually asked for +${pct(H.boardGrowth)}.`],
     ];
     const curtain = `<div class="sect"><h3>${icon("help")}Behind the curtain</h3>${truths.map(([ic, t]) => `<div class="truth">${icon(ic)}<span>${t}</span></div>`).join("")}</div>`;
-    const rows = { you: { score: sm.score, done: true }, greedy: { score: null, day: 0 }, planner: { score: null, day: 0 } };
+    const [PA, PB] = PACE_POLS;
+    const rows = { you: { score: sm.score, done: true }, [PA]: { score: null, day: 0 }, [PB]: { score: null, day: 0 } };
     const drawBots = () => {
       const max = Math.max(1, ...Object.values(rows).map(r => r.score || 0));
       const bar = (k, name, col) => { const r = rows[k]; return `<div class="bar"><span>${name}</span><i style="width:${r.score == null ? 0 : Math.max(1, r.score / max * 100)}%;background:${col}"></i><b>${r.score == null ? "…" : money(r.score)}${r.est ? `<span class="est" title="Stopped at day ${r.day} to keep the page responsive">EST d${r.day}</span>` : ""}</b>${k !== "you" && !r.done ? `<span></span><span class="prog"><i style="display:block;width:${r.day / K.END_DAY * 100}%"></i></span>` : ""}</div>`; };
-      $("bots").innerHTML = `<div class="sub" style="font-weight:600">Score vs the bots (founder equity, same seed)</div>${bar("you", "You", COL.sel)}${bar("greedy", "Greedy bot", COL.net)}${bar("planner", "Planner bot", COL.train)}
-        <div class="sub">Same seed, same events. Greedy buys whatever pays best today. Planner looks ahead: seasons, launches, vendor news, pilots, per-kW upgrades.</div>`;
+      $("bots").innerHTML = `<div class="sub" style="font-weight:600">${esc(L("pace.vs", { a: BOTNAME(PA), b: BOTNAME(PB) }))} (founder equity, same seed)</div>${bar("you", "You", COL.sel)}${bar(PA, BOTNAME(PA), COL.net)}${bar(PB, BOTNAME(PB), COL.train)}
+        <div class="sub">Same seed, same events, human-paced: ${BOTNAME(PA)} plays greedy, ${BOTNAME(PB)} plans ahead.</div>`;
     };
     $("obody").innerHTML = `<div class="score"><div class="tally" id="tally"></div><div class="scorelabel">${icon("flag")}SCORE <small>founder equity value</small></div><div class="big" id="final-score" style="font-size:38px" title="Score = your ownership × company value. Net worth is only one input.">${money(sm.score)}</div><div class="sub">${S.over === "bankrupt" ? "Cash fell below your credit line." : S.over === "fired" ? "Two missed board targets in a row. Your equity counts at half." : `Founder equity value after ${Math.floor(S.day)} days.`}</div><div id="bots" style="display:grid;gap:8px"></div></div>
       <div class="cols">${breakdown}${lessons}</div>${curtain}`;
@@ -1783,9 +2284,9 @@
       const t0 = performance.now();
       const upd = m => {
         if (!m || !m.rows) return;
-        for (const p of ["greedy", "planner"]) { const x = m.rows[p]; if (x) rows[p] = x.over ? { score: x.score, day: x.day, done: true } : { score: null, day: x.day }; }
+        for (const p of [PA, PB]) { const x = m.rows[p]; if (x) rows[p] = x.over ? { score: x.score, day: x.day, done: true } : { score: null, day: x.day }; }
         drawBots();
-        if (rows.greedy.done && rows.planner.done) { dlog("[pace] end screen bots done in", (performance.now() - t0).toFixed(0) + "ms"); V.overRows = null; }
+        if (rows[PA].done && rows[PB].done) { dlog("[pace] end screen bots done in", (performance.now() - t0).toFixed(0) + "ms"); V.overRows = null; }
       };
       V.overRows = upd;
       upd(V.pace);
@@ -1824,7 +2325,7 @@
   }
   function runBots(rows, draw) {
     const BUDGET = 8000, SLICE = 14, runId = (V.botRun = (V.botRun || 0) + 1);
-    const queue = ["greedy", "planner"];
+    const queue = PACE_POLS.slice();
     const next = () => {
       const pol = queue.shift(); if (!pol || runId !== V.botRun) return;
       const s = Sim.newGame(seed, { sandbox: V.sandbox }), mem = {}, fn = Bots.POLICIES[pol];
@@ -1963,24 +2464,33 @@
     // pressing on a card's backdrop does nothing: say why instead of silently eating the drag
     const dlg = document.querySelector("dialog[open]");
     if (dlg && e.target === dlg) {
-      toast(`Close the card first (${dlg.querySelector("footer button") ? dlg.querySelector("footer button:last-child").textContent.trim() : "Got it"})`);
+      if (dlg.id === "settings" || dlg.id === "keys") { dlg.close(); return; }   // light dialogs close on a backdrop click
+      sr(`Close the card first (${dlg.querySelector("footer button") ? dlg.querySelector("footer button:last-child").textContent.trim() : "Got it"})`);
+      SND("bonk", null, 200);
+      const fb = dlg.querySelector("footer button:last-child");
+      if (fb) pulse(fb, "fx-attn", 900);
       try { dlg.animate([0, -8, 7, -4, 0].map(x => ({ translate: `${x}px 0` })), { duration: 260 }); } catch (err) { /* no WAAPI */ }
       return;
     }
+    hoverHide();
     const fr = e.target.closest("#floor [data-rack]");
-    V.rackPress = fr && !e.target.closest("[data-drag]") ? { x: e.clientX, y: e.clientY } : null;
+    V.rackPress = fr && !e.target.closest("[data-drag]") && !e.shiftKey ? { x: e.clientX, y: e.clientY } : null;
+    // box select: press on the empty floor (aisles, gaps), not on a rack, spine or button
+    if (e.button === 0 && S && !S.over && !V.menu && e.target.closest("#floor") && !e.target.closest("[data-rack], [data-spine], button, .hall")) boxStart(e);
     const src = e.target.closest("[data-drag]");
     if (!src || e.button !== 0 || !S || S.over || V.menu) return;
     const p = payload(src); if (!p) return;
-    drag = { src, x: e.clientX, y: e.clientY, started: false, p };
+    drag = { src, x: e.clientX, y: e.clientY, started: false, p, shift: e.shiftKey };
   });
   document.addEventListener("pointermove", e => {
+    if (V.box) { boxMove(e); return; }
     if (!drag && V.rackPress && Math.hypot(e.clientX - V.rackPress.x, e.clientY - V.rackPress.y) > 30) {
       V.rackPress = null;   // floor tiles are not draggable: point at the rack panel, where parts are
       toast("To move or sell hardware, drag a part from the rack panel (right) onto another rack or the bin");
       dlog("hint: floor rack drag");
     }
     if (!drag) return;
+    drag.shift = e.shiftKey;
     if (!drag.started) {
       if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
       const info = payloadInfo(drag.p);
@@ -1995,6 +2505,8 @@
       drag.src.classList.add("lifting");
       drag.lx = e.clientX; drag.lt = performance.now(); V.tilt = 0;
       SND("pickup");
+      // an unaffordable card still lifts, but its price pulses red at once (the drop will be refused)
+      if (drag.p.kind === "new" && drag.src.classList.contains("unaff")) { const pr = drag.src.querySelector(".price"); pulse(pr, "fx-pricebad", 800); pulse($("h-cashchip"), "fx-nocash", 520); }
       dlog("drag start", drag.p);
     }
     e.preventDefault();
@@ -2006,6 +2518,18 @@
     let target = findTarget(e.clientX, e.clientY), gx = e.clientX, gy = e.clientY;
     clearMarks();
     const msg = drag.ghost.querySelector(".msg");
+    drag.reorder = null;
+    // reorder: a part dragged within its own rack's elevation → a slot index + a drop-indicator line
+    if (drag.p.kind === "dev" && target && target.matches && target.matches(`.elev[data-drop-rack="${drag.p.from}"]`)) {
+      const ro = reorderAt(target, e.clientY);
+      drag.ghost.style.transform = `translate(${gx.toFixed(1)}px,${gy.toFixed(1)}px) translate(-112%,-50%)`;   // beside the pointer: the line stays visible
+      drag.gx = gx; drag.gy = gy; drag.snap = null; drag.bad = false;
+      msg.style.display = "none";
+      if (ro) { drag.op = { type: "reorder", rack: drag.p.from, uid: drag.p.uid, index: ro.index }; drag.reorder = ro; }
+      else drag.op = null;
+      return;
+    }
+    hideReorderLine();
     let ev = evaluate(drag.p, target);
     // coyote time: magnetic targets — nothing valid under the pointer, but a valid target within 40 px snaps
     drag.snap = null;
@@ -2017,6 +2541,8 @@
     drag.gx = gx; drag.gy = gy;
     const st = Sim.stats(S);
     drag.bad = ev.res && !ev.res.ok;
+    drag.badMsg = drag.bad ? ev.res.msg : null; drag.raw = ev.raw || null;
+    drag.fill = null;
     if (!ev.res) { msg.style.display = "none"; renderHUD(st); drag.op = null; return; }
     target.classList.add(ev.res.ok ? "drop-ok" : "drop-bad");
     let level = ev.res.ok ? "ok" : "bad", text = ev.res.msg, proj = null;
@@ -2034,10 +2560,35 @@
       else if (pr && pr.throttle < 1) { level = "warn"; text += ` · rack throttles to ${Math.round(pr.throttle * 100)} %`; }
       else if (pr && pr.netF < 1 && pr.netNeed > 0) { level = "warn"; text += " · network short"; }
     }
+    // shift held over a rack with a catalog card: fill the rack (as many as fit), count · cost · ETA on the ghost
+    if (ev.res.ok && drag.shift && ev.op && (ev.op.type === "buy" || ev.op.type === "lease") && drag.p.kind === "new") {
+      const fp = QOL.fillPlan(Sim, S, ev.op, 20), days = (/in (\d+) days/.exec(ev.res.msg) || [])[1] || "?";
+      if (fp.n > 1) { drag.fill = fp; text = L("fb.fill", { n: fp.n, cost: fp.cost ? money(fp.cost) : "$0", days }); level = "ok"; }
+    }
     msg.style.display = ""; msg.className = "msg " + level; msg.textContent = text;
     renderHUD(st, proj);
     drag.op = ev.op;
   });
+  /* reorder helpers: index among the rack's other devices (top to bottom = r.devices order) and the indicator line */
+  function reorderAt(elev, y) {
+    const r = rack(drag.p.from); if (!r) return null;
+    const devs = [...elev.querySelectorAll(".dev[data-uid]")].filter(el => +el.dataset.uid !== drag.p.uid);
+    let index = 0;
+    for (const el of devs) { const b = el.getBoundingClientRect(); if (y > b.top + b.height / 2) index++; }
+    const cur = r.devices.findIndex(d => d.uid === drag.p.uid);
+    const er = elev.getBoundingClientRect(), z = STZ();
+    const edge = devs.length ? (index < devs.length ? devs[index].getBoundingClientRect().top : devs[devs.length - 1].getBoundingClientRect().bottom) : er.top + 4 * z;
+    let line = drag.line;
+    if (!line) { line = drag.line = document.createElement("div"); line.className = "reorder-line"; }
+    if (line.parentElement !== elev) elev.appendChild(line);
+    line.style.top = ((edge - er.top) / z - 1) + "px";
+    line.hidden = false;
+    elev.classList.add("reordering");
+    return index === cur ? null : { index };
+  }
+  function hideReorderLine() {
+    if (drag && drag.line) { drag.line.hidden = true; if (drag.line.parentElement) drag.line.parentElement.classList.remove("reordering"); }
+  }
   /* nearest valid drop target within MAGNET px of the pointer (rects cached per drag: the DOM does not re-render mid-drag) */
   const MAGNET = 40;
   function magnet(x, y, under) {
@@ -2084,11 +2635,21 @@
       g.src.classList.remove("lifting");
       suppressClick = true; setTimeout(() => suppressClick = false, 0);
       const op = g.op; drag = null;
-      dlog("drag end", op, g.snap ? "(magnet)" : "");
+      if (g.line) g.line.remove();
+      document.querySelectorAll(".elev.reordering").forEach(e => e.classList.remove("reordering"));
+      dlog("drag end", op, g.snap ? "(magnet)" : "", g.fill ? `fill ×${g.fill.n}` : "");
       const ok = commitIt && op;
       ghostExit(g, g.src, ok ? "commit" : commitIt && g.bad ? "bad" : "home");
-      if (!ok && commitIt && g.bad) SND("nope");
-      if (ok) { V.armed = null; act(op); } else renderAll();
+      if (!ok && commitIt && g.bad) nope(g.badMsg, g.src, g.raw);
+      if (ok && g.fill && g.fill.n > 1) {         // shift+drag fill: one ordinary buy per card, each logged
+        V.armed = null;
+        let n = 0;
+        const grp = newGroup();
+        for (const a of g.fill.actions) { if (!act(a, { quiet: true, group: grp })) break; n++; }
+        renderAll(); fxAct(op);
+        if (FXON()) fxAtRack(op.rack, c => FX.floatText(c.x, c.top, `×${n} −${money(n * (item(op.item).price || 0))}`, "#FF8466", 16));
+        TELE.event(S.day, "fill", { rack: op.rack, item: op.item, n });
+      } else if (ok) { V.armed = null; act(op, { src: g.src }); } else renderAll();
       return;
     }
     drag = null;
@@ -2101,41 +2662,296 @@
     document.body.classList.remove("dragging"); clearMarks();
     if (g.src) g.src.classList.remove("lifting");
     if (g.ghost) ghostExit(g, g.src, "home");
-    toast(`Drag cancelled: ${why}. Nothing was ordered.`);
+    if (g.line) g.line.remove();
+    sr(`Drag cancelled: ${why}. Nothing was ordered.`);
     SND("nope");
     dlog("drag cancelled", why, g.p);
+    renderAll();
   }
-  document.addEventListener("pointerup", () => { V.rackPress = null; endDrag(true); });
+  // right-click cancels a drag (the card flies home; nothing happens)
+  document.addEventListener("contextmenu", e => { if (drag && drag.started) { e.preventDefault(); cancelDrag("right-click"); } });
+  document.addEventListener("pointerup", e => { V.rackPress = null; if (V.box) boxEnd(); if (e.button === 2) return; endDrag(true); });
   document.addEventListener("pointercancel", () => endDrag(false));
+
+  /* ================= v0.4 QOL: cancel, jump, multi-select, blueprints, repeat, undo ================= */
+  /* ✕ on a queued job: sim cancelJob; the outcome floats from the ✕ (refund in green, "→ shelf", "→ A3", …) */
+  function cancelJobAt(id, el) {
+    const j = S.jobs.find(x => x.id === id), r = el.getBoundingClientRect(), cash0 = S.cash;
+    const res = Sim.check(S, { type: "cancelJob", id });
+    if (!act({ type: "cancelJob", id }, { src: el })) return;
+    const d = S.cash - cash0;
+    let txt = L("fb.cancelled"), col = "#E8ECF0";
+    if (d > 0.5) { txt = `+${money(d)}`; col = "#7FE0A8"; SND("chaching", d); }
+    else if (/shelf/.test(res.msg)) txt = L("fb.toShelf");
+    else if (/Keep it/.test(res.msg)) txt = L("fb.kept");
+    else { const m = /Back to ([A-Z]\d)/.exec(res.msg); if (m) txt = L("fb.back", { rack: m[1] }); }
+    if (FXON() && r.width) FX.floatText(r.left + r.width / 2, r.top, txt, col, 15);
+    dlog("[cancel]", id, j && j.kind, res.msg);
+  }
+  /* jump: show the hall, select the rack, bring the Rack tab forward and ping the tile */
+  function jumpTo(rid, cid) {
+    let r = rid && rack(rid);
+    if (!r && cid) { const l = Sim.stats(S).alloc.find(x => x.id === cid); r = l && rack(l.rack); }
+    if (!r) { pulse($("offerstrip"), "fx-attn", 1200); return; }
+    V.hall = r.hall; V.selected = r.id; V.selDev = null;
+    if (V.tab !== "rack") setTab("rack");
+    renderAll();
+    if (FXON()) FX.rackAnim(r.id, "fx-ping", 900);
+    TELE.event(S.day, "jump", { rack: r.id });
+  }
+  function jumpToRacks(racks, col, src) {
+    const ids = Object.keys(racks || {});
+    if (!ids.length) { wobble(src); pulse($("tray"), "fx-hint", 1200); return; }
+    const r = rack(ids.sort((a, b) => racks[b] - racks[a])[0]);
+    if (r.hall !== V.hall) { V.hall = r.hall; }
+    V.selected = r.id; V.selDev = null;
+    if (V.tab !== "rack") setTab("rack");
+    renderAll();
+    highlightRacks(racks, col, "click");
+    clearTimeout(V.hlT); V.hlT = setTimeout(() => { if (V.hl && V.hl.key === "click") highlightRacks(null); }, 1600);
+  }
+  /* multi-select (shift+click or a box drawn on the floor) → one bar sets mode / workload for all of them */
+  function toggleMulti(id) {
+    if (!V.multi.size && V.selected && V.selected !== id && rack(V.selected) && rack(V.selected).hall === V.hall) V.multi.add(V.selected);
+    if (V.multi.has(id)) V.multi.delete(id); else V.multi.add(id);
+    renderAll(); renderBulk();
+  }
+  function clearMulti() { V.multi.clear(); renderBulk(); renderAll(); }
+  function renderBulk() {
+    const el = $("bulkbar");
+    const ids = [...V.multi].filter(id => rack(id) && rack(id).hall === V.hall);
+    if (ids.length < 2) { el.hidden = true; el.innerHTML = ""; return; }
+    const modes = Object.keys(Sim.MODES).filter(k => on("power") || k === "std" || k === "off");
+    const b = (a, ic, lbl, title) => `<button class="btn" data-bulk='${esc(JSON.stringify(a))}' title="${esc(title || lbl)}">${icon(ic)}${esc(lbl)}</button>`;
+    el.innerHTML = `<b>${esc(L("multi.count", { n: ids.length }))}</b>` + modes.map(k => b({ type: "mode", mode: k }, MODE_ICON[k], Sim.MODES[k].label)).join("") +
+      (on("gpu") ? `<span class="sep"></span>` + Sim.WORKLOADS.filter(w => w !== "web").map(w => b({ type: "workload", workload: w }, R[w].icon, R[w].name)).join("") : "") +
+      `<button class="iconbtn" data-bulk='{"type":"clear"}' title="${esc(L("multi.clear"))}">${icon("cross")}</button>`;
+    el.hidden = false;
+  }
+  const newGroup = () => (V.grp = "g" + (++V.grpN || (V.grpN = 1)));
+  function bulk(a, src) {
+    if (a.type === "clear") { clearMulti(); return; }
+    newGroup();
+    let ok = 0, bad = 0;
+    for (const id of V.multi) {
+      const r = rack(id);
+      if (!r || r.hall !== V.hall || (!r.devices.length && !r.pending.length)) continue;
+      if (a.type === "workload" && !r.devices.concat(r.pending).some(d => item(d.type).role === "gpu")) continue;
+      const op = Object.assign({ rack: id }, a);
+      if (op.type === "mode" && r.mode === op.mode || op.type === "workload" && r.workload === op.workload) continue;
+      if (act(op, { quiet: true, src, group: V.grp })) ok++; else bad++;
+    }
+    dlog("[bulk]", a, "ok", ok, "refused", bad);
+    renderAll(); renderBulk();
+    if (ok) SND("tick", 4, 40);
+  }
+  /* box select on empty floor */
+  function boxStart(e) { V.box = { x: e.clientX, y: e.clientY, on: false }; }
+  function boxMove(e) {
+    const b = V.box; if (!b) return;
+    if (!b.on && Math.hypot(e.clientX - b.x, e.clientY - b.y) < 8) return;
+    b.on = true;
+    const host = $("floor").parentElement.getBoundingClientRect(), z = STZ(), el = $("boxsel");
+    const x0 = Math.min(b.x, e.clientX), y0 = Math.min(b.y, e.clientY), x1 = Math.max(b.x, e.clientX), y1 = Math.max(b.y, e.clientY);
+    Object.assign(el.style, { left: (x0 - host.left) / z + "px", top: (y0 - host.top) / z + "px", width: (x1 - x0) / z + "px", height: (y1 - y0) / z + "px" });
+    el.hidden = false;
+    b.rect = { x0, y0, x1, y1 };
+  }
+  function boxEnd() {
+    const b = V.box; V.box = null; $("boxsel").hidden = true;
+    if (!b || !b.on || !b.rect) return false;
+    const hit = [...document.querySelectorAll("#floor .rack[data-rack]")].filter(el => {
+      const r = el.getBoundingClientRect();
+      return r.right > b.rect.x0 && r.left < b.rect.x1 && r.bottom > b.rect.y0 && r.top < b.rect.y1;
+    }).map(el => el.dataset.rack);
+    V.multi = new Set(hit);
+    dlog("[box] selected", hit.join(","));
+    suppressClick = true; setTimeout(() => suppressClick = false, 0);
+    renderAll(); renderBulk();
+    return true;
+  }
+  /* blueprints: Ctrl/Cmd+C copies the selected rack (parts, mode, workload); Ctrl/Cmd+V orders what the target lacks */
+  function copyRack() {
+    const bp = V.selected && QOL.blueprint(S, V.selected);
+    if (!bp) { nope("Nothing to copy", $("detail")); return; }
+    V.clip = bp;
+    TELE.event(S.day, "copy", { rack: bp.from, n: bp.devices.length });
+    if (FXON()) FX.rackAnim(bp.from, "fx-ping", 700);
+    SND("tick", 6, 40);
+    sr(`Copied ${bp.from}`);
+    dlog("[bp] copy", bp);
+  }
+  function pasteRack(targetId, src) {
+    const bp = V.clip, rid = targetId || V.selected;
+    if (!bp || !rid) { nope("Nothing to paste", src); return; }
+    const d = QOL.blueprintDiff(S, bp, rid);
+    if (d.blocked || !d.actions.length) { nope(d.blocked === "tank" ? "Tank racks only take exotic cards" : "Already the same", src, { rack: rid }); return; }
+    TELE.event(S.day, "paste", { from: bp.from, to: rid, n: d.actions.length });
+    let done = 0;
+    const grp = newGroup();
+    for (const a of d.actions) { if (!act(a, { quiet: true, src, group: grp })) break; done++; }
+    dlog("[bp] paste", bp.from, "→", rid, done, "/", d.actions.length);
+    V.selected = rid;
+    renderAll();
+    if (done) { SND("drop"); if (FXON()) { FX.rackAnim(rid, "fx-thunk", 360, 0, false, "cubic-bezier(.3,1.6,.5,1)"); fxAtRack(rid, c => FX.floatText(c.x, c.top, `×${d.actions.filter(a => a.type === "buy").length}`, "#FFD24A", 16)); } }
+  }
+  function duplicateRack(id, src) {
+    const to = QOL.nextEmptyRack(S, id, rack(id) && rack(id).tank);
+    if (!to) { nope("No empty rack", src); return; }
+    V.clip = QOL.blueprint(S, id);
+    pasteRack(to, src);
+  }
+  /* R: repeat the last order on the hovered (or selected) rack */
+  function repeatOrder() {
+    const rid = V.hoverRack || V.selected, o = V.lastOrder;
+    if (!o || !rid) { nope("Nothing to repeat", $("tray")); return; }
+    const leasing = o.type === "lease";
+    act({ type: leasing ? "lease" : "buy", item: o.item, rack: rid }, { src: document.querySelector(`#floor [data-rack="${rid}"]`) });
+  }
+  /* Ctrl/Cmd+Z: undo the last reversible action (as a sim action through act(), so it is logged and replayable) */
+  function undoLast() {
+    const u = UNDO && UNDO.pop(Sim, S);
+    if (!u) { nope(L("undo.none"), $("h-when")); return; }
+    dlog("[undo]", u.e.kind, u.inv);
+    TELE.event(S.day, "undo", { of: u.e.a.type });
+    if (act(u.inv, { noUndo: true, quiet: !!u.e.group })) {
+      // a batch (bulk mode, blueprint paste, shift-fill) undoes as one
+      let n = 1;
+      while (u.e.group) { const nx = UNDO.peek(Sim, S); if (!nx || nx.e.group !== u.e.group) break; UNDO.pop(Sim, S); if (act(nx.inv, { noUndo: true, quiet: true })) n++; }
+      if (u.e.group) { renderAll(); dlog("[undo] group", u.e.group, n); }
+      const rid = u.inv.rack || u.inv.to || (u.e.a && (u.e.a.rack || u.e.a.to));
+      if (rid && FXON()) fxAtRack(rid, c => FX.floatText(c.x, c.top, "↶", "#FFD24A", 20));
+      sr(L("undo.done"));
+    }
+  }
+
+  /* ================= alerts tray (HUD bell) ================= */
+  const ALERT_ICON = { nosw: "unplug", fail: "cross", hot: "flame", sla: "warn", idle: "power", runway: "coin" };
+  function renderAlerts(st) {
+    if (!S || !QOL) return;
+    const rw = runwayDays(st);
+    V.alerts = QOL.alerts(Sim, S, st, { runway: rw ? rw.days : null });
+    const n = V.alerts.length, btn = $("alertbtn"), dot = btn.querySelector(".dot");
+    dot.hidden = !n; dot.textContent = n > 9 ? "9+" : String(n);
+    btn.classList.toggle("hot", V.alerts.some(a => a.sev >= 3));
+    if (V.pop === "alerts") renderPop(st);
+  }
+  function alertsHTML() {
+    const list = V.alerts;
+    if (!list.length) return `<h3>${icon("bell")}${esc(L("alerts.title"))}</h3><div class="sub">${icon("check")} ${esc(L("alerts.none"))}</div>`;
+    return `<h3>${icon("bell")}${esc(L("alerts.title"))} <small>${list.length}</small></h3><div class="alist">${list.slice(0, 12).map(a => {
+      const lbl = a.kind === "runway" ? L("alert.runway", { d: a.n }) : L("alert." + a.kind) + (a.kind === "sla" ? ` · ${a.cust}` : a.kind === "hot" ? ` ${a.n} %` : a.kind === "idle" ? ` ${a.n}u` : "");
+      return `<button class="arow sev${a.sev}" data-jump="${a.rack || ""}"${a.id ? ` data-contract="${a.id}"` : ""}>${icon(ALERT_ICON[a.kind] || "warn")}<span>${esc(lbl)}</span><b>${a.rack || ""}</b></button>`;
+    }).join("")}</div>`;
+  }
+
+  /* ================= rich hover: rack card, catalog delta ================= */
+  function hoverShow(kind, id, anchor) {
+    V.hover = { kind, id, anchor, t: performance.now() };
+    refreshHover();
+  }
+  function hoverHide() { if (!V.hover) return; V.hover = null; $("hovercard").hidden = true; }
+  function refreshHover() {
+    const h = V.hover, el = $("hovercard");
+    if (h && !h.anchor.isConnected) h.anchor = document.querySelector(h.kind === "rack" ? `#floor [data-rack="${h.id}"]:not([data-drag])` : `#tray [data-item="${h.id}"]`) || h.anchor;   // the floor re-renders every second
+    if (!h || !S || (drag && drag.started) || !h.anchor.isConnected) { hoverHide(); return; }
+    h.t = performance.now();
+    const html = h.kind === "rack" ? rackHoverHTML(h.id) : itemHoverHTML(h.id);
+    if (!html) { el.hidden = true; return; }
+    el.innerHTML = html; el.hidden = false;
+    // place beside the anchor inside the stage (stage px = viewport px ÷ zoom)
+    const a = h.anchor.getBoundingClientRect(), stg = $("stage").getBoundingClientRect(), z = STZ();
+    const w = el.offsetWidth, hh = el.offsetHeight;
+    let x = (a.right - stg.left) / z + 8, y = (a.top - stg.top) / z;
+    if (h.kind === "item") { x = (a.left - stg.left) / z; y = (a.top - stg.top) / z - hh - 8; }
+    if (x + w > Stage.STAGE_W - 6) x = (a.left - stg.left) / z - w - 8;
+    x = Math.max(6, Math.min(Stage.STAGE_W - w - 6, x)); y = Math.max(6, Math.min(Stage.STAGE_H - hh - 6, y));
+    el.style.left = x + "px"; el.style.top = y + "px";
+  }
+  function rackHoverHTML(id) {
+    const r = rack(id); if (!r) return "";
+    const st = Sim.stats(S), pr = st.perRack[id]; if (!pr) return "";
+    if (!r.devices.length && !r.pending.length) return `<b>${id}</b> <small>${K.RACK_U - Sim.usedU(S, r)}U · ${K.RACK_KW} kW</small>`;
+    const to = {};
+    for (const x of pr.to || []) to[x.id] = (to[x.id] || 0) + x.u;
+    const serves = Object.keys(to).map(cid => { const c = S.contracts.find(x => x.id === cid); return `<span class="servetag" style="--lc:${QOL.linkColor(cid)}">${esc(c ? c.cust : cid)} ${to[cid].toFixed(1)}u</span>`; }).join(" ") || `<span class="idletag">${esc(L("hover.none"))}</span>`;
+    // bottleneck: what limits this rack now (switch, heat, network, roofline side, contract)
+    const gpus = r.devices.filter(d => item(d.type).role === "gpu");
+    let bn = "";
+    if (noSwitch(r, pr)) bn = L("hover.switch");
+    else if (pr.throttle < 1) bn = `${L("hover.heat")} ${Math.round(pr.throttle * 100)} %`;
+    else if (pr.netF < 1 && pr.netNeed > 0) bn = L("hover.network");
+    else if (gpus.length) { const it = item(gpus[0].type), I = Sim.INTENSITY[r.workload]; bn = it.B * I < it.F ? L("hover.memory") : L("hover.compute"); }
+    else bn = K.RACK_U - Sim.usedU(S, r) <= 0 ? L("hover.space") : "—";
+    if (!Object.keys(to).length && pr.out && pr.out.web + pr.out.train + pr.out.infer > 0.05) bn = L("hover.idle");
+    let risk = "";
+    if (on("ops")) { const hz = rackHazard(r, pr); risk = hz > 1e-6 ? L("hover.riskDays", { d: Math.round(1 / hz) }) : "—"; }
+    const row = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
+    return `<div class="hc-h"><b>${id}</b><small>${esc(R[rackRole(r)].name)} · ${esc(Sim.MODES[r.mode] ? Sim.MODES[r.mode].label : r.mode)}</small></div>
+      ${row(L("hover.income"), perDay(pr.rev))}<div class="kv"><span>${esc(L("hover.serves"))}</span><span>${serves}</span></div>
+      ${row(L("hover.inlet"), `${pr.inlet.toFixed(1)} °C`)}${row(L("hover.bottleneck"), esc(bn))}${risk ? row(L("hover.risk"), esc(risk)) : ""}`;
+  }
+  /* a catalog card hovered with a rack selected: what buying it there changes (output, kW, inlet °C, payback) */
+  function itemHoverHTML(key) {
+    const it = item(key), rid = V.selected, r = rid && rack(rid); if (!it) return "";
+    const head = `<div class="hc-h"><b>${esc(it.name)}</b><small>${it.u}U · ${it.kw} kW · ${money(it.price)}</small></div>`;
+    if (!r) return head;
+    const op = { type: V.lease && on("finance") && it.role === "gpu" ? "lease" : "buy", item: key, rack: rid };
+    const res = Sim.check(S, op);
+    if (!res.ok) return `${head}<div class="kv bad"><span>${rid}</span><b>${icon(QOL.reason(res.msg) === "cash" ? "coin" : "warn")} ${esc(res.msg)}</b></div>`;
+    const wl = wlDefault(op), base = Sim.stats(S, { eq: true }), p = Sim.stats(Sim.project(wl ? Sim.project(S, wl) : S, op), { eq: true });
+    const b0 = base.perRack[rid], p0 = p.perRack[rid];
+    const out = w => (p0.out ? p0.out[w] : 0) - (b0.out ? b0.out[w] : 0);
+    const dOut = out("web") + out("train") + out("infer"), dKw = p0.kw - b0.kw, dT = p0.inlet - b0.inlet;
+    const dEarn = (p.earn != null ? p.earn : p.net) - (base.earn != null ? base.earn : base.net);
+    const pay = op.type === "buy" && dEarn > 0.01 ? L("delta.days", { d: Math.round(it.price / dEarn) }) : op.type === "buy" ? L("delta.never") : "—";
+    const sg = v => (v >= 0 ? "+" : "−") + Math.abs(v).toFixed(1);
+    return `${head}<div class="deltas"><span><small>${esc(L("delta.out"))}</small><b>${sg(dOut)}</b></span><span><small>${esc(L("delta.kw"))}</small><b>${sg(dKw)}</b></span><span><small>${esc(L("delta.temp"))}</small><b class="${dT > 0.5 ? "warmc" : ""}">${sg(dT)}</b></span><span><small>${esc(L("delta.payback"))}</small><b>${esc(pay)}</b></span></div><div class="sub">→ ${rid}</div>`;
+  }
 
   /* ================= clicks and keys ================= */
   function setSpeed(v) { if (S && v !== V.speed) TELE.event(S.day, "speed", { v }); V.speed = v; if (v) V.lastSpeed = v; renderHUD(Sim.stats(S)); if (V.drawer) $("drawer-sub").textContent = v ? "game running" : "paused"; }
   function tapTarget(target) {   // tap-to-place: armed payload + tapped target
     const ev = evaluate(V.armed, target);
     if (!ev.res) return false;
-    if (!ev.res.ok) { toast(ev.res.msg); SND("nope"); try { target.animate([0, -6, 5, -3, 0].map(x => ({ translate: `${x}px 0` })), { duration: 260 }); } catch (e) { /* no WAAPI */ } return true; }
-    if (act(ev.op)) { V.armed = null; renderAll(); }
+    if (!ev.res.ok) { nope(ev.res.msg, target, ev.raw || opFor(V.armed, target)); return true; }
+    if (act(ev.op, { src: target })) { V.armed = null; renderAll(); }
     return true;
   }
   document.addEventListener("click", e => {
     if (suppressClick || !S) return;
     const t = e.target;
     // popover / drawer close on outside click
-    if (V.pop && !t.closest("#pop") && !t.closest("#h-techs, #h-transit, #h-power")) closePop();
+    if (V.pop && !t.closest("#pop") && !t.closest("#h-techs, #h-transit, #h-power, #alertbtn")) closePop();
     const sp = t.closest("[data-speed]");
-    if (sp) { setSpeed(+sp.dataset.speed); return; }
+    if (sp) { if (V.skip) stopSkip("speed"); setSpeed(+sp.dataset.speed); return; }
+    if (t.closest("#skipbtn")) { toggleSkip(); return; }
+    if (t.closest("#alertbtn")) { openPop("alerts", $("alertbtn")); return; }
+    if (t.closest("#setbtn")) { openSettings(); return; }
+    const cj = t.closest("[data-canceljob]");
+    if (cj) { cancelJobAt(+cj.dataset.canceljob, cj); return; }
+    const jm = t.closest("[data-jump]");
+    if (jm) { jumpTo(jm.dataset.jump, jm.dataset.contract); closePop(); return; }
+    const bk = t.closest("[data-bulk]");
+    if (bk) { bulk(JSON.parse(bk.dataset.bulk), bk); return; }
+    const du = t.closest("[data-dup]");
+    if (du) { duplicateRack(du.dataset.dup, du); return; }
     const ab = t.closest("[data-act]");
     if (ab) {
       const a = JSON.parse(ab.dataset.act), key = JSON.stringify(a);
       if (ab.hasAttribute("data-confirm")) {
         const res = Sim.check(S, a);
-        if (!res.ok) { toast(res.msg); return; }
-        if (!(V.confirm === key && performance.now() - V.confirmT < CONFIRM_MS)) { V.confirm = key; V.confirmT = performance.now(); toast(`${res.msg} · tap again to confirm`); renderAll(); return; }
+        if (!res.ok) { act(a, { src: ab }); return; }    // refused: show-not-tell feedback (and the rejection is logged)
+        if (!(V.confirm === key && performance.now() - V.confirmT < CONFIRM_MS)) { V.confirm = key; V.confirmT = performance.now(); sr(`${res.msg} · tap again to confirm`); renderAll(); return; }
       }
-      const ok = act(a);
+      const ok = act(a, { src: ab });
       if (ok && ab.closest("#card")) $("card").close();
       return;
     }
+    const pl = t.closest("[data-contract]");
+    if (pl) { const st = Sim.stats(S), racks = {}; for (const l of st.alloc) if (l.id === pl.dataset.contract) racks[l.rack] = (racks[l.rack] || 0) + l.u; jumpToRacks(racks, QOL.linkColor(pl.dataset.contract), pl); return; }
+    const oc = t.closest(".ocard[data-offer]");
+    if (oc) { jumpToRacks(offerPreview(oc.dataset.offer) || {}, "#FFFFFF", oc); return; }
     if (t.closest("dialog [data-close]")) { const d = t.closest("dialog"); if (d.open) d.close(); return; }
     const dr = t.closest("[data-drawer]");
     if (dr) { if (dr.closest("#h-debt, #h-rep, #h-carbon, #h-equity, #offerstrip") || dr.classList.contains("iconbtn")) openDrawer(dr.dataset.drawer); return; }
@@ -2173,11 +2989,13 @@
       const same = V.armed && JSON.stringify(V.armed) === JSON.stringify(p);
       V.armed = same ? null : p;
       renderAll();
-      if (V.armed) toast(p.kind === "spine" ? "Tap a spine slot (or a rack in the row)" : p.kind === "shelf" ? "Tap a rack to install, or a failed part to swap" : `Tap a rack to ${V.lease && on("finance") && item(p.item).role === "gpu" ? "lease" : "order"} ${item(p.item).name}`);
+      if (V.armed) sr(p.kind === "spine" ? "Tap a spine slot (or a rack in the row)" : p.kind === "shelf" ? "Tap a rack to install, or a failed part to swap" : `Tap a rack to ${V.lease && on("finance") && item(p.item).role === "gpu" ? "lease" : "order"} ${item(p.item).name}`);
+      if (V.armed && p.kind === "new" && S.cash < item(p.item).price && !(V.lease && on("finance") && item(p.item).role === "gpu")) nope(`Needs $${item(p.item).price}k`, src);
       return;
     }
     const rk = t.closest("#floor [data-rack]");
-    if (rk) { V.selected = rk.dataset.rack; V.selDev = null; if (V.tab !== "rack") setTab("rack"); renderAll(); return; }
+    if (rk && e.shiftKey) { toggleMulti(rk.dataset.rack); return; }
+    if (rk) { if (V.multi.size) clearMulti(); V.selected = rk.dataset.rack; V.selDev = null; if (V.tab !== "rack") setTab("rack"); renderAll(); return; }
     const pm = t.closest("[data-pmode]");
     if (pm) { act({ type: "mode", rack: V.selected, mode: pm.dataset.pmode }); return; }
     const wl = t.closest("[data-wl]");
@@ -2186,15 +3004,53 @@
     if (mb) { V.mode = mb.dataset.mode; renderAll(); }
   });
   document.addEventListener("keydown", e => {
-    if (e.target.closest && e.target.closest("input, textarea")) return;
-    if ((e.key === "f" || e.key === "F") && !e.metaKey && !e.ctrlKey && !e.altKey) { toggleFullscreen(); return; }   // also on the menu and over cards
+    if (e.target.closest && e.target.closest("input, textarea, select")) return;
+    const mod = e.metaKey || e.ctrlKey, k = e.key;
+    if ((k === "f" || k === "F") && !mod && !e.altKey) { toggleFullscreen(); return; }   // also on the menu and over cards
+    if (k === "?" || (k === "/" && e.shiftKey)) { e.preventDefault(); if ($("keys").open) $("keys").close(); else if (!anyDialogOpen()) openKeys(); return; }
     if (V.menu || anyDialogOpen() || !S) return;
     const SPEEDS = { "1": 1, "2": 2, "3": 4, "4": 8 };
-    if (e.code === "Space") { e.preventDefault(); setSpeed(V.speed ? 0 : V.lastSpeed); }
-    else if (SPEEDS[e.key]) setSpeed(SPEEDS[e.key]);
-    else if (e.key === "Escape") { if (V.armed) { V.armed = null; renderAll(); } else if (V.pop) closePop(); else if (V.drawer) closeDrawer(); }
-    else if (e.key === "m" || e.key === "M") toggleMute();
-    else if (e.key === "v" || e.key === "V") { const ms = MAP_MODES.filter(m => on(m.ch)); V.mode = ms[(ms.findIndex(m => m.key === V.mode) + 1) % ms.length].key; renderAll(); }
+    if (e.code === "Space") { e.preventDefault(); if (V.skip) stopSkip("key"); setSpeed(V.speed ? 0 : V.lastSpeed); }
+    else if (SPEEDS[k] && !mod) { if (V.skip) stopSkip("key"); setSpeed(SPEEDS[k]); }
+    else if (k === "Escape") {
+      if (drag && drag.started) cancelDrag("Esc");
+      else if (V.hover) hoverHide();
+      else if (V.armed) { V.armed = null; renderAll(); }
+      else if (V.pop) closePop();
+      else if (V.multi.size) clearMulti();
+      else if (V.skip) stopSkip("Esc");
+      else if (V.drawer) closeDrawer();
+    }
+    else if (mod && (k === "z" || k === "Z") && !e.shiftKey) { e.preventDefault(); undoLast(); }
+    else if (mod && (k === "c" || k === "C")) { if (window.getSelection && String(window.getSelection())) return; e.preventDefault(); copyRack(); }
+    else if (mod && (k === "v" || k === "V")) { e.preventDefault(); pasteRack(V.hoverRack || V.selected, document.querySelector(`#floor [data-rack="${V.hoverRack || V.selected}"]`)); }
+    else if (mod && (k === "d" || k === "D")) { e.preventDefault(); if (V.selected) duplicateRack(V.selected, $("detail")); }
+    else if (mod) return;
+    else if (k === "m" || k === "M") toggleMute();
+    else if (k === "v" || k === "V") { const ms = MAP_MODES.filter(m => on(m.ch)); V.mode = ms[(ms.findIndex(m => m.key === V.mode) + 1) % ms.length].key; renderAll(); }
+    else if (k === "r" || k === "R") repeatOrder();
+    else if (k === "n" || k === "N") toggleSkip();
+    else if (k === "a" || k === "A") openPop("alerts", $("alertbtn"));
+    else if (k === "o" || k === "O") openSettings();
+  });
+  /* rich hover: racks on the floor, catalog cards (delta vs the selected rack) */
+  document.addEventListener("pointerover", e => {
+    if (!S || V.menu || (drag && drag.started) || V.down) return;
+    const rk = e.target.closest("#floor [data-rack]");
+    if (rk) { V.hoverRack = rk.dataset.rack; if (!V.hover || V.hover.id !== rk.dataset.rack) hoverShow("rack", rk.dataset.rack, rk); return; }
+    const it = e.target.closest("#tray .item[data-item]");
+    if (it) { if (!V.hover || V.hover.id !== it.dataset.item) hoverShow("item", it.dataset.item, it); return; }
+    const oc = e.target.closest(".ocard[data-offer]");
+    if (oc && (!V.hl || V.hl.key !== oc.dataset.offer)) highlightRacks(offerPreview(oc.dataset.offer), "#FFFFFF", oc.dataset.offer);
+    const pl = e.target.closest("[data-contract]");
+    if (pl && (!V.hl || V.hl.key !== pl.dataset.contract)) { const racks = {}; for (const l of Sim.stats(S).alloc) if (l.id === pl.dataset.contract) racks[l.rack] = (racks[l.rack] || 0) + l.u; highlightRacks(racks, QOL.linkColor(pl.dataset.contract), pl.dataset.contract); }
+  });
+  document.addEventListener("pointerout", e => {
+    const from = e.target.closest && e.target.closest("#floor [data-rack], #tray .item[data-item], .ocard[data-offer], [data-contract]");
+    if (!from || (e.relatedTarget && from.contains(e.relatedTarget))) return;
+    if (from.matches("#floor [data-rack]")) V.hoverRack = null;
+    if (V.hover && V.hover.anchor === from) hoverHide();
+    if (V.hl && V.hl.key !== "click" && from.matches(".ocard[data-offer], [data-contract]")) highlightRacks(null);
   });
   document.addEventListener("pointerup", () => { V.down = false; }, true);
 
@@ -2228,7 +3084,7 @@
     b.setAttribute("aria-pressed", String(!SFX.muted));
     b.title = SFX.muted ? "Sound off (M)" : "Sound on (M)";
   }
-  function toggleMute() { if (!window.SFX) return; SFX.toggle(); renderMute(); toast(SFX.muted ? "Sound off" : "Sound on"); }
+  function toggleMute() { if (!window.SFX) return; SFX.toggle(); renderMute(); pulse($("mutebtn"), "fx-attn", 500); sr(SFX.muted ? "Sound off" : "Sound on"); }
   if ($("mutebtn")) $("mutebtn").addEventListener("click", toggleMute);
 
   /* ================= stage: tabs in the right column, fullscreen ================= */
@@ -2263,8 +3119,8 @@
     b.classList.toggle("off", !Stage.canFullscreen());
   }
   function toggleFullscreen() {
-    if (!Stage.canFullscreen()) { toast("Fullscreen is not available in this frame: use the page's fullscreen button"); dlog("fullscreen unavailable"); return; }
-    Stage.toggleFullscreen().then(ok => { if (!ok) toast("Fullscreen was blocked by the browser"); dlog("fullscreen", ok, Stage.isFullscreen()); renderFs(); });
+    if (!Stage.canFullscreen()) { nope("Fullscreen is not available in this frame: use the page's fullscreen button", $("fsbtn")); dlog("fullscreen unavailable"); return; }
+    Stage.toggleFullscreen().then(ok => { if (!ok) nope("Fullscreen was blocked by the browser", $("fsbtn")); dlog("fullscreen", ok, Stage.isFullscreen()); renderFs(); });
   }
   if ($("fsbtn")) $("fsbtn").addEventListener("click", toggleFullscreen);
   document.addEventListener("fullscreenchange", renderFs);
@@ -2282,6 +3138,7 @@
   }
 
   /* ================= boot ================= */
+  applySettings("boot");
   if (params.has("speed")) V.speed = V.lastSpeed = +params.get("speed") || 1;
   const play = params.get("play");
   if (play === "campaign" || play === "sandbox") start(seed, { sandbox: play === "sandbox" });
@@ -2305,7 +3162,6 @@
     if (name) { toast(`Log saved: ${name}`); return; }
     toast(await TELE.copyToClipboard() ? "Download blocked here: log copied to the clipboard" : "Export failed: try fullscreen or the downloaded build");
   }
-  $("exportbtn").addEventListener("click", exportLog);
   $("m-export").addEventListener("click", exportLog);
   $("o-export").addEventListener("click", exportLog);
   $("m-tele").addEventListener("click", () => { TELE.setEnabled(!TELE.enabled()); showMenu(!!S && !S.over); });

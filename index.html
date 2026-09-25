@@ -72,6 +72,14 @@
   <symbol id="expand" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></symbol>
   <symbol id="shrink" viewBox="0 0 24 24"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></symbol>
   <symbol id="factory" viewBox="0 0 24 24"><path d="M3 21V10l6 4V10l6 4V6h6v15z"/></symbol>
+  <symbol id="power" viewBox="0 0 24 24"><path d="M12 3v8"/><path d="M6.4 7.2a8 8 0 1 0 11.2 0"/></symbol>
+  <symbol id="bell" viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7 7M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"/></symbol>
+  <symbol id="skip" viewBox="0 0 24 24"><path d="M5 6v12l9-6z" fill="currentColor"/><path d="M18 6v12"/></symbol>
+  <symbol id="unplug" viewBox="0 0 24 24"><path d="M8 3v4M13 3v4M6 7h9v4a4.5 4.5 0 0 1-9 0z"/><path d="M10.5 15.5V21"/><path d="M3 3l18 18"/></symbol>
+  <symbol id="keyboard" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></symbol>
+  <symbol id="copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="1"/><path d="M16 8V4H4v12h4"/></symbol>
+  <symbol id="link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
 </svg>
 
 <div class="stage" id="stage">
@@ -86,6 +94,7 @@
     <button data-speed="2" title="2x speed (2)"><svg class="i"><use href="#play2"/></svg></button>
     <button data-speed="4" title="4x speed (3)"><svg class="i"><use href="#play3"/></svg></button>
     <button data-speed="8" title="8x speed (4)"><svg class="i"><use href="#play4"/></svg></button>
+    <button id="skipbtn" title="Skip to the next event (N)" aria-pressed="false"><svg class="i"><use href="#skip"/></svg></button>
   </div>
   <div class="chip click" id="h-power"></div>
   <div class="chip" id="h-heat"></div>
@@ -99,10 +108,11 @@
     <button class="iconbtn" data-drawer="energy" id="db-energy" title="Energy, facilities and environment" hidden><svg class="i"><use href="#bolt"/></svg><span class="dot" hidden></span></button>
     <button class="iconbtn" data-drawer="affairs" id="db-affairs" title="Reputation and policy" hidden><svg class="i"><use href="#flag"/></svg><span class="dot" hidden></span></button>
   </div>
+  <button class="iconbtn" id="alertbtn" title="Alerts (A)" aria-label="Alerts"><svg class="i"><use href="#bell"/></svg><span class="dot" hidden></span></button>
   <button class="iconbtn" id="fsbtn" title="Fullscreen (F)" aria-pressed="false"><svg class="i"><use href="#expand"/></svg></button>
   <button class="iconbtn" id="mutebtn" title="Sound (M)"><svg class="i"><use href="#sound"/></svg></button>
-  <button class="iconbtn" id="exportbtn" title="Export gameplay log (JSON)"><svg class="i"><use href="#download"/></svg></button>
-  <button class="iconbtn" id="helpbtn" title="Replay the current chapter card"><svg class="i"><use href="#help"/></svg></button>
+  <button class="iconbtn" id="setbtn" title="Settings and saves (O)" aria-label="Settings"><svg class="i"><use href="#gear"/></svg></button>
+  <button class="iconbtn" id="helpbtn" title="Keyboard and chapter card (?)"><svg class="i"><use href="#help"/></svg></button>
   <div class="pop" id="pop" hidden></div>
 </header>
 
@@ -111,9 +121,9 @@
 <div class="game">
   <section class="floor-wrap">
     <div class="goal" id="goal"></div>
-    <div class="offerstrip" id="offerstrip" hidden aria-live="polite"></div>
+    <div class="offerstrip board" id="offerstrip" hidden aria-live="polite"></div>
     <div class="floorbar"><div class="halltabs" id="halltabs" role="group" aria-label="Hall"></div><div class="modes" role="group" aria-label="Map mode" id="modes"></div><div class="legend" id="legend"></div></div>
-    <div class="floor-scroll"><div class="floor" id="floor"></div></div>
+    <div class="floor-scroll"><div class="floor" id="floor"></div><div class="boxsel" id="boxsel" hidden></div><div class="bulkbar" id="bulkbar" hidden></div></div>
     <div class="shelf-wrap" id="shelf-wrap" hidden>
       <div class="shelf-head"><h2>Spares</h2><span id="shelf-n"></span><svg class="i" id="shelf-help"><use href="#help"/></svg></div>
       <div class="shelf" id="shelf" data-drop-shelf></div>
@@ -163,6 +173,8 @@
 </aside>
 
 <div class="toast" id="toast" role="status"></div>
+<div class="hovercard" id="hovercard" hidden role="tooltip"></div>
+<div class="sr-only" id="sr" aria-live="polite"></div>
 <div class="undo" id="undo" role="status" aria-live="polite"><span id="undo-msg"></span><button class="btn" id="undo-btn" type="button"><svg class="i"><use href="#undoarrow"/></svg>Undo</button><i class="undo-bar"></i></div>
 <div class="qcard" id="qcard" aria-live="polite"></div>
 
@@ -174,6 +186,7 @@
       <button class="mbtn" id="m-campaign"><svg class="i"><use href="#flag"/></svg><span><b>New campaign</b><small>17 chapters, one mechanic at a time</small></span></button>
       <button class="mbtn" id="m-sandbox"><svg class="i"><use href="#layers"/></svg><span><b>Sandbox</b><small>Everything unlocked from day 0</small></span></button>
       <label class="seedrow"><svg class="i"><use href="#globe"/></svg><span>Seed</span><input id="m-seed" type="text" inputmode="numeric" autocomplete="off" spellcheck="false" maxlength="9" aria-label="Seed"><button class="btn" id="m-dice" title="Random seed" type="button"><svg class="i"><use href="#rocket"/></svg></button></label>
+      <button class="mbtn ghostbtn" id="m-load"><svg class="i"><use href="#box"/></svg><span><b id="m-load-t">Load / import a save</b></span></button>
       <button class="mbtn ghostbtn" id="m-how"><svg class="i"><use href="#help"/></svg><span><b>How to play</b></span></button>
       <button class="mbtn ghostbtn" id="m-export" hidden><svg class="i"><use href="#download"/></svg><span><b>Export gameplay log</b><small>JSON: seed + every action, replayable</small></span></button>
       <button class="mbtn ghostbtn" id="m-tele" hidden><svg class="i"><use href="#globe"/></svg><span><b>Share anonymous gameplay data</b><small id="m-tele-sub"></small></span></button>
@@ -195,6 +208,18 @@
   <footer id="kfoot" style="gap:8px"></footer>
 </dialog>
 
+<dialog id="settings" class="chap setdlg" aria-labelledby="st-t">
+  <header><h2 id="st-t"></h2><button class="iconbtn" data-close title="Close (Esc)"><svg class="i"><use href="#cross"/></svg></button></header>
+  <div class="body" id="st-body"></div>
+  <input type="file" id="st-file" accept=".json,application/json" hidden>
+</dialog>
+
+<dialog id="keys" class="chap keysdlg" aria-labelledby="ky-t">
+  <header><h2 id="ky-t"></h2><button class="iconbtn" data-close title="Close (Esc)"><svg class="i"><use href="#cross"/></svg></button></header>
+  <div class="body" id="ky-body"></div>
+  <footer id="ky-foot" style="gap:8px"></footer>
+</dialog>
+
 <dialog id="over" class="overdlg" aria-labelledby="ot">
   <header><h2 id="ot"></h2><span style="color:var(--hud-ink-2)" id="osub"></span></header>
   <div class="body" id="obody"></div>
@@ -204,6 +229,7 @@
 
 <script src="js/build.js"></script>
 <script src="js/telemetry.js"></script>
+<script src="js/strings.js"></script>
 <script src="js/content.js"></script>
 <script src="js/sim.js"></script>
 <script src="bots/bots.js"></script>
@@ -211,6 +237,7 @@
 <script src="js/stage.js"></script>
 <script src="js/fx.js"></script>
 <script src="js/audio.js"></script>
+<script src="js/qol.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>

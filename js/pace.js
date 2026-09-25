@@ -2,7 +2,8 @@
  * whole days up to the player's current day and never beyond it, so the HUD can show "you vs greedy vs planner" mid-game
  * and the end screen can compare instantly.
  * - createRunner(Sim, Bots): pure logic (Node-testable): init / to(day) / finish() / work(ms) / rows().
- * - Pace.start(opts): browser host. Runs the runner in a Web Worker built from the already-loaded factory sources
+ * - Pace.start(opts): browser host. opts.pols = the two bots to ghost (the UI passes the human-paced ["casual", "expert"],
+ *   labelled with Bots.LABELS; the default greedy/planner pair is kept for tests and tools). Runs the runner in a Web Worker built from the already-loaded factory sources
  *   (window.__factories), so it needs no extra file fetch and works from file://. Falls back to the main thread
  *   (greedy only, sliced in idle time) when workers are unavailable: a planner day can take 30 ms, which would drop frames.
  * Classic script (window.Pace) + CommonJS.
@@ -57,7 +58,7 @@
 
   /* worker body (serialized): receives init / to / finish, answers with {type:"rows"} after each work slice */
   function workerMain(self, Sim, Bots, createRunner) {
-    const R = createRunner(Sim, Bots);
+    let R = createRunner(Sim, Bots);
     let gen = 0, timer = null;
     const pump = () => {
       timer = null;
@@ -69,7 +70,7 @@
     self.onmessage = e => {
       const m = e.data || {};
       try {
-        if (m.type === "init") { gen = m.gen; R.init(m.seed, m.sandbox, m.day); self.postMessage(Object.assign({ type: "rows", gen }, R.rows())); }
+        if (m.type === "init") { gen = m.gen; if (m.pols) R = createRunner(Sim, Bots, m.pols); R.init(m.seed, m.sandbox, m.day); self.postMessage(Object.assign({ type: "rows", gen }, R.rows())); }
         else if (m.type === "to") R.to(m.day);
         else if (m.type === "finish") R.finish();
         kick();
@@ -104,12 +105,12 @@
         opts.onRows(m);
       };
       worker.onerror = e => { log("worker failed", e.message); if (alive) useFallback(); };
-      worker.postMessage({ type: "init", gen, seed: opts.seed, sandbox: opts.sandbox, day: opts.day || 0 });
+      worker.postMessage({ type: "init", gen, seed: opts.seed, sandbox: opts.sandbox, day: opts.day || 0, pols: opts.pols });
       log("worker up", { seed: opts.seed, sandbox: opts.sandbox, day: opts.day || 0, srcKB: Math.round(src.length / 1024) });
     } catch (err) { log("no worker:", err.message); useFallback(); }
     function useFallback() {
       if (worker) { try { worker.terminate(); } catch (e) { /* ignore */ } worker = null; }
-      const R = createRunner(g.Sim, g.Bots, ["greedy"]);      // the planner's 30 ms days would drop frames on the main thread
+      const R = createRunner(g.Sim, g.Bots, [(opts.pols || POLS)[0]]);      // the cheaper bot only: a planner day can take 30 ms (dropped frames)
       R.init(opts.seed, opts.sandbox, opts.day || 0);
       const idle = g.requestIdleCallback || (cb => setTimeout(() => cb({ timeRemaining: () => 4 }), 50));
       const pump = dl => {

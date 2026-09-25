@@ -11,6 +11,8 @@
 
   let muted = false;
   try { muted = localStorage.getItem(MUTE_KEY) === "1"; } catch (e) { /* storage blocked */ }
+  // v0.4 settings: per-bus volumes 0..1 (master scales VOL; sfx and hum scale their own bus). Set by ui.js from settings.
+  const vol = { master: 1, sfx: 1, hum: 1 };
   let ac = null, master = null, sfxBus = null, noiseBuf = null;
   let hum = null;
   const last = {};   // per-sound rate limit timestamps
@@ -22,10 +24,10 @@
     if (!Ctor) return false;
     try {
       ac = new Ctor();
-      master = ac.createGain(); master.gain.value = muted ? 0 : VOL;
+      master = ac.createGain(); master.gain.value = muted ? 0 : VOL * vol.master;
       const comp = ac.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 4;
       master.connect(comp); comp.connect(ac.destination);
-      sfxBus = ac.createGain(); sfxBus.gain.value = 1; sfxBus.connect(master);
+      sfxBus = ac.createGain(); sfxBus.gain.value = vol.sfx; sfxBus.connect(master);
       noiseBuf = ac.createBuffer(1, ac.sampleRate, ac.sampleRate);
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
@@ -98,6 +100,10 @@
     drum(i) { const t = ac.currentTime; noise(t, 0.06, 0.22 + 0.02 * Math.min(8, i || 0), "bandpass", 180, 1.2); tone("sine", 120, 70, t, 0.08, 0.2); },
     tick(step) { const t = ac.currentTime, f = 600 * Math.pow(2, Math.min(2, (step || 0) / 8)); tone("square", f, f, t, 0.03, 0.05); },
     stamp() { const t = ac.currentTime; tone("sine", 200, 70, t, 0.12, 0.5); noise(t, 0.04, 0.3, "lowpass", 1500, 0.7); },
+    // v0.4 show-not-tell: a low "bonk" for an action you can't do (no money, no room), a heartbeat under 30 days of cash
+    bonk() { const t = ac.currentTime; tone("sine", 140, 70, t, 0.16, 0.5); tone("triangle", 95, 60, t + 0.01, 0.14, 0.18); noise(t, 0.04, 0.12, "lowpass", 400, 0.7); },
+    heartbeat() { const t = ac.currentTime; tone("sine", 62, 40, t, 0.13, 0.55); tone("sine", 58, 38, t + 0.19, 0.16, 0.4); },
+    link() { const t = ac.currentTime; tone("triangle", 880, 1320, t, 0.12, 0.12); tone("sine", 1760, 1760, t + 0.1, 0.18, 0.06); },
   };
 
   /* play(name, arg, minGapMs): no-op when muted, not yet unlocked, or rate-limited */
@@ -128,7 +134,7 @@
     ensureHum();
     const load = Math.max(0, Math.min(1.5, kw / Math.max(50, cap || 250)));
     const scale = Math.min(1, Math.sqrt(kw / 600));
-    const target = dark || kw < 0.5 ? 0 : (0.012 + 0.05 * scale) * (running ? 1 : 0.45);
+    const target = dark || kw < 0.5 ? 0 : (0.012 + 0.05 * scale) * (running ? 1 : 0.45) * vol.hum;
     const t = ac.currentTime;
     hum.g.gain.setTargetAtTime(target, t, 0.25);
     const base = 42 + 34 * scale + 10 * load;
@@ -140,13 +146,23 @@
   function setMuted(v) {
     muted = !!v;
     try { localStorage.setItem(MUTE_KEY, muted ? "1" : "0"); } catch (e) { /* storage blocked */ }
-    if (master) master.gain.setTargetAtTime(muted ? 0 : VOL, ac.currentTime, 0.03);
+    if (master) master.gain.setTargetAtTime(muted ? 0 : VOL * vol.master, ac.currentTime, 0.03);
     dlog("muted", muted);
     listeners.forEach(fn => { try { fn(muted); } catch (e) { /* ignore */ } });
   }
 
+  function setVolume(k, v) {
+    if (!(k in vol)) return;
+    vol[k] = Math.max(0, Math.min(1, +v || 0));
+    if (ac && master && k === "master") master.gain.setTargetAtTime(muted ? 0 : VOL * vol.master, ac.currentTime, 0.03);
+    if (ac && sfxBus && k === "sfx") sfxBus.gain.setTargetAtTime(vol.sfx, ac.currentTime, 0.03);
+    humLast = 0;
+    dlog("volume", k, vol[k]);
+  }
+
   window.SFX = {
-    play, setHum, setMuted,
+    play, setHum, setMuted, setVolume,
+    get volume() { return Object.assign({}, vol); },
     toggle() { setMuted(!muted); return muted; },
     onChange(fn) { listeners.push(fn); },
     get muted() { return muted; },

@@ -4,8 +4,10 @@
  *        viewport: 4th arg or env VIEWPORT=1920x1080 (default 1400x950); the seed arg can carry params ("21&play=campaign")
  * GET  /shot?name=x      -> screenshot saved to outDir/x.png, returns the path
  * GET  /text             -> visible text of HUD, goal banner, news and any open dialog
- * POST /click  {selector} | {x,y}
- * POST /drag   {from:{selector}|{x,y}, to:{selector}|{x,y}}   (real pointer moves, like a human)
+ * POST /click  {selector} | {x,y}  [+ button:"right", mods:["Shift"]]
+ * POST /drag   {from:{selector}|{x,y}, to:{selector}|{x,y}, mods?:["Shift"]}   (real pointer moves, like a human)
+ * POST /upload {selector, path}   set a file on an <input type=file> (import a save)
+ * GET  /downloads          files the page downloaded so far (saved to outDir/downloads)
  * POST /pointer {op:"down"|"move"|"up", selector|x,y}   low-level pointer, e.g. to screenshot mid-drag
  * POST /key    {key}      e.g. " " (pause), "1" "2" "3" "4" (speed)
  * POST /wait   {ms}       let real time pass (the game runs while you wait)
@@ -25,7 +27,9 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
 (async () => {
   const browser = await chromium.launch({ executablePath: "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", headless: true });
-  const page = await browser.newPage({ viewport: { width: VW || 1400, height: VH || 950 } });
+  const page = await browser.newPage({ viewport: { width: VW || 1400, height: VH || 950 }, acceptDownloads: true });
+  const downloads = [];
+  page.on("download", async d => { const f = path.join(outDir, "downloads", d.suggestedFilename()); fs.mkdirSync(path.dirname(f), { recursive: true }); await d.saveAs(f); downloads.push(f); log("download", f); });
   const errors = [];
   page.on("pageerror", e => errors.push(String(e)));
   page.on("console", m => { if (m.type() === "error") errors.push(m.text()); });
@@ -43,14 +47,24 @@ const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
       const pick = sel => [...document.querySelectorAll(sel)].map(e => e.innerText.trim()).filter(Boolean).join("\n");
       return ["HUD:\n" + pick(".hud"), "GOAL:\n" + pick("#goal"), "DIALOG:\n" + pick("dialog[open]"), "NEWS:\n" + pick("#newsfeed").slice(0, 1500)].join("\n\n");
     }), errors: errors.splice(0) }),
-    "POST /click": async b => { const p = await point(b); await page.mouse.click(p.x, p.y); return { ok: true, at: p }; },
+    "POST /click": async b => {
+      const p = await point(b);
+      for (const m of b.mods || []) await page.keyboard.down(m);
+      await page.mouse.click(p.x, p.y, { button: b.button || "left" });
+      for (const m of b.mods || []) await page.keyboard.up(m);
+      return { ok: true, at: p };
+    },
     "POST /drag": async b => {
       const a = await point(b.from), z = await point(b.to);
       await page.mouse.move(a.x, a.y); await page.mouse.down();
+      for (const m of b.mods || []) await page.keyboard.down(m);
       for (let i = 1; i <= 12; i++) await page.mouse.move(a.x + (z.x - a.x) * i / 12, a.y + (z.y - a.y) * i / 12);
       await page.waitForTimeout(80); await page.mouse.up();
+      for (const m of b.mods || []) await page.keyboard.up(m);
       return { ok: true, from: a, to: z };
     },
+    "POST /upload": async b => { await page.locator(b.selector).setInputFiles(b.path); return { ok: true }; },
+    "GET /downloads": async () => ({ files: downloads.slice() }),
     "POST /pointer": async b => {
       const p = b.op === "up" && !b.selector && b.x == null ? null : await point(b);
       if (p) await page.mouse.move(p.x, p.y, { steps: b.op === "move" ? 8 : 1 });

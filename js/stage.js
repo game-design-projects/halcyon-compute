@@ -36,8 +36,13 @@
   const DEBUG = /[?&]debug\b/.test(location.search);
   const listeners = [];
   let last = null;
+  /* settings: UI scale override (1 = fit the window; 0.9 / 0.8 = smaller, with a wider letterbox). Never above fit:
+     a bigger stage would scroll. */
+  let scale = 1;
+  api.setScale = v => { scale = Math.max(0.5, Math.min(1, +v || 1)); apply(); return scale; };
   function apply() {
-    const f = fit(innerWidth, innerHeight);
+    const f0 = fit(innerWidth, innerHeight), zs = Math.floor(f0.z * scale * 10000) / 10000;
+    const f = scale === 1 ? f0 : { z: zs, w: STAGE_W * zs, h: STAGE_H * zs, x: (innerWidth - STAGE_W * zs) / 2, y: (innerHeight - STAGE_H * zs) / 2 };
     api.z = f.z; api.rect = f;
     const r = document.documentElement.style;
     r.setProperty("--z", String(f.z));

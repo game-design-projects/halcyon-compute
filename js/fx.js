@@ -10,12 +10,19 @@
   const dlog = (...a) => { if (DEBUG) console.log("[fx]", ...a); };
 
   /* ---------- reduced motion: no shake, no particles, short tweens ---------- */
-  let reduced = false;
+  let reduced = false, sysReduced = false, forced = null;   // forced: the settings override (true/false) or null = follow the OS
   try {
     const mq = matchMedia("(prefers-reduced-motion: reduce)");
-    reduced = mq.matches;
-    mq.addEventListener("change", e => { reduced = e.matches; dlog("reduced motion", reduced); if (reduced) clearAll(); });
+    sysReduced = reduced = mq.matches;
+    mq.addEventListener("change", e => { sysReduced = e.matches; setReduced(forced); });
   } catch (e) { /* old browsers */ }
+  function setReduced(v) {
+    forced = v == null ? null : !!v;
+    reduced = forced == null ? sysReduced : forced;
+    document.documentElement.classList.toggle("reduce-motion", reduced);
+    dlog("reduced motion", reduced, forced == null ? "(system)" : "(setting)");
+    if (reduced) clearAll();
+  }
 
   /* ---------- easing ---------- */
   const EASE = {
@@ -283,6 +290,49 @@
     if (lp || lt) { dx0 = Math.floor(x0); dy0 = Math.floor(y0); dx1 = Math.ceil(x1); dy1 = Math.ceil(y1); dirty = true; }
   }
 
+  /* ---------- v0.4 show-not-tell: an icon flies into a HUD badge; screen-edge vignettes ---------- */
+  /* fly(x, y, target, iconId, color): a small icon (DOM, outside #stage, viewport px) arcs from (x, y) into `target`, which
+     then pops. Reduced motion: no flight, the target just pops. onArrive runs either way. */
+  function fly(x, y, target, iconId, color, onArrive) {
+    const pop = () => { try { target && target.animate([{ scale: "1" }, { scale: "1.35" }, { scale: "1" }], { duration: 320, easing: "cubic-bezier(.3,1.6,.5,1)" }); } catch (e) { /* no WAAPI */ } if (onArrive) onArrive(); };
+    const r = target && target.getBoundingClientRect();
+    if (reduced || !r || !r.width || !document.body.animate) { pop(); return; }
+    const el = document.createElement("div");
+    el.className = "flyicon";
+    el.setAttribute("aria-hidden", "true");
+    el.innerHTML = `<span style="background:${color || "#2F8FA0"}"><svg class="i"><use href="#${iconId}"/></svg></span>`;
+    document.body.appendChild(el);
+    const z = (window.Stage && Stage.z) || 1, tx = r.left + r.width / 2, ty = r.top + r.height / 2, mx = (x + tx) / 2, my = Math.min(y, ty) - 80 * z;
+    const at = (px, py, sc, o) => ({ transform: `translate(${px.toFixed(1)}px,${py.toFixed(1)}px) translate(-50%,-50%) scale(${sc})`, opacity: o });
+    const a = el.animate([at(x, y, 0.6, 0), at(x, y, 1.1, 1), at(mx, my, 1, 1), at(tx, ty, 0.55, 0.9)], { duration: 620, easing: "cubic-bezier(.4,0,.6,1)" });
+    a.onfinish = () => { el.remove(); pop(); };
+    setTimeout(() => { if (el.isConnected) { el.remove(); } }, 1200);
+  }
+  let vigEl = null, dangerEl = null;
+  function ensureVig() {
+    if (vigEl) return;
+    vigEl = document.createElement("div"); vigEl.id = "fx-vignette"; vigEl.setAttribute("aria-hidden", "true");
+    dangerEl = document.createElement("div"); dangerEl.id = "fx-danger"; dangerEl.setAttribute("aria-hidden", "true");
+    document.body.appendChild(dangerEl); document.body.appendChild(vigEl);
+  }
+  /* a short red screen-edge flash for a big loss (strength 0..1) */
+  function vignette(strength, ms) {
+    ensureVig();
+    const a = Math.max(0.25, Math.min(1, strength || 0.6));
+    try { vigEl.animate([{ opacity: 0 }, { opacity: a, offset: 0.2 }, { opacity: 0 }], { duration: reduced ? 250 : (ms || 700), easing: "ease-out" }); } catch (e) { /* no WAAPI */ }
+    dlog("vignette", a.toFixed(2));
+  }
+  /* persistent bankruptcy vignette: 0 = none, 1 = deepest (set every frame; cheap, only writes on change) */
+  let dangerLv = -1;
+  function danger(level) {
+    ensureVig();
+    const v = Math.round(Math.max(0, Math.min(1, level)) * 20) / 20;
+    if (v === dangerLv) return;
+    dangerLv = v;
+    dangerEl.style.opacity = String(v);
+    dangerEl.classList.toggle("beat", v >= 0.5 && !reduced);
+  }
+
   function clearAll() {
     for (const p of P) p.on = false;
     for (const t of T) t.on = false;
@@ -293,7 +343,7 @@
   }
 
   window.FX = {
-    get reduced() { return reduced; }, EASE,
+    get reduced() { return reduced; }, EASE, setReduced, fly, vignette, danger,
     sparks, smoke, steam, dust, confetti, floatText, shake, flash, tween,
     rackAnim, clearRackAnims, afterFloor, rackCenter, rackEl, hostCanvas, tick, clearAll,
     get live() { return { particles: liveP, texts: liveT, trauma, tweens: tweens.length, rackAnims: rackAnims.size }; },
