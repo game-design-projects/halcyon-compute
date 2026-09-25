@@ -249,7 +249,8 @@
   "set.export": ["Export save", "导出存档"], "set.import": ["Import save", "导入存档"], "set.log": ["Export gameplay log", "导出游戏日志"],
   "set.saved": ["Saved", "已保存"], "set.loaded": ["Loaded", "已读取"], "set.bad": ["Not a Halcyon save", "不是 Halcyon 存档"], "set.blocked": ["Storage blocked", "存储被禁用"],
   "set.copied": ["Save copied to clipboard", "存档已复制到剪贴板"], "set.exportFail": ["Export failed", "导出失败"],
-  "ap.offer": ["new offer", "新报价"], "ap.fail": ["failure", "故障"], "ap.cash": ["cash below 0", "现金为负"], "ap.sla": ["SLA at risk", "SLA 告急"],
+  "ap.offer": ["new offer", "新报价"], "ap.fail": ["failure", "故障"], "ap.cash": ["cash below 0", "现金为负"], "ap.sla": ["SLA at risk", "SLA 告急"], "ap.lost": ["customer lost", "客户流失"],
+  "set.smart": ["Smart speed (2×, slows for trouble)", "智能倍速（2×，出事减速）"], "hud.smart": ["Slowed to 1× ({why}); back to {x}× soon", "已降到 1×（{why}），稍后回到 {x}×"], "fb.smart": ["Slowed: {why}", "已减速：{why}"],
   "log.none": ["Start a game first", "先开一局"], "log.copied": ["Log copied to clipboard", "日志已复制到剪贴板"],
 
   // ---------- feedback (aria-live, tooltips, floating labels) ----------

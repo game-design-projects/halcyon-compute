@@ -43,7 +43,8 @@
      runway warnings are modal and stop time on their own) plus ONE teaching pause on the very first new offer ever
      (`apFirstDone`). Offer / failure / SLA pauses are opt-in in Settings. AP_V bumps migrate old saved settings once. */
   const AP_V = 2, AP_DEFAULT = { offer: false, fail: false, cash: true, sla: false };
-  const SET_DEFAULT = { master: 1, sfx: 1, hum: 1, reduced: null, cb: false, scale: 1, ap: Object.assign({}, AP_DEFAULT), apTouched: false, apV: AP_V, apFirstDone: false, campaigns: 0 };
+  const SET_DEFAULT = { master: 1, sfx: 1, hum: 1, reduced: null, cb: false, scale: 1, ap: Object.assign({}, AP_DEFAULT), apTouched: false, apV: AP_V, apFirstDone: false, campaigns: 0,
+    smart: true };   // v0.4.6 smart speed (D73): campaigns start at 2x and slow to 1x for urgent events (QOL.smartStep)
   let SET = JSON.parse(JSON.stringify(SET_DEFAULT));
   try {
     const raw = JSON.parse(localStorage.getItem(SET_KEY) || "null");
@@ -240,7 +241,7 @@
       drawer: null, pop: null, newsCat: "all", confirm: null, wfLast: false,
       fxPrev: null, cashOff: 0, scoreOff: 0, cashT: null, scoreT: null, cashPeak: S.cash, ghostFrac: 1, ghostHold: 0,
       fillPrev: {}, earnAcc: {}, earnLast: {}, finalQ: false, lastCount: -1,
-      apSeen: null, hl: null, hover: null, hoverRack: null, boardSeen: new Set(), keepItem: null });
+      apSeen: null, hl: null, hover: null, hoverRack: null, boardSeen: new Set(), keepItem: null, smart: null, smSeen: null, smDay: null });
     V.multi = new Set();
     if (V.skip) { V.skip = null; $("skipbtn").setAttribute("aria-pressed", "false"); document.body.classList.remove("skipping"); }
     $("hovercard").hidden = true;
@@ -284,6 +285,9 @@
     TELE.start(seed, { sandbox: V.sandbox });
     V.teleSnap = -1;
     resetView();
+    // smart speed (D73): a new campaign cruises at 2x (telemetry: 1x only, ~40 min a campaign); urgent events slow it down
+    V.speed = V.lastSpeed = !V.sandbox && SET.smart && QOL ? QOL.SMART.START : 1;
+    TELE.event(0, "smartSpeed", { on: !!SET.smart, start: V.speed });
     V.seenChapter = -1;
     if (V.sandbox) { V.seenChapter = S.chapter; showSandboxCard(); }
     setUrl();
@@ -579,6 +583,25 @@
     dlog("[speed] hint shown after", Math.round(V.t1x), "s at 1x");
   }
   const SPEED_HINT_S = 60;
+  /* smart speed (D73, QOL.smartStep): while running at >= 2x an urgent event (failure, SLA miss starting, cash < 0, a
+     customer lost) slows to 1x for QOL.SMART.HOLD game days, then the chosen speed returns. Any manual speed change or
+     pause clears it (setSpeed with src "user"). Logged as speed events with src "smart" + the reason */
+  function smartTick(st) {
+    if (!S || S.over || !QOL || V.skip || !V.speed || V.smDay === S.day) return;
+    V.smDay = S.day;
+    let failed = 0;
+    for (const r of S.racks) for (const d of r.devices) if (d.failed) failed++;
+    const now = { failed, miss: new Set(Object.keys(st.cMiss || {}).filter(k => st.cMiss[k] > 1e-6)), neg: S.cash < 0, lost: S.contractLog ? S.contractLog.failed : 0 };
+    const urgent = QOL.urgentOf(V.smSeen, now);
+    V.smSeen = now;
+    const r = QOL.smartStep(V.smart, { on: !!SET.smart, speed: V.speed, day: S.day, urgent });
+    V.smart = r.state;
+    if (r.set == null) return;
+    setSpeed(r.set, "smart", r.why);
+    pulse(document.querySelector(`.speed [data-speed="${r.set}"]`), "fx-attn", 1200);
+    if (r.why !== "quiet") sr(L("fb.smart", { why: L("ap." + r.why) }));
+    dlog("[smart]", r.why, "->", r.set, "x until", r.state ? r.state.until.toFixed(1) : "-");
+  }
 
   /* ================= live affordability: every cost-bearing control re-checks while cash moves ================= */
   function refreshAfford(force) {
@@ -636,6 +659,7 @@
         autoPause(st);
         slaWatch(st);
         speedHint(dtSec);
+        smartTick(st);
         refreshAfford();
         if (now - V.alertsT > 500) { V.alertsT = now; renderAlerts(st); teachTick(); }
         if (V.hover && now - V.hover.t > 1000) refreshHover();
@@ -1061,7 +1085,14 @@
     $("h-score").innerHTML = `${icon("flag", "color:var(--sel)")}<div><span class="big">${money(sc - V.scoreOff)}</span></div>`;
     renderPace(sc);
     $("h-score").title = L(on("investors") ? "tip.scoreVc" : "tip.score") + " · " + L("tip.worth", { x: money(Sim.netWorth(S)) });
-    document.querySelectorAll(".speed button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.speed === V.speed));
+    const back = V.smart ? V.smart.back : null;   // smart speed: the speed it returns to keeps an outline
+    document.querySelectorAll(".speed button").forEach(b => {
+      b.setAttribute("aria-pressed", +b.dataset.speed === V.speed);
+      const sb = back != null && +b.dataset.speed === back;
+      if (b.classList.contains("smartback") !== sb) b.classList.toggle("smartback", sb);
+      const tt = sb ? L("hud.smart", { why: L("ap." + V.smart.why), x: back }) : L(b.dataset.i18nTitle);
+      if (b.dataset.i18nTitle && b.title !== tt) b.title = tt;
+    });
     document.body.classList.toggle("paused", V.speed === 0);
   }
   function renderDrawerBtns() {
@@ -1100,7 +1131,8 @@
   function renderGoal(st) {
     const left = K.END_DAY - Math.floor(S.day);
     const ni = Sim.nextChapter(S), nc = ni != null ? CH[ni] : null;
-    const next = S.sandbox ? `<span class="nextch">${esc(L("menu.sandbox"))}</span>` : nc ? `<span class="nextch" title="${esc(L("goal.next"))}: ${esc(chTitle(nc))} · ${esc(L("ch." + nc.key + ".hint"))}${S.day < nc.day ? ` (${esc(L("goal.nextFrom", { d: nc.day }))})` : ""}">${icon("lock")}<span>${esc(L("ch." + nc.key + ".hint"))}</span></span>`
+    const ready = Sim.chapterReadyDay ? Sim.chapterReadyDay(S) : nc && nc.day;   // earliest day incl. the chapter spacing (D70)
+    const next = S.sandbox ? `<span class="nextch">${esc(L("menu.sandbox"))}</span>` : nc ? `<span class="nextch" title="${esc(L("goal.next"))}: ${esc(chTitle(nc))} · ${esc(L("ch." + nc.key + ".hint"))}${S.day < ready ? ` (${esc(L("goal.nextFrom", { d: Math.ceil(ready) }))})` : ""}">${icon("lock")}<span>${esc(L("ch." + nc.key + ".hint"))}</span></span>`
       : `<span class="nextch">${icon("check")}</span>`;
     $("goal").innerHTML = `<span class="gflag">${icon("flag", "color:var(--c-warn)")}</span><b>${esc(chTitle(CH[S.chapter]))}</b>${next}`;
     $("goal").title = L("tip.daysLeft", { d: left });
@@ -2280,7 +2312,7 @@
         <label class="srow"><span>${esc(L("set.scale"))}</span><select data-setsel="scale">${[[1, L("set.scaleAuto")], [0.9, "90 %"], [0.8, "80 %"], [0.7, "70 %"]].map(([v, t]) => `<option value="${v}"${+SET.scale === v ? " selected" : ""}>${esc(t)}</option>`).join("")}</select></label>
         <div class="srow"><span>${esc(L("set.lang"))}</span>${langToggleHTML("st")}</div>
         ${tog("cb", "set.cb", SET.cb)}</section>
-      <section class="sect"><h3>${icon("pause")}${esc(L("set.autopause"))}</h3><div class="togs">${tog("ap.offer", "set.ap.offer", SET.ap.offer)}${tog("ap.fail", "set.ap.fail", SET.ap.fail)}${tog("ap.cash", "set.ap.cash", SET.ap.cash)}${tog("ap.sla", "set.ap.sla", SET.ap.sla)}</div></section>
+      <section class="sect"><h3>${icon("pause")}${esc(L("set.autopause"))}</h3><div class="togs">${tog("smart", "set.smart", SET.smart)}${tog("ap.offer", "set.ap.offer", SET.ap.offer)}${tog("ap.fail", "set.ap.fail", SET.ap.fail)}${tog("ap.cash", "set.ap.cash", SET.ap.cash)}${tog("ap.sla", "set.ap.sla", SET.ap.sla)}</div></section>
       <section class="sect"><h3>${icon("box")}${esc(L("set.saves"))}</h3>${slots}
         <div class="buyrow"><button class="btn" id="st-export"${S && !S.over ? "" : " disabled"}>${icon("download")}${esc(L("set.export"))}</button><button class="btn" id="st-import">${icon("box")}${esc(L("set.import"))}</button><button class="btn" id="st-log"${TELE.log ? "" : " disabled"}>${icon("doc")}${esc(L("set.log"))}</button></div></section>`;
   }
@@ -2313,6 +2345,7 @@
       if (path[0] === "ap") { SET.ap[path[1]] = !SET.ap[path[1]]; SET.apTouched = true; } else SET[path[0]] = !SET[path[0]];
       tg.setAttribute("aria-pressed", String(path[0] === "ap" ? SET.ap[path[1]] : SET[path[0]]));
       saveSettings(); applySettings(tg.dataset.settog);
+      if (path[0] === "smart") { if (!SET.smart) V.smart = null; if (S) TELE.event(S.day, "smartSpeed", { on: !!SET.smart }); }
       if (S) { R = ROLE(); renderAll(); }
       return;
     }
@@ -3070,7 +3103,13 @@
   }
 
   /* ================= clicks and keys ================= */
-  function setSpeed(v) { if (S && v !== V.speed) TELE.event(S.day, "speed", { v }); V.speed = v; if (v) V.lastSpeed = v; renderHUD(Sim.stats(S)); if (V.drawer) $("drawer-sub").innerHTML = v ? icon("play1") : icon("pause"); }
+  /* src: "user" (buttons, keys, auto-pause, cards: anything but smart speed) clears the smart-speed state; "smart" keeps it */
+  function setSpeed(v, src, why) {
+    if (S && v !== V.speed) TELE.event(S.day, "speed", src === "smart" ? { v, src, why } : { v });
+    if (src !== "smart") V.smart = null;
+    V.speed = v; if (v) V.lastSpeed = v;
+    renderHUD(Sim.stats(S)); if (V.drawer) $("drawer-sub").innerHTML = v ? icon("play1") : icon("pause");
+  }
   function tapTarget(target) {   // tap-to-place: armed payload + tapped target
     const ev = evaluate(V.armed, target);
     if (!ev.res) return false;

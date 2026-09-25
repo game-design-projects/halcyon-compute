@@ -6,6 +6,22 @@ release plus the fix and merged back here afterwards.
 
 ## [Unreleased]
 
+Improvement round driven by real telemetry (v0.4.4, seed 45823, one player, replay-verified to day 730).
+
+### Changed
+- **Smart speed** (Settings, on by default): a new campaign starts at 2×; a failure, a contract starting to miss its
+  SLA, cash below 0 or a lost customer slows the game to 1× for 10 days, then your speed comes back (the speed it returns
+  to keeps an outline). Pause and any speed you pick always win. Logged in telemetry (`smartSpeed`, `speed.src`).
+
+### Tools
+- `tools/replay.js` reports smart-speed use (setting, slowdowns by reason, restores, manual speed changes).
+
+### Known issues
+- **The Casual reference bot collapses mid-game on some seeds** (seed 45823: d360 3.4M → d540 1.26M → d720 3.19M), so the
+  pace chip often says "ahead of Casual". Fix in progress (DECISIONS D74).
+- Chapter spacing (D70), a never-leaving starting customer (D71) and price-elastic GPU markets (D72) are implemented but
+  held back until the reference bots are rebalanced.
+
 ## [0.4.5] - 2026-09-25 (hotfix)
 
 ### Fixed

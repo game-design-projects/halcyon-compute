@@ -236,5 +236,33 @@
     return LINK[n % LINK.length];
   }
 
-  return { KINDS, kindOf, byKind, kindCounts, reason, offerFit, servePreview, blueprint, blueprintDiff, nextEmptyRack, fillPlan, undoPre, undoEntry, resolveUndo, undoStack, alerts, linkColor, LINK };
+  /* ---------- smart speed (v0.4.6, DECISIONS D73) ----------
+     Telemetry (3 sessions, one player): only 1x was ever used, ~50 pause/unpause in 16 min, a campaign ~40 min at 1x.
+     Smart speed (setting, default on): a new campaign starts at SMART.START (2x); while running at >= 2x an URGENT event
+     (a failure, a contract starting to miss its SLA, cash below 0, a customer walking away) slows the game to 1x for
+     SMART.HOLD game days (the walk-away window stays as long as at 1x), then it returns to the speed you chose. New
+     offers are not urgent (they wait 10-20 days). Pause and any speed you pick yourself always win (the UI clears the
+     state on a manual change). Pure: (state, input) -> { state, set: speed to apply or null, why }. */
+  const SMART = { START: 2, HOLD: 10 };
+  const URGENT = ["fail", "sla", "cash", "lost"];
+  function smartStep(state, inp) {
+    const { on, speed, day, urgent } = inp;
+    if (!on) return { state: null, set: null, why: null };
+    const why = urgent && URGENT.includes(urgent) ? urgent : null;
+    if (why && speed >= 2) return { state: { back: speed, until: day + SMART.HOLD, why }, set: 1, why };
+    if (why && state) return { state: Object.assign({}, state, { until: Math.max(state.until, day + SMART.HOLD), why }), set: null, why };
+    if (state && speed === 1 && day >= state.until) return { state: null, set: state.back, why: "quiet" };
+    return { state, set: null, why: null };
+  }
+  /* the most urgent new thing between two snapshots {failed, miss:Set, neg, lost} (null = nothing urgent) */
+  function urgentOf(prev, now) {
+    if (!prev) return null;
+    if (now.lost > prev.lost) return "lost";
+    if (now.neg && !prev.neg) return "cash";
+    if (now.failed > prev.failed) return "fail";
+    for (const id of now.miss) if (!prev.miss.has(id)) return "sla";
+    return null;
+  }
+
+  return { KINDS, kindOf, byKind, kindCounts, reason, offerFit, servePreview, blueprint, blueprintDiff, nextEmptyRack, fillPlan, undoPre, undoEntry, resolveUndo, undoStack, alerts, linkColor, LINK, SMART, smartStep, urgentOf };
 });

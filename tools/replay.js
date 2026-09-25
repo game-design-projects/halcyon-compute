@@ -75,6 +75,14 @@ const report = {
   actionsByType: byType, rejections: rejByMsg, realSecondsAtSpeed: Object.fromEntries(Object.entries(speedTime).map(([k, v]) => [k, +v.toFixed(0)])),
   drawersOpened: drawers, chaptersSeen: chapters, idleGapsOver90Days: idleGaps, jsErrors: ev("jsError").map(e => e.data),
   toastsShown: ev("toast").length,
+  // v0.4.6 smart speed (D73): setting at start, automatic slowdowns by reason, and manual speed changes
+  smartSpeed: (() => {
+    const set = ev("smartSpeed"), sp = ev("speed"), auto = sp.filter(e => e.data.src === "smart");
+    const why = {};
+    for (const e of auto) if (e.data.v === 1) why[e.data.why] = (why[e.data.why] || 0) + 1;
+    return { on: set.length ? set[set.length - 1].data.on : null, start: set.length && set[0].data.start != null ? set[0].data.start : null,
+      slowdowns: why, restores: auto.filter(e => e.data.why === "quiet").length, manualChanges: sp.length - auto.length };
+  })(),
 };
 if (withBots) {
   const Bots = require("../bots/bots.js");
