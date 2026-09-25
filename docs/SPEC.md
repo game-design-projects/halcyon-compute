@@ -203,4 +203,4 @@ M66 **Incumbent response**: after the real exotic's 2nd model, Kestrel/Heron cut
 - Mid-game cash should not pile up idle for more than ~1 year: Hall 2, contracts, investors and policy must create sinks and choices. Measured (v3) as the planner's longest stretch with more than $2M in the bank, mean over seeds < ~365 days.
 - v4 additions: the human-paced Casual beats idle and never goes bankrupt; Expert beats Casual on most seeds; an idle player
   with only the anchor survives (all 5 years); the first signable offers are deliverable with the starting cash.
-- v4 status (n=12, reports/depth.json): all met except idle cash (493 d mean); see DECISIONS "v4 contracts core".
+- v4 status (n=12, reports/depth.json): all met except idle cash (521 d mean); see DECISIONS "v4 contracts core".

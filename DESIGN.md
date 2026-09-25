@@ -139,22 +139,22 @@ Human-paced, full game, n = 12: **Casual 5,205** (877–11,397), **Expert 17,013
 Casual beats idle on 12/12, none bankrupt or fired.
 
 Balance targets (SPEC §6) on the full game, n = 12:
-- **Idle** (only the starting customer) survives on every seed and ends at 1.3 % of the planner's score.
+- **Idle** (only the starting customer) survives on every seed and ends at 1.2 % of the planner's score.
 - **Greedy** is never bankrupt; it ends below idle on 1/12 seeds (seed 11), which SPEC §6 allows (DECISIONS D52).
-- **The planner** is never fired and beats greedy on 12/12 seeds by at least +332 %.
-- **Idle cash** (the planner's longest stretch above $2M, mean over seeds) is **493 days: not met** (target < ~365). It is
+- **The planner** is never fired and beats greedy on 12/12 seeds by at least +186 %.
+- **Idle cash** (the planner's longest stretch above $2M, mean over seeds) is **521 days: not met** (target < ~365). It is
   offer-flow-bound late in the game; see DECISIONS "v4 contracts core" (Open).
 - **Chapter coverage** (games out of 12 where the chapter changed the planner's actions): 15 chapters 12/12; environment 7/12
-  (drought-dependent); investors 8/12 (12/12 counting explicit declines).
-- **Timing:** planner ≈4.4 s per game, greedy ≈1.5 s (inside 8 parallel workers).
+  (drought-dependent); investors 6/12 (12/12 counting explicit declines).
+- **Timing:** planner ≈4.7 s per game, greedy ≈1.6 s (inside 8 parallel workers).
 
 What this suggests (tentatively):
 - **Contracts carry most of the depth now**: without them (a flat-rate buyer at the same average price) the relative gap
-  falls from +1,051 % to +100 %, mostly because greedy does 7× better. Matching capacity to promises is where myopia is
+  falls from +854 % to +100 %, mostly because greedy does 5.6× better. Matching capacity to promises is where myopia is
   punished (overcommitting, late jobs, idle hardware between contracts, walk-outs). The planner does about as well either way.
-- Heat, operations, fabric and reputation carry depth too (gap +459…+644 % without them); memory, policy and investors
-  carry little (+756…+986 %). The per-seed spread is large (± $11–40M): the ordering is a hypothesis.
-- **Greedy is weaker than in v3** (5.0M vs 7.7M) while the planner is similar (57.7M vs 61.8M): the contract loop widens the
+- Fabric, network, reputation, energy, generations and heat carry depth too (gap +373…+617 % without them); memory,
+  policy, environment and facilities carry little (+702…+1,033 %). The per-seed spread is large (± $11–40M): the ordering is a hypothesis.
+- **Greedy is weaker than in v3** (6.2M vs 7.7M) while the planner is similar (59.3M vs 61.8M): the contract loop widens the
   gap. A human is compared with Casual/Expert, not with the full bots.
 - Generations, fabric and roofline ablations stay confounded (they change the economy).
 
