@@ -5,6 +5,12 @@ Versions are milestones of the week-3 project; there are no tagged releases.
 
 ## [Unreleased]
 
+## [0.4.3] - 2026-09-25 (hotfix)
+
+### Fixed
+- Telemetry no longer loses batches: batches are capped in size, retried with backoff until the server confirms, kept
+  across reloads, and every batch carries the session meta (replays of sessions with a lost first batch diverged).
+
 ## [0.4.2] - 2026-09-25 (hotfix)
 
 ### Fixed
