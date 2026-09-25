@@ -6,6 +6,11 @@ release plus the fix and merged back here afterwards.
 
 ## [Unreleased]
 
+## [0.4.7] - 2026-09-25
+
+Includes everything from 0.4.6 (smart speed, tagged separately from c9c859e) plus late-chapter spacing and the first
+Casual bot fix.
+
 Improvement round driven by real telemetry (v0.4.4, seed 45823, one player, replay-verified to day 730).
 
 ### Changed
@@ -27,6 +32,12 @@ Improvement round driven by real telemetry (v0.4.4, seed 45823, one player, repl
   around day 1710 on seed 45823. Under investigation (DECISIONS D74).
 - A never-leaving starting customer (`K.ANCHOR_STAYS`, D71) and price-elastic GPU markets (`K.GPU_ELASTIC`, D72) are
   implemented and tested but ship switched OFF until the reference bots are rebalanced.
+
+## [0.4.6] - 2026-09-25
+
+### Changed
+- Smart speed (Settings, on by default): campaigns start at 2×; failures, SLA misses, cash < 0 or a lost customer slow
+  to 1× for 10 days, then your speed returns. See 0.4.7 for details.
 
 ## [0.4.5] - 2026-09-25 (hotfix)
 
