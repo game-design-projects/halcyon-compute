@@ -44,19 +44,32 @@
     SLA_WALK_DAYS: 20,          // a serving customer whose SLA is missed this many days in a row terminates the contract
     RENEW_BEFORE: 10,           // a serving customer on track (SLA met so far) offers a renewal this many days before the end
     // v0.4.2 onboarding grace (telemetry: a new player lost the anchor on day 46): a miss streak that began before
-    // GRACE_DAYS is tolerated GRACE_PATIENCE x longer, and the anchor cannot walk before GRACE_DAYS (it only pays less)
+    // GRACE_DAYS is tolerated GRACE_PATIENCE x longer, and the anchor cannot walk before GRACE_DAYS (it only pays less; D71 below)
     GRACE_DAYS: 90, GRACE_PATIENCE: 2,
     // v0.4.2 web is an unbounded, price-elastic market (designer: "web 需求需要做 inf 下去，满了 web 降低单价"; DECISIONS D61):
     // new web offers are priced x max(WEB_FLOOR, min(1, (WEB_DREF / H)^WEB_EPS)), H = web units a day you already hold.
     // Flat up to the old 30-unit market; ~1-year server payback near H 75; below a server's running cost past ~170.
     // Offer size: at most max(WEB_CAP_MIN, WEB_CAP_FRAC x your web capacity) (sane steps instead of a demand wall)
     WEB_DREF: 30, WEB_EPS: 0.8, WEB_FLOOR: 0.25, WEB_CAP_MIN: 12, WEB_CAP_FRAC: 0.6,
+    // v0.4.6 GPU markets (inference, training, frontier) are price-elastic too (soft guidance, D66 audit item 1; D72):
+    // a new offer is priced x max(GPU_FLOOR, min(1, (demand / H)^GPU_EPS)), H = units of that market you already hold.
+    // Flat up to the market's (growing) demand, then cheaper; offers no longer stop when the market is "full".
+    // GPU_ELASTIC 0 = the old open-demand wall (kept for balance comparisons)
+    GPU_ELASTIC: 0, GPU_EPS: 0.8, GPU_FLOOR: 0.3,
+    // D71: ANCHOR_STAYS 1 = the day-0 anchor customer never walks (0 = the v0.4.2 rule: it can walk after the grace).
+    // D71 and D72 (GPU_ELASTIC) ship OFF until the reference bots are rebalanced: with either on, the fixed-seed bots test
+    // flips (Expert bankrupt on seed 11 / the planner stops using ch17 on seed 12). See DECISIONS v0.4.6
+    ANCHOR_STAYS: 0,
     // once GPUs are unlocked, web customers arrive on their own clock (every WEB_EVERY +- OFFER_JITTER days) instead of
     // taking GPU offers' turns on the board: web never closes now, and it must not crowd out the GPU offer flow
     WEB_EVERY: 8, WEB_BOARD_MAX: 3,
     // v4 player-triggered chapters (DECISIONS D49): one chapter per CH_GAP days at most; a stalled active player gets the
     // next chapter after CH_STALL days
     CH_GAP: 30, CH_STALL: 240,
+    // v0.4.6 (D70; telemetry feee0c29: fabric/long-term deals/memory/finance unlocked d596/626/656/686, four chapters in
+    // 90 days): from ch7 on (index >= CH_LATE_FROM) chapters unlock at least CH_GAP_LATE days apart. Only fast players are
+    // slowed (milestones still gate; slow players are further apart anyway; the CH_STALL fallback is unchanged)
+    CH_LATE_FROM: 6, CH_GAP_LATE: 45,
     // ch8 build-to-suit: big, long, high-SLA offers that need an up-front fit-out (capex) and start after a lead time
     BTS_EVERY: 40, BTS_JITTER: 10, BTS_FIRST: 30, BTS_EXPIRY: 20, BTS_LEAD: 45, BTS_PREMIUM: 0.2, BTS_PENALTY_MULT: 3,
     BTS_FIT_PER_UNIT: 6, BTS_MIN_UNITS: 20, BTS_SLA: 0.95,
@@ -612,11 +625,16 @@
   /* missed days in a row a customer tolerates: doubled for a streak that began in the onboarding grace */
   function patience(s, c) { return K.SLA_WALK_DAYS * (s.day - (c.streak || 0) < K.GRACE_DAYS ? K.GRACE_PATIENCE : 1); }
   /* days until serving contract c walks away at its current miss streak (0 = today), or null when it is not at risk.
-     The anchor cannot walk before GRACE_DAYS. */
+     The anchor cannot walk before GRACE_DAYS; with K.ANCHOR_STAYS (D71) it never walks. */
   function walkIn(s, c) {
-    if (!c || isJob(c) || c.phantom || !(c.streak > 0)) return null;
+    if (!c || isJob(c) || c.phantom || (c.anchor && K.ANCHOR_STAYS) || !(c.streak > 0)) return null;
     return Math.max(0, patience(s, c) - c.streak, c.anchor ? K.GRACE_DAYS - s.day : 0);
   }
+  /* v0.4.6 (D71, K.ANCHOR_STAYS): the day-0 anchor customer never walks. Missed deliveries cost the usual SLA penalty for as long as any
+     customer would wait (its patience); past that it just pays for what it gets and is served after every other
+     contract (bounded exposure, no cliff, no trap for a player who winds web down, and it never starves newer customers
+     into walking) until deliveries recover and the streak resets */
+  const penaltyOf = (s, c) => K.ANCHOR_STAYS && c.anchor && (c.streak || 0) >= patience(s, c) ? 0 : c.penalty;
   /* active on `day`: started, and not yet over (serving: before its end; job: work left) */
   const activeC = (c, day) => !(c.start > day + 1e-9) && (isJob(c) ? c.done < c.work - 1e-9 : day < c.end);
   /* allocate every rack's output to contracts, most urgent first (least slack; ties: higher penalty, then id).
@@ -639,7 +657,8 @@
     for (const c of s.contracts) {
       if (!activeC(c, day)) continue;
       const job = isJob(c), need = job ? jobNeed(c, day) : c.units;
-      const slack = c.phantom ? 1e9 : job ? (c.deadline - day) - Math.max(0, c.work - c.done) / c.maxRate : 0;
+      // an anchor past its patience is a best-effort customer (D71): it takes output after every other contract
+      const slack = c.phantom ? 1e9 : c.anchor && penaltyOf(s, c) === 0 ? 1e8 : job ? (c.deadline - day) - Math.max(0, c.work - c.done) / c.maxRate : 0;
       act.push({ c, job, need, slack, got: 0 });
       if (!c.phantom) out.owed[c.w] += need;
     }
@@ -669,7 +688,7 @@
         out.cMiss[c.id] = miss;
         const v = del * c.price;
         out.revenue[c.w] += v; out.gross += v;
-        out.penalties += miss * c.penalty;
+        out.penalties += miss * penaltyOf(s, c);
       }
     }
     const val = {};
@@ -1889,6 +1908,14 @@
   /* web price elasticity (D61): the factor on the index for the NEXT web contract when you already hold h units a day */
   const webPriceAt = h => Math.max(K.WEB_FLOOR, Math.min(1, Math.pow(K.WEB_DREF / Math.max(1e-9, h), K.WEB_EPS)));
   const webPriceF = (s, extra) => webPriceAt(held(s).web + (extra || 0));
+  /* GPU market price factor (D72): flat while you hold less than the market's demand, then falling to GPU_FLOOR */
+  const gpuPriceAt = (h, demand) => Math.max(K.GPU_FLOOR, Math.min(1, Math.pow(Math.max(1e-9, demand) / Math.max(1e-9, h), K.GPU_EPS)));
+  /* the price factor for the next offer in `market` (web | infer | train | frontier) when you hold H (held(s)) */
+  function priceFactor(s, market, H, mk) {
+    if (market === "web") return webPriceAt(H.web);
+    if (!K.GPU_ELASTIC) return 1;
+    return gpuPriceAt(H[market], (mk || marketAt(s, s.day))[market].demand);
+  }
   /* after the GPU chapter, a player with no GPU hardware and no GPU work always has one starter GPU offer on the board */
   function needsStarter(s) {
     if (!core(s) || !on(s, "gpu")) return false;
@@ -1901,8 +1928,8 @@
     const st = stats(s), mk = st.mk, rf = repF(s), R = () => nextRand(s);
     const cap = capacity(s, st), H = held(s), f = fleet(s), owed = owedNow(s);
     const kinds = [];
-    // GPU markets: a full market sends no offers (demand grows 1.25-2.2x a year). Web never fills: it gets cheaper (D61)
-    const openOf = w => w === "web" ? Infinity : Math.max(0, mk[w].demand - H[w]);
+    // no market "fills" any more: past its demand a market gets cheaper (web D61, GPU D72). GPU_ELASTIC 0 = the old wall
+    const openOf = w => w === "web" || K.GPU_ELASTIC ? Infinity : Math.max(0, mk[w].demand - H[w]);
     const add = (kind, w, market) => {
       const card = bestCard(s, w === "frontier" ? "train" : w), m = w === "frontier" ? "frontier" : w;
       const c = cap[m], free = Math.max(0, c - owed[m]);
@@ -1937,11 +1964,11 @@
     units = Math.min(units, pick.open, kind === "web" ? Math.max(K.WEB_CAP_MIN, K.WEB_CAP_FRAC * cap.web) : Infinity);
     units = Math.max(K.OFFER_MIN_UNITS, Math.round(units));
     const cust = customer(s), spread = (1 + K.CONTRACT_PREMIUM) * (1 + (R() * 2 - 1) * K.QUOTE_SPREAD), repAdj = 1 + 0.2 * rf;
-    const pf = market === "web" ? webPriceAt(H.web) : 1, P = mk[market].price * pf, ttl = K.OFFER_EXPIRY_MIN + Math.round(R() * (K.OFFER_EXPIRY - K.OFFER_EXPIRY_MIN));
+    const pf = priceFactor(s, market, H, mk), P = mk[market].price * pf, ttl = K.OFFER_EXPIRY_MIN + Math.round(R() * (K.OFFER_EXPIRY - K.OFFER_EXPIRY_MIN));
     const o = { id: "c" + s.nextId++, kind, cust: cust.name, icon: cust.icon, foreign: cust.foreign, w, spot: +mk[market].price.toFixed(4),
       repAdj: +repAdj.toFixed(4), stretch, expires: s.day + ttl, ttl };
     if (starter) o.starter = true;
-    if (pf < 1) o.pf = +pf.toFixed(4);           // the web volume discount it was signed at (a renewal keeps it, D61)
+    if (pf < 1) o.pf = +pf.toFixed(4);           // the volume discount it was signed at (a renewal keeps it, D61/D72)
     if (kind === "train" || kind === "frontier") {
       const days = pickOf(s, starter ? K.JOB_DAYS.filter(x => x >= 60) : K.JOB_DAYS), work = Math.max(K.OFFER_MIN_UNITS * days, Math.round(units * days));
       const pay = work * P * (1 + K.JOB_PREMIUM) * spread * repAdj;
@@ -2138,18 +2165,25 @@
     return false;
   }
   /* the next chapter (ablated ones are stepped over) unlocks once its milestone holds, not before its earliest day and
-     at most one per K.CH_GAP days. An active player (2+ GPUs) who is stuck gets it after K.CH_STALL days anyway. */
+     at most one per chapterGap(i) days (K.CH_GAP; K.CH_GAP_LATE from ch7: D70). An active player (2+ GPUs) who is stuck gets it after K.CH_STALL days anyway. */
   function nextChapter(s) {
     let i = s.chapter + 1;
     while (i < CHAPTERS.length && CHAPTERS[i].mech && s.mech[CHAPTERS[i].mech] === false) i++;
     return i < CHAPTERS.length ? i : null;
+  }
+  /* minimum days between the previous unlock and chapter index i (D70): CH_GAP for ch2-6, CH_GAP_LATE from ch7 on */
+  const chapterGap = i => i < K.CH_LATE_FROM ? K.CH_GAP : K.CH_GAP_LATE;
+  /* the first day the next chapter may unlock (its earliest day and the spacing; its milestone still has to hold) */
+  function chapterReadyDay(s) {
+    const i = nextChapter(s);
+    return i == null ? null : Math.max(CHAPTERS[i].day, s.prog.lastChapter + chapterGap(i));
   }
   function checkChapters(s, st) {
     if (s.sandbox) return;
     const i = nextChapter(s);
     if (i == null) return;
     const c = CHAPTERS[i], since = s.day - s.prog.lastChapter;
-    if (s.day < c.day || since < K.CH_GAP) return;
+    if (s.day < c.day || since < chapterGap(i)) return;
     const f = fleet(s);
     const met = milestone(s, c.key, st, f), stall = since >= K.CH_STALL && s.chapter >= 2 && f.gpus >= 2;
     if (!met && !stall) return;
@@ -2313,7 +2347,7 @@
         ct.done = Math.min(ct.work, ct.done + del * dt);
         if (s.day >= ct.deadline && !(ct.start > s.day + 1e-9)) { ct.penaltyPaid += ct.lateFee * dt; ct.late = true; s.dayAcc.missed[ct.id] = true; }
         if (ct.done >= ct.work - 1e-9) (doneJobs = doneJobs || []).push(ct);
-      } else if (miss > 1e-9) { ct.missed += miss * dt; ct.penaltyPaid += miss * ct.penalty * dt; s.dayAcc.missed[ct.id] = true; }
+      } else if (miss > 1e-9) { ct.missed += miss * dt; ct.penaltyPaid += miss * penaltyOf(s, ct) * dt; s.dayAcc.missed[ct.id] = true; }
     }
     if (doneJobs) for (const c of doneJobs) completeJob(s, c);
     const a = 1 - Math.exp(-dt / K.THERMAL_TAU);
@@ -2449,7 +2483,7 @@
     K, MODES, MARKET, INTENSITY, NET_NEED, CHAPTERS, BASE_ITEMS, SHOP_ORDER, GEN_LAUNCH, WORKLOADS, CONTENT: C, LOSS_LABEL,
     newGame, step, advance, stats, check, apply, project, shallowClone, netWorth, resale, score, summary, companyValue,
     // v4 contracts core + player-triggered chapters
-    contractsOn: core, isJob, jobNeed, capacity, capacityAt, commitmentPeak, deliverable, overbook, walkIn, patience, needsStarter, webPriceF, webPriceAt, bestCard, held, roomFor, owedNow, fleet, milestone, nextChapter, makeOffer, LESSON,
+    contractsOn: core, isJob, jobNeed, capacity, capacityAt, commitmentPeak, deliverable, overbook, walkIn, patience, needsStarter, webPriceF, webPriceAt, gpuPriceAt, priceFactor, bestCard, held, roomFor, owedNow, fleet, milestone, nextChapter, chapterGap, chapterReadyDay, makeOffer, LESSON,
     seasonAt, marketAt, rackById, rackIndex, usedU, rackKw, rackKwAll, gridKwAll, shopItems, currentGen, busyTechs, isDead, throttleAt,
     on, repOf, repFactor, hazard, naturalWorkload, logCash, ppaQuote, creditLimitOf, shelfLoad, transitTarget, trailingRevenue, hbmF, gridNext, hallCost, HALL_LETTERS,
     setDebug(v) { DEBUG = !!v; },

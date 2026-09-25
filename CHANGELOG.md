@@ -12,15 +12,21 @@ Improvement round driven by real telemetry (v0.4.4, seed 45823, one player, repl
 - **Smart speed** (Settings, on by default): a new campaign starts at 2×; a failure, a contract starting to miss its
   SLA, cash below 0 or a lost customer slows the game to 1× for 10 days, then your speed comes back (the speed it returns
   to keeps an outline). Pause and any speed you pick always win. Logged in telemetry (`smartSpeed`, `speed.src`).
+- **Late chapters are spaced out**: from chapter 7 on, at least 45 days between unlocks (was 30; the player got four
+  chapters in 90 days). The goal tooltip's "from day N" includes the spacing.
+- **Casual reference bot** (pace chip, end screen) saves for its first GPU once it has learnt GPUs, instead of growing a
+  thin-margin web business: first GPU median day 430 → 278, mean 7.3M → 8.6M, min 0.21M → 1.90M (12 seeds). On the
+  telemetry seed it no longer halves mid-game (d540 1.26M → 8.2M).
 
 ### Tools
 - `tools/replay.js` reports smart-speed use (setting, slowdowns by reason, restores, manual speed changes).
+- `reports/bots-v046.json`: the 12-seed bot run for this round.
 
 ### Known issues
-- **The Casual reference bot collapses mid-game on some seeds** (seed 45823: d360 3.4M → d540 1.26M → d720 3.19M), so the
-  pace chip often says "ahead of Casual". Fix in progress (DECISIONS D74).
-- Chapter spacing (D70), a never-leaving starting customer (D71) and price-elastic GPU markets (D72) are implemented but
-  held back until the reference bots are rebalanced.
+- Casual (and Expert) still drop late in the game on most seeds (after the day-1500–1560 shocks); Casual goes bankrupt
+  around day 1710 on seed 45823. Under investigation (DECISIONS D74).
+- A never-leaving starting customer (`K.ANCHOR_STAYS`, D71) and price-elastic GPU markets (`K.GPU_ELASTIC`, D72) are
+  implemented and tested but ship switched OFF until the reference bots are rebalanced.
 
 ## [0.4.5] - 2026-09-25 (hotfix)
 

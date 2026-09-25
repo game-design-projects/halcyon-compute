@@ -241,9 +241,19 @@
       const runCost = card ? o.units / card.u * (s.items[card.k].kw * perKw + K.UPKEEP_PER_DEV) * (Sim.isJob(o) ? o.days : term) : 0;
       const perDay = (revenue - runCost) / Math.max(1, Sim.isJob(o) ? o.days : term);
       const profit = noisy(mem, revenue * 0.85 - capex * 0.5 - runCost);
+      // v0.4.6 (diagnosis-casual.md, D74): once Casual has learnt GPUs and owns none, it saves for its first card - no
+      // web deal that needs new servers or more than today's idle web output (the telemetry player saved $165k -> $311k
+      // over days 20-80 and bought his first card on day 88)
+      const saving = savingForGpu(s, mem);
+      if (m === "web" && saving && (capex > 0 || st.idle.web + 1e-6 < o.units)) { dbg(s, `casual decline ${o.id} web: saving for the first GPU`); ap(s, { type: "declineContract", id: o.id }); continue; }
+      // ...and that first card is worth thinning the cushion for (GOAL_RUNWAY days of bills instead of GREEDY_RUNWAY)
+      const cushion = saving && m !== "web" ? Math.min(reserve, 40 + HUMAN.GOAL_RUNWAY * Math.max(0, st.opex)) : reserve;
       // a deal that needs no new hardware is taken even when cash is below the reserve (it only earns: idle servers
       // cost the same either way). v0.4.2: before, a broke greedy/Casual declined free-capacity deals and died slowly
-      const ok = revenue > 0 && profit > 0 && (capex === 0 || (capex + spent <= s.cash - reserve && perDay > 0 && capex / perDay <= payback(mem)));
+      const ok = revenue > 0 && profit > 0 && (capex === 0 || (capex + spent <= s.cash - cushion && perDay > 0 && capex / perDay <= payback(mem)));
+      dbg(s, `${mem.h ? "casual" : "greedy"} ${ok ? "sign" : "decline"} ${o.id} ${o.kind} ${o.units}u x${o.days}d short=${short.toFixed(1)} n=${n}` +
+        ` capex=${capex.toFixed(0)} cash-cushion=${(s.cash - cushion - spent).toFixed(0)} rev=${revenue.toFixed(0)} run=${runCost.toFixed(0)}` +
+        ` perDay=${perDay.toFixed(2)} payback=${perDay > 0 ? (capex / perDay).toFixed(0) : "inf"}`);
       if (ok) {
         // Casual keeps a running tally of what it just promised and what that will cost; full-speed greedy does not
         const res = ap(s, { type: "signContract", id: o.id });
@@ -251,6 +261,13 @@
         else if (!res.ok && BLOCKED.test(res.msg)) mem.offerSeen.delete(o.id);   // not decided yet: look again next session
       } else ap(s, { type: "declineContract", id: o.id });
     }
+  }
+  /* Casual's goal after the GPU chapter card (D74): it saves for its first GPU instead of growing web. Full-speed greedy
+     (mem.h unset) never saves: it stays the myopic measurement baseline */
+  function savingForGpu(s, mem) {
+    if (!mem.h || !Sim.on(s, "gpu") || !Sim.contractsOn(s) || END - s.day < HUMAN.PAYBACK) return false;
+    const learnt = mem.h.learn && mem.h.learn.gpu != null && mem.h.learn.gpu <= s.day;
+    return learnt && !s.racks.some(r => r.devices.concat(r.pending).some(d => itemRole(s, d) === "gpu"));
   }
   function greedy(s, mem) {
     if (!mem.offerSeen) mem.offerSeen = new Set();
@@ -276,8 +293,10 @@
       let best = null, gridBlocked = false;
       // a person looks at a few racks, not the whole floor x the whole catalogue
       const racks = mem.h ? sampleRacks(s, mem, 3) : null;
+      const saving = savingForGpu(s, mem);
       for (const c of candidates(s, { st, racks })) {
         if (c.cost > s.cash - reserve) continue;
+        if (saving && s.items[c.item].role === "cpu") continue;       // Casual saves for its first GPU: no more web servers
         const p = preview(s, c.acts);
         if (!p) { const chk = Sim.check(s, c.acts[c.acts.length - 1]); if (/Grid/.test(chk.msg)) gridBlocked = true; continue; }
         const gain = noisy(mem, gNet(s, p, cs) - base);
@@ -1156,7 +1175,7 @@
        after the unlock;
      - Casual also misjudges values by +-HUMAN.NOISE and looks at only 3 racks per purchase decision.
      All jitter comes from a per-game seeded stream in `mem.h`, so a human-paced game is deterministic. */
-  const HUMAN = { EVERY: 12, JITTER: 6, REACT: 3, REACT_J: 4, READ: 5, LEARN: 20, LEARN_J: 20, NOISE: 0.15, SAMPLE: 3, REPEAT: 6, TWO: 0.5, PAYBACK: 300,
+  const HUMAN = { EVERY: 12, JITTER: 6, REACT: 3, REACT_J: 4, READ: 5, LEARN: 20, LEARN_J: 20, NOISE: 0.15, SAMPLE: 3, REPEAT: 6, TWO: 0.5, PAYBACK: 300, GOAL_RUNWAY: 5,
     // Expert's own attention profile: a skilled player looks more often and does a little more per look
     EXPERT_EVERY: 8, EXPERT_JITTER: 4, EXPERT_BASE: 2 };
   function humanize(fn, name, noise) {

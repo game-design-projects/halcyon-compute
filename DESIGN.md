@@ -138,6 +138,11 @@ a *lower bound* on depth. Weak signals, not proof.
 Human-paced, full game, n = 12: **Casual 5,205** (877–11,397), **Expert 17,013** (4,900–35,593); Expert beats Casual on 10/12,
 Casual beats idle on 12/12, none bankrupt or fired.
 
+**v0.4.6 update** (full game only, `node bots/run.js --seeds 12`, reports/bots-v046.json; chapter spacing D70 + Casual saves
+for its first GPU D74; the ablation table above is from v0.4.1 and was not re-run): idle 723, greedy 9,091, planner 48,880
+(wins 11/12: seed 4 flips with any chapter-spacing change, 5.1–21.0M, per-seed chaos), **Casual 8,572** (1,902–19,288),
+**Expert 9,963** (3,689–23,915); Expert > Casual 7/12, Casual > idle 12/12, none bankrupt or fired.
+
 Balance targets (SPEC §6) on the full game, n = 12:
 - **Idle** (only the starting customer) survives on every seed and ends at 1.2 % of the planner's score.
 - **Greedy** is never bankrupt; it ends below idle on 1/12 seeds (seed 11), which SPEC §6 allows (DECISIONS D52).

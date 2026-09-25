@@ -1215,7 +1215,7 @@ test("M29b/M65: a real demand cut sends inference build-to-suit customers away (
 });
 
 test("full 1800-day campaign with a random-action driver is deterministic", () => {
-  const a = playRandom(26).s, b = playRandom(26).s;   // seed 26 (v4; was 21): reaches Hall 2 through milestones, takes an equity round and reaches d1800 (re-check the seed when RNG draws change)
+  const a = playRandom(10).s, b = playRandom(10).s;   // seed 10 (v0.4.6; was 26, 21): reaches Hall 2 through milestones, takes an equity round and reaches d1800 (re-check the seed when RNG draws or chapter pacing change; v0.4.6 late chapters are 45 d apart and seed 26 no longer reached investors)
   assert.equal(JSON.stringify(a), JSON.stringify(b));
   assert.equal(a.over, "end", `game lasted ${a.day} days (${a.over})`);
   assert.ok(a.equity.rounds >= 1 && a.contractLog.signed >= 1 && a.racks.length >= 36, "the driver touched the late chapters (Hall 2+)");

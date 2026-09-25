@@ -24,7 +24,7 @@ test("chapter pacing: ordered earliest days, at most one chapter per CH_GAP days
   const s = Bots.play(3, "planner").state;
   const un = Sim.CHAPTERS.map(c => s.unlocked[c.key]).filter(d => d != null);
   assert.ok(un.length >= 14, `planner reached ${un.length} chapters`);
-  for (let i = 1; i < un.length; i++) assert.ok(un[i] - un[i - 1] >= K.CH_GAP - 1e-9, `gap before chapter ${i + 1}: ${un[i] - un[i - 1]}`);
+  for (let i = 1; i < un.length; i++) assert.ok(un[i] - un[i - 1] >= Sim.chapterGap(i) - 1e-9, `gap before chapter ${i + 1}: ${un[i] - un[i - 1]}`);
 });
 
 test("hardware goes on sale with its chapter (GPUs with ch3, CRU coolers with ch4), never by the calendar", () => {
