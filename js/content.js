@@ -59,7 +59,7 @@
   const FLAT_F = [0, 8, 12.5, 19.5, 30, 47], FLAT_B = [0, 6, 9.5, 15, 23, 36];
 
   /* chapters. mech = ablation flag that disables the chapter (null = always on).
-     v4 (DECISIONS D41): chapters unlock in order on player MILESTONES (js/sim.js `milestone`), not on calendar days.
+     v4 (DECISIONS D49): chapters unlock in order on player MILESTONES (js/sim.js `milestone`), not on calendar days.
      `day` = the earliest day the chapter may unlock; `hint` = the trigger in plain words (for the UI's "next chapter" tip).
      At most one chapter per K.CH_GAP days. Sandbox still unlocks everything on day 0.
      v4 core loop (docs/CONTRACTS_CORE.md): all money comes from contracts; ch8 now teaches long-term deals. */

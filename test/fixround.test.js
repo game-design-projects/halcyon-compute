@@ -11,7 +11,7 @@ const rack = (s, id) => Sim.rackById(s, id);
 const mk = (s, type, extra) => Object.assign({ uid: s.nextId++, type, born: s.day - 100, inst: s.day - 100 }, extra || {});
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps * Math.max(1, Math.abs(b));
 
-/* ============ P1 chapter pacing (v4: player-triggered, DECISIONS D41) ============ */
+/* ============ P1 chapter pacing (v4: player-triggered, DECISIONS D49) ============ */
 test("chapter pacing: ordered earliest days, at most one chapter per CH_GAP days, ch17 early enough for its arc", () => {
   const days = Sim.CHAPTERS.map(c => c.day);
   assert.equal(days[0], 0);

@@ -18,6 +18,13 @@ original list, it wins.
 ## 1. Structure
 - **Campaign**: 5 years (1800 days, ≈15 min at 1x). 17 chapters unlock mechanics in order; each chapter shows a
   card (icons + ≤4 bullets) and pauses the game. Mechanics are **inactive until their chapter** (no hidden drain before the player is told).
+  **v4: chapters unlock on player milestones** (DECISIONS D49), not on calendar days: each chapter has a trigger (its `hint`
+  in content.js, checked daily from the state), an earliest day, and at most one chapter unlocks per 30 days; an active
+  player stuck on a trigger for 240 days gets the next chapter anyway. World events that need a calendar (generation
+  launches, HBM shocks, weather, outages, the exotic vendors' timeline) stay dated and are skipped while their chapter is
+  locked; everything aimed at the player (offer kinds, policy proposals, vendor pitches, new hardware) follows the unlocks.
+- **Core loop (v4, docs/CONTRACTS_CORE.md): all money comes from contracts.** Offers arrive on an order board → sign →
+  build the capacity before the start date → deliver (SLA) → get paid. Hardware with no contract earns nothing.
 - **Sandbox**: all chapters unlocked from day 0, same 1800 days, choose seed.
 - **Main menu**: Continue (autosave, localStorage, every 30 game days + on quarter close), New campaign, Sandbox, Seed field, How to play.
   Autosave must be wrapped in try/catch and optional.
@@ -25,21 +32,34 @@ original list, it wins.
   Company value = net worth + max(0, trailing-90-day profit/day) × 365 × 2 (a simple earnings multiple) × reputation factor (0.8–1.2).
   Before chapter 14 ownership is 100 % and the reputation factor is 1, so the score equals the old net worth plus the earnings multiple.
 - **Lose conditions**: bankrupt (cash < −credit line), or fired by the board (chapter 14+: miss 2 board targets in a row).
-- **End screen**: score, breakdown, replay of the same seed by the Greedy and Planner bots, "behind the curtain" reveal of every hidden truth, and 3 personalised lessons (the largest measurable mistakes, e.g. "you lost $1.2M to throttling in Y3 summer").
+- **End screen**: score, breakdown, replay of the same seed by the human-paced Casual and Expert bots (v4; the full-speed
+  Greedy and Planner remain for depth measurement), "behind the curtain" reveal of every hidden truth, and 3 personalised lessons (the largest measurable mistakes, e.g. "you lost $1.2M to throttling in Y3 summer").
 
 ## 2. Chapters (campaign day → mechanics). Each mechanic has an id M##.
-v0.3 pacing (playtest round 1): d0, 45, 100, 170, 250, 330, 420, 490, 570, 660, 750, 840, 930, 1020, 1110, 1200, 1290 (was 0, 30, 60, 120, 240, 300, …, 480, …). GPUs (c1/m1) go on sale with ch3 and CRU coolers with ch4. Ch17 stays at d1290: its seeded arc (launches 1290/1440/1590, vendor death 1500, Nanofab 1560) fills the last 500 days.
+v4 pacing: milestones (see §1). Earliest days 0, 20, 60, 100, 150, 200, 250, 300, 350, 400, 450, 500, 550, 600, 650, 700, 1200.
+Triggers: ch2 sign 2 offers / run 4 racks / >35 % of the grid; ch3 cash for a GPU + switch or 2 completed contracts; ch4 2 GPUs
+and summer within 60 days (or 6 GPUs); ch5 4 GPUs and a launch within 75 days (or past d390); ch6 30 devices or 8 GPUs; ch7 8
+training GPUs or 14 GPUs; ch8 5 completed contracts; ch9 10 GPUs ordered; ch10 $500k revenue in 90 days, or owing capacity
+without cash for a card; ch11 Hall 1 ≥80 % used or grid ≥85 %; ch12 power ≥1/3 of costs; ch13 a heat wave; ch14 $2M revenue in
+180 days; ch15 3 days with a missed delivery or an outage; ch16 2 t CO₂/day; ch17 from d1200 once ch5 is known.
+GPUs (c1/m1) go on sale with ch3, CRU coolers with ch4, exotics and PM-900 with ch17. (v0.3 calendar days were 0, 45, 100, 170, … 1290.)
 
-### Ch1 Racks and cash (d0) — exists
-M01 18-rack Hall 1 floor, 20U / 30 kW per rack. M02 switch per rack (rack-local network, 16 per switch). M03 web servers + web market (demand ≈30, flat). M04 oversupply sells at 25 %. M05 technicians install (3), 6-day shipping + 2-day install. M06 move/sell via drag.
+### Ch1 Racks and contracts (d0)
+M01 18-rack Hall 1 floor, 20U / 30 kW per rack. M02 switch per rack (rack-local network, 16 per switch). M03 web servers; web
+hosting contracts (market demand ≈30 units, flat). ~~M04 oversupply sells at 25 %~~ (removed in v4: no spot market). M05
+technicians install (3), 6-day shipping + 2-day install. M06 move/sell via drag.
+**v4 contract core (all chapters):** the order board (M29), the starting anchor customer, automatic allocation (M30), rack mode
+Off (0 power, 0 output, no failures), SLA walk-outs, renewals. See "v4 contract core" below.
 
 ### Ch2 Power (d45) — exists
 M07 grid cap 250 kW, upgrade to 400 kW. (Later tiers: 700 kW from ch11, **M07b** 1000 kW after that — $1.8M, 90 days; v0.3: only once Hall 3 is built or under construction.) M08 seasonal power price. M09 Eco/Std/Boost per rack.
 
 ### Ch3 GPUs and the roofline (d100) — exists
-M10 Kestrel C (compute) and Heron M (bandwidth) families. M11 training vs inference markets with separate demand/price. M12 roofline throughput = min(F, B × intensity). M13 per-rack workload toggle. M14 network need per workload.
+M10 Kestrel C (compute) and Heron M (bandwidth) families. M11 v4: inference serving contracts (units/day, SLA 95 %) and training
+jobs (work by a deadline, paid on completion) — the old training/inference markets are now their price index and demand. M12
+roofline throughput = min(F, B × intensity). M13 per-rack workload toggle. M14 network need per workload.
 
-### Ch4 Seasons and heat (d170) — exists
+### Ch4 Seasons and heat (d170) — exists (v4: seasonal cooling, neighbour heat and throttling start with this chapter)
 M15 seasonal cooling capacity. M16 room thermal inertia. M17 per-rack inlet + neighbour heat + throttling. M18 CRU cooler item.
 
 ### Ch5 Hardware generations (d250; launches d390, d780, d1170, d1560)
@@ -55,15 +75,32 @@ Decision: staff and spares vs downtime; running hot costs failures, not just thr
 
 ### Ch7 Network fabric (d420)
 M26 **Row spine**: each floor row can get a spine switch (facility purchase, $160k, 20 days, 3 kW). Training racks in a row with a spine pool their GPUs into one cluster.
-M27 **Frontier training market**: a third market that pays 1.6× the training price, but only counts output from clusters with ≥12 training GPUs on one spine. Separate demand (starts 30 units, grows 1.5×/yr).
+M27 **Frontier training jobs** (v4; was a market): pay 1.6× the training index, but only output from clusters with ≥12 training GPUs on one spine counts. Frontier demand starts at 30 units and grows 1.5×/yr; offers appear once a row holds 8+ training GPUs or a cluster exists.
 M28 **Internet transit**: web + inference output needs transit capacity (1 transit unit per 10 output units). Transit is bought in steps with a stepper (0.4 k/day per unit, changes take effect after 5 days). Short transit caps web + inference output proportionally.
 Decision: cluster training racks in a row (network wins) vs spread them out (heat wins).
 
-### Ch8 Customers and contracts (d490)
-M29 **Contract offers** arrive every ~25 days (seeded) as cards: customer (icon + name), workload, units, days, price/unit·day, SLA (min delivered fraction), penalty per missed unit·day, expiry (15 days).
+### v4 contract core (from ch1; was ch8 "Customers and contracts")
+M29 **Order board**: an offer every ~4 days (reputation makes them more frequent), expiring in 10–20 days, at most 6 on the
+board, none for a market whose demand is already held. Kind: uniform among the kinds the player has unlocked and can plausibly
+serve (web; inference and training jobs from ch3 if the player has cards or cash for one; frontier jobs from ch7 near a cluster).
+Size: 0.3–1.2× what the player can deliver (free capacity incl. hardware on its way + what half the cash buys, limited by floor
+room), a quarter of the time a 1.2–1.6× stretch; a first offer in a new market is 0.5–0.85 of one card; capped by open demand.
+Price: the market price index × 1.2 ± 15 % × reputation (±20 %); jobs +15 % (paid late, deadline risk); frontier 1.6×.
+Serving contracts start after a 14–24-day lead; jobs start at once. Fields: kind, cust, icon, w, units (jobs: nominal rate),
+days, lead, price, spot (index), sla, penalty (jobs: late fee/day), expires, ttl, stretch; jobs add work, pay, maxRate, lateFee,
+lateMax; build-to-suit adds bts, fitout; renewals add renewOf. Day 0: the anchor (Wren Hosting, 15 web units, all game) + 2
+small web offers.
+M30 **Allocation** every substep: SLA minimums first (least slack, then higher penalty), then serving top-ups, then job
+speed-ups (to 2× the nominal rate); the rest is idle. Serving: paid per delivered unit, penalty per unit below SLA × units;
+20 missed days in a row = the customer walks away. Jobs: lump sum on completion, 0.5 % of the pay per late day, cancelled 20
+days after the deadline (unpaid). Renewal offered 10 days before the end if the SLA held (re-priced; autoRenew signs it).
+M31 Prices follow the index, which drops at every launch and in the disruption price war: a long contract signed before a
+known launch is a hedge.
+
+### Ch8 Long-term deals (d490 in v0.3; v4: after 5 completed contracts)
 **M29b Build-to-suit** (v3): about every 60 days (±15, first 30 days after ch8) a big customer asks for dedicated capacity: units 40–80 % of today's output on that workload (≥20), 360–540 days, price = spot × (1.0–1.2) × reputation adjustment, SLA 95 %, penalty 3× the price, an up-front **fit-out** of $6k per unit (capex, paid at signing), and delivery starting **45 days** after signing (time to buy the hardware). Signing commits cash and capacity: a hedge before launches, a trap before a real demand shock (see M65).
-M30 Accepted contracts are served first from your supply at their fixed price; the rest goes to spot. A shortfall below the SLA costs the penalty and −reputation (from ch15).
-M31 Contract prices are quoted against **today's** spot price (±15 %), so locking in before a known generation launch is a hedge, and signing just after one is a trap.
+v4: build-to-suit offers every 40 ± 10 days (was 60 ± 15), sized 40–80 % of max(capacity, ¼ of demand). A shortfall below the SLA
+costs the penalty and −reputation (from ch15).
 Decision: hedge price risk vs keep flexibility; don't oversell capacity.
 
 ### Ch9 Memory market (d570)
@@ -141,6 +178,15 @@ M66 **Incumbent response**: after the real exotic's 2nd model, Kestrel/Heron cut
 - All new numbers entered by steppers or drag. No `<select>`, no `<input type=text>` except the seed field in the menu.
 
 ## 4. Bots
+- v4: all bots value states by economic profit (cash profit + training-job progress). **Greedy** signs any offer that pays
+  for the cards it needs beyond today's free capacity within 300 days, judging each offer against the same free capacity (so
+  a batch can overcommit), if the cards fit on the floor and it keeps 15 days of bills in cash; it parks racks that serve no
+  contract (Off) and sells parts that lose money today. **Planner** values offers against a pipeline belief (idle capacity
+  would find contracts at 85 % of the index after 15 days, up to open demand, after the public launch calendar), keeps
+  headroom over SLA-required units per unlocked risk, prices customer walk-outs, may buy up to 10 cards (30 for build-to-suit)
+  to take an offer, and treats offers it had to decline for room as a growth signal. **Human-paced Casual/Expert** (D50):
+  greedy/planner under a human attention budget (sessions, reaction and learning delays, decisions per session, noise);
+  they are what the player is compared with on the pace chip and the end screen.
 - v3: the greedy baseline may sell any part that loses money *today* (a gut player pulls a rack in the red) and lets an idle technician go; otherwise it stays myopic (payback ≤ 300 days, never hedges or pilots).
 - Greedy and planner must handle all new actions sensibly: planner uses contracts as hedges before rumoured launches, hires technicians when repair queues grow, keeps 2 spares, reads memory-scare signals, uses debt when ROI > interest, declines dilution unless growth ROI is high, buys backup before summer from ch11, signs PPA when spot is volatile, prepares for policies whose signals point to passing.
 - Depth report extended with ablations per chapter group. Target: planner > greedy on ≥90 % of seeds; relative gap ≥25 %.
@@ -155,3 +201,6 @@ M66 **Incumbent response**: after the real exotic's 2nd model, Kestrel/Heron cut
 - Greedy is never bankrupt; the planner is never fired.
 - Each chapter's mechanic changes the planner's actions at least once per game (log it).
 - Mid-game cash should not pile up idle for more than ~1 year: Hall 2, contracts, investors and policy must create sinks and choices. Measured (v3) as the planner's longest stretch with more than $2M in the bank, mean over seeds < ~365 days.
+- v4 additions: the human-paced Casual beats idle and never goes bankrupt; Expert beats Casual on most seeds; an idle player
+  with only the anchor survives (all 5 years); the first signable offers are deliverable with the starting cash.
+- v4 status (n=12, reports/depth.json): all met except idle cash (493 d mean); see DECISIONS "v4 contracts core".

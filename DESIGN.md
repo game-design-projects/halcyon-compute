@@ -5,30 +5,36 @@ should do"), and explain which characteristics it uses and which heuristics play
 Lecture 2 (see [docs/GAME_FEEL.md](docs/GAME_FEEL.md)). The full design contract is [docs/SPEC.md](docs/SPEC.md);
 version history is in [CHANGELOG.md](CHANGELOG.md).
 
-**The game:** you run a datacenter for 5 years (1800 days, about 15 minutes at 1x, pausable, up to 8x). You drag
-hardware onto racks in up to 3 halls and decide what each rack runs, how it is powered, cooled, staffed, financed
-and sold. **Score = founder equity value:** your ownership % × (net worth + 2 years of current profit) × reputation
-factor. Seventeen chapters unlock the systems one at a time, simplest first. A sandbox mode unlocks everything on day 0.
+**The game:** you run a datacenter for 5 years (1800 days, about 15 minutes at 1x, pausable, up to 8x). **All money
+comes from contracts (v4):** customers post offers on an order board; you sign, build the capacity before the start date,
+deliver against an SLA, and get paid. Hardware with no contract earns nothing. You drag hardware onto racks in up to 3 halls
+and decide what each rack runs, how it is powered, cooled, staffed, financed and sold. **Score = founder equity value:**
+your ownership % × (net worth + 2 years of current profit) × reputation factor. Seventeen chapters unlock the systems one at a
+time, simplest first, **when the player reaches each chapter's milestone** (not on a calendar). A sandbox mode unlocks
+everything on day 0.
 
-| Ch. | Day | System | The decision it adds |
+| Ch. | Unlocks when (earliest day) | System | The decision it adds |
 |---|---|---|---|
-| 1 | 0 | Racks, cash, switches, web market | Where to put hardware; when a market is full (oversupply sells at 25 %) |
-| 2 | 45 | Power: grid cap, per-rack cap, Eco/Std/Boost, grid tiers | Output vs power |
-| 3 | 100 | GPUs and the roofline (compute vs bandwidth cards; training vs inference) | Which card goes with which workload |
-| 4 | 170 | Seasons and heat: thermal inertia, inlet throttling, hot neighbours, coolers | Prepare for summer ahead of time; spread heat |
-| 5 | 250 | Hardware generations (launches at d390/780/1170/1560, ~60-day rumours) | When to upgrade, when to sell |
-| 6 | 330 | Operations: failures (age × heat), repairs, hiring, spares shelf | Staff and spares vs downtime |
-| 7 | 420 | Network fabric: row spines, frontier-training clusters (≥12 GPUs), internet transit | Cluster training in a row (network) vs spread it out (heat) |
-| 8 | 490 | Contracts: fixed-price offers with SLA and penalty; build-to-suit deals | Hedge price risk vs keep flexibility; don't oversell |
-| 9 | 570 | Memory market: HBM price index, shortages (some scares are false), forward orders | Buy ahead into inventory vs wait; read which scares are real |
-| 10 | 660 | Finance: credit line, leasing, tax with depreciation | Leverage before a price drop vs stay safe; lease what you'll replace |
-| 11 | 750 | Facilities: Hall 2/3, outages, UPS + generator, CRAC upgrades | Insurance vs growth capex |
-| 12 | 840 | Energy: volatile spot power, heat-wave spikes, PPA, solar + battery | Lock in price and green power vs flexibility |
-| 13 | 930 | Environment: cooling mode (evaporative vs chiller, PUE), water, droughts, carbon | Cheap power vs water risk |
-| 14 | 1020 | Investors: equity rounds, board targets (miss twice = fired), buyback | Dilution vs growth speed |
-| 15 | 1110 | Reputation and PR: SLA misses, outages, drought water use, press | Protect reputation; PR only when there's no scandal |
-| 16 | 1200 | Policy: carbon tax, efficiency mandate, export controls; votes with hinted odds, lobbying | Prepare before a policy passes vs wait for certainty |
-| 17 | 1290 | Disruption: real vs hype accelerator startups (seeded), pilots, an Optane-style vendor pitch, a demand shock that may be real or hype, incumbent price war | Read biased information; pay for information |
+| 1 | start | Racks, switches, the order board: web hosting contracts, a starting customer, rack mode Off | Which offers to sign; build before the start date; park idle hardware |
+| 2 | 2 offers signed, 4 racks, or >35 % of the grid (d20) | Power: grid cap, per-rack cap, Eco/Std/Boost, grid tiers | Output vs power |
+| 3 | cash for a GPU + switch, or 2 contracts done (d60) | GPUs and the roofline; inference serving contracts and training jobs (deadline, paid on completion) | Which card for which contract; serving (daily pay) vs jobs (lump sum, deadline) |
+| 4 | 2 GPUs and summer within 60 days (d100) | Seasons and heat: thermal inertia, inlet throttling, hot neighbours, coolers | Keep a buffer for summer; spread heat |
+| 5 | 4 GPUs and a launch within 75 days (d150) | Hardware generations (launches d390/780/1170/1560, ~60-day rumours) | Lock long contracts before a launch; when to upgrade |
+| 6 | 30 devices or 8 GPUs (d200) | Operations: failures (age × heat), repairs, hiring, spares shelf | Staff and spares vs missed deliveries |
+| 7 | 8 training GPUs or 14 GPUs (d250) | Network fabric: row spines, frontier training jobs (≥12 GPUs on a spine, 1.6×), internet transit | Cluster training in a row (network) vs spread it out (heat) |
+| 8 | 5 contracts done (d300) | **Long-term deals**: build-to-suit (fit-out capex, 45-day lead, 3× penalty) | Commit cash and capacity for years: hedge vs trap |
+| 9 | 10 GPUs ordered (d350) | Memory market: HBM price index, shortages (some scares are false), forward orders | Buy ahead into inventory vs wait; read which scares are real |
+| 10 | $500k revenue in 90 days, or owing capacity without cash (d400) | Finance: credit line, leasing, tax with depreciation | Leverage to deliver vs stay safe; lease what you'll replace |
+| 11 | Hall 1 ≥80 % used or grid ≥85 % (d450) | Facilities: Hall 2/3, outages, UPS + generator, CRAC upgrades | Insurance vs growth capex |
+| 12 | power ≥ ⅓ of costs (d500) | Energy: volatile spot power, heat-wave spikes, PPA, solar + battery | Lock in price and green power vs flexibility |
+| 13 | a heat wave (d550) | Environment: cooling mode (evaporative vs chiller, PUE), water, droughts, carbon | Cheap power vs water risk |
+| 14 | $2M revenue in 180 days (d600) | Investors: equity rounds, board targets (miss twice = fired), buyback | Dilution vs growth speed |
+| 15 | a missed delivery streak or an outage (d650) | Reputation and PR: SLA misses, outages, drought water use, press | Protect reputation; PR only when there's no scandal |
+| 16 | 2 t CO₂ a day (d700) | Policy: carbon tax, efficiency mandate, export controls; votes with hinted odds, lobbying | Prepare before a policy passes vs wait for certainty |
+| 17 | knowing ch5, from d1200 | Disruption: real vs hype accelerator startups (seeded), pilots, an Optane-style vendor pitch, a demand shock that may be real or hype, incumbent price war | Read biased information; pay for information |
+
+At most one chapter unlocks per 30 days; a player who is building (2+ GPUs) but stuck on a trigger gets the next chapter
+after 240 days. An idle player stays in chapter 1 (there is nothing to teach them).
 
 ## Characteristics used (from the lecture's list)
 
@@ -45,9 +51,9 @@ factor. Seventeen chapters unlock the systems one at a time, simplest first. A s
   indirect news ("sells its only fab", "fails to replicate"), paid measurement (pilot cards), and time.
   Generation launches are the one thing announced honestly.
 - **Systems** (the lecture's four kinds):
-  - *Conditional*: a rack throttles above 32 °C inlet; a rack without a switch earns nothing; missing a contract's SLA costs a penalty; missing two board targets gets you fired.
+  - *Conditional*: a rack throttles above 32 °C inlet; a rack without a switch earns nothing; hardware with no contract earns nothing; below a contract's SLA every missing unit pays a penalty, and 20 missed days in a row lose the customer; a late training job pays a daily fee and is cancelled 20 days late; missing two board targets gets you fired.
   - *Combination*: card × workload (roofline), training GPUs × a row spine (frontier cluster), PM-900 × a memory-bound rack, exotic card × tank, evaporative cooling × drought.
-  - *Feedback loops*: revenue → hardware → revenue is positive. The negative loops are heat → throttling and failures, oversupply → quarter price, and SLA misses → reputation → worse offers.
+  - *Feedback loops*: contracts → cash → hardware → bigger offers (they scale with what you can deliver) is positive. The negative loops are heat → throttling and failures → missed deliveries, a full market → no offers, and SLA misses → penalties, walk-outs and reputation → fewer, cheaper offers. Served customers offer renewals (a loop that rewards reliability).
   - *Resources*: cash, debt, kW, U, network, transit, technician time, cooling, water, market demand, reputation, equity.
 - **Length of play:** a decision takes seconds, a session is a quarter (the quarter tally), and the full game is 20 quarters (sandbox has the same length).
 - **Single player, "one-and-a-half"**: the market (rivals upgrading at launches, the incumbents' price war),
@@ -68,8 +74,15 @@ compresses the game state usefully. Heuristic 1 is the backbone; the others are 
 3. **"Heat is a forecast, not a reflex."** Coolers, Eco mode and chillers go in before late July, and hot racks go far apart.
 4. **"When a scarce input limits you, rank options by output per unit of that input."** Per kW when power limits you, per U when space does.
 5. **"Sell or lease the generation you'll replace; sell before the launch."**
-6. **"Don't oversupply a market; don't oversell your capacity."** This covers spot demand and contract SLAs.
-7. **"Lock prices before known drops."** A contract signed before a rumoured launch is a hedge; signed just after, it's a trap.
+6. **"Don't sign what you can't deliver; keep a buffer for failures and summer."** The SLA leaves 5–10 % slack; heat,
+   failures and droughts eat it. The planner keeps headroom per unlocked risk.
+7. **"Lock long contracts before known drops."** Signed prices never move; new offers follow the index, which falls at
+   every launch. A long contract signed before a rumoured launch is a hedge; signed just after, it's a trap.
+7a. **"Idle capacity is waste: match capacity to backlog."** Build what you owe (plus a buffer), park what serves nobody.
+7b. **"Training deadlines need compute, serving needs bandwidth; jobs pay late."** Match the card to the contract kind and
+   mind the cash flow: a training job pays only on completion.
+7c. **"Keep your customers."** A customer served at SLA offers a renewal; one missed for 20 days walks away (and the
+   cheapest contract is not the least valuable: the starting customer lasts the whole game).
 8. **"Buy insurance where the loss is fat-tailed."** Spares before failures cluster, UPS before outage season, a PPA when spot is spiking.
 9. **"Cluster where it pays, spread where it burns."** Frontier training needs 12 GPUs on one spine; heat punishes packing.
 10. **"A discount near a vendor's bad news is a liquidation."** (PM-900.)
@@ -82,74 +95,71 @@ compresses the game state usefully. Heuristic 1 is the backbone; the others are 
 
 Two scripted players share the simulation core (`bots/bots.js`), so we can measure how much thinking pays:
 
-- **Greedy** buys whatever raises income *right now* the most per dollar (payback ≤ 300 days). It ignores seasons,
-  launches, vendor risk and contracts, and never hedges or pilots. Like a gut player, it sells a part that loses
-  money *today* and lets an idle technician go. It also does the obvious chores (transit for its traffic,
-  auto-repair, one more technician when repairs pile up).
-- **Planner** plays the heuristics above across all 17 chapters with one value function: change in daily profit
-  over a lookahead (150 days, or the rest of the game in the last 420), plus the final-quarter profit × 730 that the
-  score counts, plus resale using the public launch calendar, minus the reputation cost of SLA misses. On top: it
-  signs contracts and build-to-suit deals it can serve with ≥10–15 % headroom (buying the capacity when that pays and
-  is affordable before delivery starts), builds grid tiers and Hall 2 when demand outruns the floor, buys UPS/solar/PPA,
-  switches each hall's cooling for droughts, reads scare follow-ups, pilots exotic cards, reads the demand-disruption
-  signal (inference build-to-suit customers walk away if it is real), and takes a VC round only when the board can
-  no longer fire it. It sees only public state, news and its own pilots (never the seed's hidden truths).
+- **Greedy** signs any offer that pays for the cards it needs beyond today's free capacity within 300 days (judging each
+  offer against the same free capacity, so a batch can overcommit), if the cards fit and it keeps 15 days of bills in the
+  bank; it buys whatever raises income *right now* per dollar, parks racks that serve nobody, and sells a part that loses
+  money *today*. It ignores seasons, launches, failures, vendor risk and cash flow, and never hedges or pilots.
+- **Planner** plays the heuristics above across all 17 chapters with one value function: change in economic profit (cash
+  profit + training-job progress) over a lookahead (150 days, or the rest of the game in the last 420), plus the
+  final-quarter profit × 730 that the score counts, plus resale using the public launch calendar, minus the reputation cost of
+  SLA misses and the revenue lost when a customer walks. It values offers against a *pipeline belief* (idle capacity would
+  find contracts at 85 % of the index, up to open demand, after the launch calendar), keeps headroom over SLA-required units
+  per unlocked risk, may buy up to 10 cards (30 for build-to-suit) to take an offer, and reads signals as before. It sees only
+  public state, news and its own pilots.
+- **Human-paced Casual and Expert** (v4, what the pace chip and end screen show): greedy and planner under a person's
+  attention budget — a decision session every 12–18 days (Expert 8–12) plus one 3–7 days after a new offer, failure or
+  chapter card; 1–2 decisions per session (Expert 2–3); new mechanics used 20–40 days after their card; Casual misjudges values
+  by ±15 % and looks at 3 racks at a time.
 
-`node bots/run.js --seeds 12 --ablate` (reports/depth.json, v3 balance: GPU prices ×1.6, build-to-suit every ~60
-days). **n = 12 seeds (1–12) per row, one planner implementation, score = founder equity value (SPEC §1).** The gap
-is a *lower bound* on depth: a better planner would open it further, and a better greedy would close it. Weak
-signals, not proof.
+`node bots/run.js --seeds 12 --ablate` (reports/depth.json, v4 balance: contract premium 1.2× the index, build-to-suit every
+~40 days). **n = 12 seeds (1–12) per row, one implementation of each bot, score = founder equity value (SPEC §1).** The gap is
+a *lower bound* on depth. Weak signals, not proof.
 
 | Variant | Greedy score (mean $k) | Planner score | Relative gap (mean / median / min) | Planner wins | Note |
 |---|---|---|---|---|---|
-| **Full game** | 7,719 | 61,829 | **+701 % / +666 % / +290 %** | 12/12 | net worth gap +662 % |
-| No heat/seasons | 14,315 | 70,517 | +393 % / +331 % / +134 % | 12/12 |  |
-| No generations | 58,334 | 171,066 | +193 % / +181 % / +90 % | 12/12 | confounded: prices never fall, so the never-sell greedy stops losing |
-| No operations | 16,188 | 71,295 | +340 % / +399 % / +94 % | 12/12 |  |
-| No fabric | 41,564 | 211,483 | +409 % / +408 % / +208 % | 12/12 | confounded: also removes transit, a large late cost for both bots |
-| **No contracts** | 7,705 | 37,527 | **+387 % / +471 % / +152 %** | 12/12 | also removes build-to-suit, the planner's main sink |
-| No memory market | 9,197 | 72,390 | +687 % / +688 % / +325 % | 12/12 |  |
-| No finance | 12,641 | 76,913 | +508 % / +481 % / +268 % | 12/12 | greedy bankrupt 1/12 (no credit line: floor −$150k) |
-| No facilities | 10,013 | 62,918 | +528 % / +522 % / +193 % | 12/12 |  |
-| **No energy** | 12,060 | 51,635 | **+328 % / +441 % / +143 %** | 12/12 |  |
-| No environment | 8,420 | 61,958 | +636 % / +678 % / +299 % | 12/12 |  |
-| No investors | 7,956 | 49,175 | +518 % / +552 % / +219 % | 12/12 |  |
-| No reputation | 8,592 | 58,881 | +585 % / +572 % / +259 % | 12/12 |  |
-| No policy | 8,169 | 74,430 | +811 % / +822 % / +388 % | 12/12 |  |
-| No disruption | 7,706 | 94,174 | +1,122 % / +1,189 % / +438 % | 12/12 |  |
-| No network | 10,815 | 74,805 | +592 % / +600 % / +192 % | 12/12 |  |
-| No roofline | 1,904 | 42,327 | +2,123 % / +3,082 % / +426 % | 12/12 | confounded: both families become poor at inference |
+| **Full game** | 5,011 | 57,664 | **+1,051 % / +1,780 % / +332 %** | 12/12 | net worth gap +805 % |
+| No heat/seasons | 10,261 | 76,329 | +644 % / +946 % / +50 % | 12/12 |  |
+| No generations | 26,208 | 158,706 | +506 % / +579 % / +201 % | 12/12 | confounded: prices never fall |
+| No operations | 13,946 | 83,482 | +499 % / +516 % / +86 % | 12/12 |  |
+| No fabric | 20,969 | 119,697 | +471 % / +538 % / +126 % | 12/12 | confounded: also removes transit |
+| **No contracts** | 34,771 | 69,456 | **+100 % / +89 % / +31 %** | 12/12 | a flat-rate buyer at index × 1.2 up to demand; no board |
+| No memory market | 7,157 | 77,714 | +986 % / +785 % / +353 % | 12/12 |  |
+| No finance | 6,386 | 48,239 | +655 % / +839 % / +8 % | 12/12 | greedy bankrupt 1/12 |
+| No facilities | 6,697 | 57,164 | +754 % / +769 % / +224 % | 12/12 | greedy bankrupt 1/12 |
+| No energy | 6,977 | 45,235 | +548 % / +596 % / +146 % | 12/12 |  |
+| No environment | 6,266 | 52,761 | +742 % / +795 % / +211 % | 12/12 |  |
+| No investors | 6,537 | 55,970 | +756 % / +788 % / +159 % | 12/12 |  |
+| No reputation | 11,242 | 62,822 | +459 % / +717 % / +66 % | 12/12 |  |
+| No policy | 6,179 | 64,633 | +946 % / +767 % / +337 % | 12/12 |  |
+| No disruption | 10,170 | 71,903 | +607 % / +671 % / +228 % | 12/12 |  |
+| No network | 9,645 | 65,191 | +576 % / +594 % / +297 % | 12/12 |  |
+| No roofline | 2,969 | 20,176 | +580 % / +649 % / −7 % | 11/12 | confounded: both families poor at inference |
+
+Human-paced, full game, n = 12: **Casual 4,151** (892–13,029), **Expert 14,930** (1,987–34,827); Expert beats Casual on 11/12,
+Casual beats idle on 12/12, none bankrupt or fired.
 
 Balance targets (SPEC §6) on the full game, n = 12:
-- **Idle** survives on every seed and ends at 1.0 % of the planner's score.
-- **Greedy** is never bankrupt (3.8–24× idle).
-- **The planner** is never fired (0 in every row) and beats greedy on 12/12 seeds by at least +290 %.
-- **Idle cash** (the planner's longest stretch with more than $2M in the bank, mean over seeds) is **311 days**
-  (it was 1,256 before v3), but 4/12 seeds still exceed a year (385–645 days).
-- **Chapter coverage** (games out of 12 where the chapter changed the planner's actions): 15 chapters in 12/12.
-  Environment 10/12: seeds 6 and 10 have no drought after chapter 13. Policy 10/12 (12/12 counting explicit
-  "don't lobby" decisions).
-- **Timing:** planner ≈1.9 s per game, greedy ≈0.6 s (single thread, n = 12).
+- **Idle** (only the starting customer) survives on every seed and ends at 1.3 % of the planner's score.
+- **Greedy** is never bankrupt; it ends below idle on 1/12 seeds (seed 11), which SPEC §6 allows (DECISIONS D52).
+- **The planner** is never fired and beats greedy on 12/12 seeds by at least +332 %.
+- **Idle cash** (the planner's longest stretch above $2M, mean over seeds) is **493 days: not met** (target < ~365). It is
+  offer-flow-bound late in the game; see DECISIONS "v4 contracts core" (Open).
+- **Chapter coverage** (games out of 12 where the chapter changed the planner's actions): 15 chapters 12/12; environment 7/12
+  (drought-dependent); investors 8/12 (12/12 counting explicit declines).
+- **Timing:** planner ≈4.4 s per game, greedy ≈1.5 s (inside 8 parallel workers).
 
 What this suggests (tentatively):
-- **Contracts (with build-to-suit) carry the most depth**: removing them roughly halves the planner's score
-  and the gap falls to +387 %. They are the planner's main cash sink and its hedge before launches.
-- **Energy, operations, heat and fabric carry a lot too** (gap +328…+409 % without them). Finance, facilities,
-  investors and reputation carry some (+508…+585 %). Environment, network, memory and policy carry little or
-  nothing (+592…+811 %). The per-seed spread of the gap is large (±$16–64M), so this ordering is a hypothesis,
-  not a result.
-- **Removing disruption *widens* the gap** (+1,122 %). The planner does better without the late shocks, and greedy
-  isn't hurt by them because it ignores exotic tech. That is not evidence that disruption adds depth. **Don't cut or
-  keep any mechanic on this evidence**; the next tests are cleaner ablations (fabric without the transit cost) and
-  playtests.
-- **Generations, fabric and roofline ablations are confounded** (they change the whole economy).
-- **Hall 3 and the 1000 kW grid tier were never built by the planner (0/12).** At v3 margins it rarely fills two
-  halls, so they are a bet it declines. They exist as a choice, but this data doesn't show them working as a sink.
-- **The gap is still large (≈7×).** Most of it comes from contracts/build-to-suit and the endgame run-rate that the
-  score's earnings multiple rewards. A human will sit somewhere between the two bots, which only playtests can show.
+- **Contracts carry most of the depth now**: without them (a flat-rate buyer at the same average price) the relative gap
+  falls from +1,051 % to +100 %, mostly because greedy does 7× better. Matching capacity to promises is where myopia is
+  punished (overcommitting, late jobs, idle hardware between contracts, walk-outs). The planner does about as well either way.
+- Heat, operations, fabric and reputation carry depth too (gap +459…+644 % without them); memory, policy and investors
+  carry little (+756…+986 %). The per-seed spread is large (± $11–40M): the ordering is a hypothesis.
+- **Greedy is weaker than in v3** (5.0M vs 7.7M) while the planner is similar (57.7M vs 61.8M): the contract loop widens the
+  gap. A human is compared with Casual/Expert, not with the full bots.
+- Generations, fabric and roofline ablations stay confounded (they change the economy).
 
-The end screen of every game replays the same seed with both bots, so each playtester sees how they
-compare with gut-feeling play and with thinking-ahead play.
+The end screen of every game replays the same seed with Casual and Expert, so each playtester sees how they compare with a
+casual and an expert *human-paced* player.
 
 ## Playtest round 1 (AI personas, n = 1 each: weak signals)
 

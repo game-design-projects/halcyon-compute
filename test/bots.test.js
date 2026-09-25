@@ -7,7 +7,7 @@ const Bots = require("../bots/bots.js");
 // thinking ahead must beat myopic greed by >= 25 % on the game's score (founder equity value, SPEC §1), idle ends far
 // below the planner, greedy never goes bankrupt and the planner is never fired.
 // v4 (contracts core): greedy > idle is no longer asserted per seed: at v4 margins a myopic player can end at or just
-// below idle on a bad seed (n=12: 11/12 above idle, seed 11 ~0.85x; DECISIONS D48). The human-paced reference bots
+// below idle on a bad seed (n=12: 11/12 above idle, seed 11 ~0.85x; DECISIONS D52). The human-paced reference bots
 // (Casual, Expert: what the pace chip shows) must beat idle and never go bankrupt.
 const games = {};
 for (const seed of [11, 12]) for (const p of ["idle", "greedy", "planner", "casual", "expert"]) games[`${seed}${p}`] = Bots.play(seed, p);

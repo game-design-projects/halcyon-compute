@@ -22,7 +22,7 @@ function inject(s, e) { s.events.splice(s.firedEvents, 0, Object.assign({ day: s
 const near = (a, b, eps = 1e-6) => Math.abs(a - b) <= eps * Math.max(1, Math.abs(b));
 
 /* ============ §1 structure ============ */
-test("campaign: 1800 days, 17 chapters that unlock in order on player milestones (v4, DECISIONS D41)", () => {
+test("campaign: 1800 days, 17 chapters that unlock in order on player milestones (v4, DECISIONS D49)", () => {
   assert.equal(K.END_DAY, 1800);
   assert.equal(Sim.CHAPTERS.length, 17);
   assert.equal(Sim.CHAPTERS[7].key, "contracts");
@@ -579,7 +579,7 @@ test("contracts ablation: a flat-rate buyer takes output at the price index up t
   assert.equal(s.contracts.length, 0);
   assert.equal(Sim.check(s, { type: "signContract", id: "x" }).ok, false);
   const st = Sim.stats(s);
-  assert.ok(near(st.gross, Math.min(st.supply.web, st.mk.web.demand) * st.mk.web.price));
+  assert.ok(near(st.gross, Math.min(st.supply.web, st.mk.web.demand) * st.mk.web.price * (1 + K.CONTRACT_PREMIUM)), "at the average contract price");
   Sim.advance(s, 100);
   assert.equal(s.offers.length, 0);
 });

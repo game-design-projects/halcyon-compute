@@ -25,7 +25,7 @@
   let DEBUG = false;
   const dbg = (s, ...m) => { if (DEBUG) console.debug(`[bot d${Math.floor(s.day)}]`, ...m); };
 
-  /* ---------------- human pacing (DECISIONS D42) ----------------
+  /* ---------------- human pacing (DECISIONS D50) ----------------
      Every state change a bot makes goes through ap(). In human-paced mode (Casual / Expert) a decision session has an
      action budget and each chapter's mechanics are off-limits until the bot has "learnt" them; declines are free
      no-ops (a person lets an offer expire). BUDGET is null for the full-speed bots. */
@@ -166,6 +166,7 @@
   /* gut reflex for v4: a rack that serves no contract goes Off (it costs power and earns nothing); a parked rack
      comes back on when its market owes more than the running racks deliver */
   function greedyPark(s) {
+    if (!Sim.contractsOn(s)) return;                  // ablation: a flat-rate buyer takes everything, nothing to park
     const cs = startedNow(s), p = Sim.shallowClone(s);
     p.contracts = cs;
     const sv = Sim.stats(p, { eq: true });
@@ -1127,7 +1128,7 @@
     mem.canBorrow = Sim.on(s, "finance") ? Math.max(0, Math.min(1500, K.LOAN_LTV * Sim.netWorth(s) - s.debt - 200)) : 0;
   }
 
-  /* ---------------- human-paced reference players (DECISIONS D42) ----------------
+  /* ---------------- human-paced reference players (DECISIONS D50) ----------------
      "Casual" (human-paced greedy) and "Expert" (human-paced planner) are what the pace chip and the end screen compare
      the player with. Same rules and lead times as everyone; on top, a person's limits:
      - attention: one decision session every HUMAN.EVERY..+HUMAN.JITTER days, 1-2 actions per session;

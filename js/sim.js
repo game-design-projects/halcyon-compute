@@ -43,7 +43,7 @@
     ANCHOR_UNITS: 15, START_OFFERS: 2, REP_SLA_DAY_MAX: 0.45, REP_JOB_CANCEL: 3,
     SLA_WALK_DAYS: 20,
     RENEW_BEFORE: 10,           // a serving customer on track (SLA met so far) offers a renewal this many days before the end          // a serving customer whose SLA is missed this many days in a row terminates the contract
-    // v4 player-triggered chapters (DECISIONS D41): one chapter per CH_GAP days at most; a stalled active player gets the
+    // v4 player-triggered chapters (DECISIONS D49): one chapter per CH_GAP days at most; a stalled active player gets the
     // next chapter after CH_STALL days
     CH_GAP: 30, CH_STALL: 240,
     // ch8 build-to-suit: big, long, high-SLA offers that need an up-front fit-out (capex) and start after a lead time
@@ -151,7 +151,7 @@
       spines: {}, transit: 0, transitOrders: [],
       // v4 contracts core: the order board (offers), signed contracts, the offer timer; ch8 adds build-to-suit (nextBts)
       offers: [], contracts: [], nextOffer: -1, nextBts: -1, contractLog: { signed: 0, fulfilled: 0, failed: 0, cancelled: 0, late: 0 },
-      // v4 player-triggered chapters: milestone counters (DECISIONS D41)
+      // v4 player-triggered chapters: milestone counters (DECISIONS D49)
       prog: { gpuOrders: 0, heatWaves: 0, outages: 0, missDays: 0, lastChapter: 0 },
       // v4 coyote time for sales: sold devices can be bought back at the sale price for K.BUYBACK_DAYS
       recentlySold: [],
@@ -656,8 +656,11 @@
     for (const w of ["web", "train", "infer"]) for (const p of pools[w]) out.idle[w] += p.left;
     return out;
   }
-  /* ablation (mech.contracts false): a flat-rate buyer takes output at the price index up to market demand */
-  function spotSale(s, mk, perRack, racks, supply, frontierElig) {
+  /* ablation (mech.contracts false): a flat-rate buyer takes output up to market demand at the average contract price
+     (index x (1 + CONTRACT_PREMIUM)), so the ablation removes the contract decisions, not the margin */
+  function spotSale(s, mk0, perRack, racks, supply, frontierElig) {
+    const f = 1 + K.CONTRACT_PREMIUM, mk = {};
+    for (const w of ["web", "train", "infer", "frontier"]) mk[w] = { price: mk0[w].price * f, demand: mk0[w].demand };
     const out = { revenue: { web: 0, train: 0, infer: 0, frontier: 0, contracts: 0 }, gross: 0, accrual: 0, penalties: 0,
       cDel: {}, cMiss: {}, alloc: [], idle: { web: 0, train: 0, infer: 0 }, owed: { web: 0, train: 0, infer: 0 } };
     const left = { web: supply.web, train: supply.train, infer: supply.infer }, wRev = { web: 0, train: 0, infer: 0 };
@@ -1940,7 +1943,7 @@
     }
   }
 
-  /* ================= v4 player-triggered chapters (DECISIONS D41) ================= */
+  /* ================= v4 player-triggered chapters (DECISIONS D49) ================= */
   function fleet(s) {
     let racks = 0, devices = 0, gpus = 0, trainGpus = 0, hall1 = 0;
     const rowTrain = {};
@@ -1962,7 +1965,7 @@
   function milestone(s, key, st, f) {
     const d = s.day;
     switch (key) {
-      case "power": return s.contractLog.signed >= 2 || f.racks >= 4 || gridKwAll(s) > 0.35 * s.gridKw;
+      case "power": return (core(s) ? s.contractLog.signed >= 2 : d >= 45) || f.racks >= 4 || gridKwAll(s) > 0.35 * s.gridKw;   // ablation: v0.3 day
       case "gpu": return s.cash >= cheapestGpu(s) + s.items.sw.price || s.contractLog.fulfilled >= 2;
       case "heat": return f.gpus >= 6 || (f.gpus >= 2 && (seasonAt(d).c > 0.5 || seasonAt(d + 60).c > 0.5));
       case "gens": { const next = GEN_LAUNCH.find(g => g > d); return f.gpus >= 4 && (next == null || next - d <= 75 || d > GEN_LAUNCH[0]); }
