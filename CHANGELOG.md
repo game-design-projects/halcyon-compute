@@ -6,6 +6,8 @@ release plus the fix and merged back here afterwards.
 
 ## [Unreleased]
 
+## [0.4.5] - 2026-09-25 (hotfix)
+
 ### Fixed
 - **The floor collapsed late in the game** (player on v0.4.4, year 3: "玩不下去了"; replay of their log measured 6–7 px
   racks at every window size). The floor is now the hero and never shrinks below 3 rows of 72 px racks; everything else
