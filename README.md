@@ -13,7 +13,14 @@ Open `index.html` in a browser. It is plain HTML/CSS/JS and also works from `fil
 ```bash
 python3 -m http.server 8765   # then http://localhost:8765/
 ```
-- Space pauses; 1-4 set 1x/2x/4x/8x; V cycles map modes; M mutes; F toggles fullscreen; Esc cancels a tapped card.
+- **Controls** (press **?** in game for the list): Space pauses; 1-4 set 1x/2x/4x/8x; **N** skips to the next event;
+  V cycles map modes; M mutes; F toggles fullscreen; **A** opens the alerts tray; **O** opens settings and saves;
+  **R** repeats your last order on the hovered rack; **Ctrl/⌘+C / V / D** copy, paste and duplicate a rack blueprint;
+  **Ctrl/⌘+Z** undoes; Esc closes or cancels; right-click cancels a drag.
+- Mouse: drag a catalog card onto a rack to buy it (**Shift+drag** fills the rack); drag a part inside the rack panel's
+  elevation to reorder it; **Shift+click** racks (or drag a box on the floor) to select several and set their mode at
+  once; ✕ on any job cancels it; "Sold · Undo" buys a sale back within 10 days. The order board above the floor is
+  where all money comes from: sign what you can deliver (the bar shows your spare capacity vs the offer).
 - The game is one 1920×1080 screen that scales to fit the window (letterboxed, no scrolling), so any window size works.
 - **itch.io embed:** upload a zip with `index.html` at its root, set the embed size to 1280×720 (or 1920×1080), tick
   "Fullscreen button" and leave "Enable scrollbars" off. The in-game fullscreen button (F) works when the embed allows it;
@@ -26,7 +33,7 @@ python3 -m http.server 8765   # then http://localhost:8765/
 
 ## Develop
 ```bash
-node --test test/*.test.js           # 103 tests: sim rules, determinism, bots, pace ghost, stage fit
+node --test test/*.test.js           # 138 tests: sim rules, determinism, bots, pace ghost, stage fit, UI logic
 node bots/run.js --seeds 12 --ablate # depth report -> reports/depth.json
 ```
 
@@ -34,6 +41,8 @@ node bots/run.js --seeds 12 --ablate # depth report -> reports/depth.json
 |---|---|
 | `js/sim.js` | Deterministic simulation core (seeded, 0.25-day substeps, no DOM). Loads in the browser and in Node |
 | `js/ui.js` | Rendering, drag and drop, dialogs. Contains no game rules |
+| `js/qol.js` | Pure UI logic (deliverability, blueprints, fill, undo, alerts); tested in Node |
+| `js/strings.js` | `L(key, params)`: every new UI string (English now; the i18n pass plugs in here) |
 | `js/stage.js` | Fixed 1920×1080 game screen: scale-to-fit with CSS `zoom`, letterbox, fullscreen |
 | `bots/bots.js` | Greedy and planner reference players, used for depth measurement and the end-screen comparison |
 | `bots/run.js` | Ablation runner |

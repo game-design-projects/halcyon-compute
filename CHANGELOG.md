@@ -5,6 +5,54 @@ Versions are milestones of the week-3 project; there are no tagged releases.
 
 ## [Unreleased]
 
+### Added (UI pass A: the v4 contracts core on screen, forgiveness, QOL, "show, don't tell")
+- **Order board** above the floor from day 0 (was hidden until chapter 8): each offer shows its kind (web, inference,
+  training job, frontier job, build-to-suit), terms (units × days and start; jobs: work, pay, deadline; fit-out),
+  price vs the market index, a **deliverability bar** (your spare capacity, including hardware on its way, vs what the
+  offer needs) and big **Sign** / ✕ buttons. Hovering an offer lights up the racks that would serve it; signing flies a
+  link to each of them. Every active contract is a pill in its own link colour (delivery vs SLA, days left); racks carry
+  a strip of those colours (width = units served) and idle output shows as hatched "z z" racks. Board header = count,
+  next offer ETA, Auto-renew toggle, click for the Contracts drawer.
+- **Off** rack mode (power icon) from chapter 1; parked racks go dark. The goal bar shows the **next chapter unlock**
+  and its milestone (chapters are player-triggered).
+- **Show, don't tell** (docs/I18N.md feel table): no cash → the cash chip shakes and flashes red, the price pulses, a
+  low bonk; rack full / over kW → the rack wobbles and the missing gauge pulses; over grid → the power chip flashes;
+  no switch → the rack goes dark with an unplugged icon, and a power-up light sweep when a switch goes in; throttling →
+  a red heat glow; failure → a blinking red LED; a big loss → a red screen-edge vignette; bankruptcy danger → a vignette
+  that deepens with the runway and a heartbeat under 30 days; new offers and chapter unlocks fly an icon into the board
+  badge / goal flag. Rejections no longer toast (reason in the tooltip and an aria-live region).
+- **Unaffordable = disabled everywhere** (catalog cards, drawer and card buttons, steppers, spine/grid/hall buttons,
+  fit-out offers), re-checked live as cash moves; a click still gives the feedback above and never acts. The memory-scare
+  card offers the cheapest GPU you can afford, or only "Wait and see".
+- Forgiveness: **drag to reorder** parts inside a rack (drop-indicator line); **✕ cancels** any queued job (floor chip,
+  rack panel, shelf) with the outcome floating from the ✕; **Sold · Undo** chips with a 10-day countdown next to the
+  catalog; **Ctrl/⌘+Z multi-step undo** (mode, workload, reorder, policies, transit, buys while shipping, sells, moves,
+  store/unstore; batches undo as one).
+- QOL: **Shift+drag fill** (as many as fit; count · cost · ETA on the ghost), **rack blueprints** (Ctrl/⌘+C / V,
+  Duplicate button, Ctrl/⌘+D), **multi-select** (Shift+click or a box on the floor) with a bulk mode/workload bar,
+  **R** repeats the last order on the hovered rack, an **alerts tray** (bell, A: no switch, failed part, throttling,
+  SLA at risk, idle capacity, runway) that jumps to the rack, clicking a news item or an offer jumps to the rack/drawer,
+  a **rich rack hover** (income, contracts served, inlet, bottleneck, days to the next failure), a **catalog delta
+  hover** (output, kW, °C, payback on the selected rack), **auto-pause** options (new offer, failure, cash < 0, SLA at
+  risk; on for the first campaign), **skip to the next event** (N), a **settings** panel (O: master/effects/hum volume,
+  reduced motion, colour-blind palette, UI scale, auto-pause, language placeholder), **3 save slots + export/import save
+  JSON**, a **keyboard overlay** (?), Esc closes/cancels, right-click cancels a drag, policy toggles (Auto-swap and
+  Keep-spares in the technicians popover, Auto-renew on the board and in the Contracts drawer).
+- `js/qol.js` (pure, tested: rejection reasons, deliverability, serve preview, blueprint diff, fill plan, undo stack,
+  alerts, link colours) and `js/strings.js` (`L(key, params)`, English today; pass B plugs i18n into it).
+  `test/qol.test.js`: 11 tests (138 total).
+- Playtest driver: `mods` (Shift) on click/drag, right-click, `POST /upload`, `GET /downloads`.
+
+### Changed (UI pass A)
+- v4 saves (and v2/v3 saves, migrated by the sim) resume from Continue, a slot or an imported file.
+- The pace chip and end screen compare you with the **human-paced Casual and Expert** bots (labels from `Bots.LABELS`);
+  the full-speed greedy/planner are no longer shown to players.
+- End screen: lesson icons by loss key (idle, cancelled, SLA, …); contracts row adds cancelled / late.
+- The HUD export button moved into Settings (still in the main menu and on the end screen); the HUD Contracts button is
+  replaced by the board header. Lease is a tag flag on the rack tile.
+- Perf: the HUD height is tracked with a ResizeObserver instead of a forced layout in every render (renderAll ≈4.3 →
+  0.9 ms in a 200-render loop, n=1).
+
 ### Added
 - **Fixed game screen that fits any window.** The UI is one 1920×1080 screen (authored at 1440×810, zoom 4/3) scaled
   uniformly to the window with letterbox bars. It fits an itch.io embed of any size (960×540 up), a fullscreen monitor

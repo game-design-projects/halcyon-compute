@@ -1,5 +1,9 @@
 # UI pass backlog (v0.4): collected user feedback, done in ONE pass after the v4 sim/bots land
 
+**Status (2026-09-25, UI pass A):** bugs 1–5, "From the specs" (except i18n + text diet = pass B), every P0 QOL item and
+the automation-policy toggles are implemented (CHANGELOG [Unreleased], CLAUDE.md "UI pass A"). P1 items (upgrade rack,
+sell all old-gen, stats screen) are not done. Pass B: i18n zh/en + text diet through `L()` (js/strings.js).
+
 Specs: `docs/CONTRACTS_CORE.md`, `docs/I18N.md` (i18n + text diet + show-not-tell), `docs/GAME_FEEL.md`.
 
 ## Bugs / UX reported by the user (2026-09-25)

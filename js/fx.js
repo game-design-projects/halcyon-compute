@@ -141,6 +141,31 @@
     for (let n = 0; n < MAXT; n++) { const c = T[tHead]; tHead = (tHead + 1) % MAXT; if (!c.on) { t = c; liveT++; break; } }
     if (!t) { t = T[tHead]; tHead = (tHead + 1) % MAXT; }
     t.on = true; t.x = x / Z; t.y = y / Z; t.vy = -34; t.life = 0; t.max = 1.25; t.size = size || 13; t.color = color || "#7FE0A8"; t.text = text;
+    t.img = textSprite(text, t.size, t.color);
+  }
+  /* floating text is pre-rendered once into a sprite: setting ctx.font on the page's canvas every frame forced a full
+     document style recalc right after ui.js rewrote the DOM (the slowest 5 % of frames at 8x). An OffscreenCanvas has no
+     element style to resolve. Sprites are cached by text/size/colour (a small LRU). */
+  const spriteCache = new Map();
+  function textSprite(text, size, color) {
+    const key = `${text}|${size}|${color}|${DPR}|${Z}`;
+    let sp = spriteCache.get(key);
+    if (sp) return sp;
+    const k = DPR * Z * 1.15, font = `600 ${size}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+    let c = null;
+    try { c = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(4, 4) : document.createElement("canvas"); } catch (e) { return null; }
+    const g = c.getContext("2d");
+    if (!g) return null;
+    g.font = font;
+    const w = Math.ceil(g.measureText(text).width + 8), h = Math.ceil(size * 1.5 + 6);
+    c.width = Math.ceil(w * k); c.height = Math.ceil(h * k);
+    g.scale(k, k); g.font = font; g.textAlign = "center"; g.textBaseline = "middle"; g.lineJoin = "round";
+    g.lineWidth = 3; g.strokeStyle = "rgba(15,19,23,.75)"; g.strokeText(text, w / 2, h / 2);
+    g.fillStyle = color; g.fillText(text, w / 2, h / 2);
+    sp = { c, w, h };
+    if (spriteCache.size > 80) spriteCache.delete(spriteCache.keys().next().value);
+    spriteCache.set(key, sp);
+    return sp;
   }
 
   /* ---------- shake (trauma model: offset ∝ trauma², decays linearly) ---------- */
@@ -190,7 +215,8 @@
   /* called by ui.js right after the floor's innerHTML is replaced */
   function afterFloor(F) {
     floorEl = F;
-    rectCache.clear();
+    // rack rects survive the floor's innerHTML re-render (same grid, same place): re-measuring right after it forced a
+    // full synchronous layout every render (perf). ui.js clears them when the floor's box or the hall changes (clearRects).
     const now = performance.now();
     for (const [id, e] of rackAnims) {
       if (!e.hold && now - e.t0 - e.delay > e.dur) { rackAnims.delete(id); continue; }
@@ -198,7 +224,7 @@
       if (el) el.style.animation = styleFor(e, now);
     }
   }
-  const rectCache = new Map();   // rackId -> DOMRect, valid until the floor re-renders, the page scrolls or resizes
+  const rectCache = new Map();   // rackId -> DOMRect, valid until the floor box changes (ui.js), the page scrolls or resizes
   addEventListener("scroll", () => rectCache.clear(), true);
   addEventListener("resize", () => rectCache.clear());
   function rackCenter(id) {
@@ -270,7 +296,6 @@
       L.length = 0;
     }
     if (liveT) {
-      cx.textAlign = "center"; cx.textBaseline = "middle"; cx.lineJoin = "round";
       for (let i = 0; i < MAXT; i++) {
         const t = T[i]; if (!t.on) continue;
         t.life += dt;
@@ -280,9 +305,7 @@
         t.y += t.vy * dt; t.vy *= (1 - 1.2 * dt);
         grow(t.x, t.y, t.size * 4 + t.text.length * t.size * 0.35);
         cx.globalAlpha = k > 0.6 ? 1 - (k - 0.6) / 0.4 : 1;
-        cx.font = `600 ${(t.size * pop).toFixed(1)}px "Barlow Condensed", "Arial Narrow", sans-serif`;
-        cx.lineWidth = 3; cx.strokeStyle = "rgba(15,19,23,.75)"; cx.strokeText(t.text, t.x, t.y);
-        cx.fillStyle = t.color; cx.fillText(t.text, t.x, t.y);
+        if (t.img) { const w = t.img.w * pop, h = t.img.h * pop; cx.drawImage(t.img.c, t.x - w / 2, t.y - h / 2, w, h); }
       }
     }
     cx.globalAlpha = 1;
@@ -294,6 +317,11 @@
   /* fly(x, y, target, iconId, color): a small icon (DOM, outside #stage, viewport px) arcs from (x, y) into `target`, which
      then pops. Reduced motion: no flight, the target just pops. onArrive runs either way. */
   function fly(x, y, target, iconId, color, onArrive) {
+    // measured at the start of the next frame, when layout is clean: reading the target's rect right after ui.js
+    // rewrote the DOM forced a synchronous layout (the p95 frame at 8x)
+    requestAnimationFrame(() => flyNow(x, y, target, iconId, color, onArrive));
+  }
+  function flyNow(x, y, target, iconId, color, onArrive) {
     const pop = () => { try { target && target.animate([{ scale: "1" }, { scale: "1.35" }, { scale: "1" }], { duration: 320, easing: "cubic-bezier(.3,1.6,.5,1)" }); } catch (e) { /* no WAAPI */ } if (onArrive) onArrive(); };
     const r = target && target.getBoundingClientRect();
     if (reduced || !r || !r.width || !document.body.animate) { pop(); return; }
@@ -345,7 +373,7 @@
   window.FX = {
     get reduced() { return reduced; }, EASE, setReduced, fly, vignette, danger,
     sparks, smoke, steam, dust, confetti, floatText, shake, flash, tween,
-    rackAnim, clearRackAnims, afterFloor, rackCenter, rackEl, hostCanvas, tick, clearAll,
+    rackAnim, clearRackAnims, afterFloor, rackCenter, clearRects() { rectCache.clear(); }, rackEl, hostCanvas, tick, clearAll,
     get live() { return { particles: liveP, texts: liveT, trauma, tweens: tweens.length, rackAnims: rackAnims.size }; },
   };
 })();

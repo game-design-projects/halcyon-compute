@@ -97,3 +97,14 @@ before n = 1 run, after n = 3 runs: before rAF 16.7 / 16.7 / 16.8, frame() 0.5 /
 recur), frame() 0.4 / 1.2 / 8.6–9.8 ms (med / p95 / max). No measurable difference.
 Measures taken: dirty-rect canvas clears, rack rects cached per floor render, steam/smoke batched into 8 alpha-bucket
 paths, `.game` promoted to a layer only while shaking. Harness: `.playwright-mcp/perf.js`; verification run: `.playwright-mcp/juice.js`.
+
+## Show, don't tell (UI pass A, 2026-09-25)
+The docs/I18N.md feel table is implemented as signals, not sentences: `nope()` in ui.js (cash chip shake + red flash,
+price pulse, bonk; rack wobble + gauge pulse for U/kW; power-chip flash for the grid; shelf shake), dark no-switch racks
+with an unplugged icon and a `--sweep` light sweep (CSS `@property`) when a switch installs, a red heat-glow on throttling
+racks, a blinking red LED on failures, `FX.vignette` for big losses and walk-outs, `FX.danger` (depth ∝ 60 − runway days,
+heartbeat under 30), `FX.fly` for offers → board badge, chapters → goal flag, signing → the serving racks. Every signal is
+≤ 400 ms or a steady state, never blocks input; reduced motion (OS or the Settings override, `FX.setReduced`) keeps colour
+only. Rejection text stays in tooltips and the `#sr` aria-live region. Perf at 8x with 36 racks, 1920×1080 (n=1 run,
+3 × 8 s windows): frame() JS p95 4.7–4.9 ms, max 7–15 ms; rAF 16.7 ms p95; baseline HEAD a125ef8 on the same harness
+p95 5.3 ms (the HUD's forced layout per render was replaced by a ResizeObserver).

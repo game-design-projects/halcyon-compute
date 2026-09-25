@@ -1095,3 +1095,4 @@ kbd { font: 600 12px var(--sans); background: var(--page); border: 1px solid var
   .rack .flags { top: 9px; }
 }
 #newsfeed .ev { cursor: pointer; }
+.tray-title .badge-short { color: var(--white); }

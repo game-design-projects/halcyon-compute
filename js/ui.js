@@ -195,7 +195,7 @@
     const cls = ["btn", opts.cls || "", armed ? "confirm" : "", res.ok ? "" : "dim"].join(" ");
     // unaffordable / invalid = rendered disabled (dim, price red via CSS, aria-disabled, the reason as tooltip); a click still
     // reaches act(), which refuses it with show-not-tell feedback. refreshAfford() re-checks these live as cash moves.
-    return `<button class="${cls}" data-act='${esc(key)}'${opts.confirm ? " data-confirm" : ""} title="${esc(res.msg)}"${res.ok ? "" : ' aria-disabled="true"'}${!label && opts.title ? ` aria-label="${esc(opts.title)}"` : ""}>${opts.icon ? icon(opts.icon) : ""}${armed ? `Tap again: ${label || opts.title || ""}` : label}</button>`;
+    return `<button class="${cls}" data-act='${esc(key)}' data-afford${opts.confirm ? " data-confirm" : ""} title="${esc(res.msg)}"${res.ok ? "" : ' aria-disabled="true"'}${!label && opts.title ? ` aria-label="${esc(opts.title)}"` : ""}>${opts.icon ? icon(opts.icon) : ""}${armed ? `Tap again: ${label || opts.title || ""}` : label}</button>`;
   }
 
   /* ================= storage (optional: every call guarded) ================= */
@@ -410,7 +410,8 @@
     if (a.type === "cancelOrder") { hideUndo("used"); SND("pickup"); return; }
     if (a.type === "signContract") { linkFx(a.id); return; }
     if (a.type === "declineContract") { SND("pickup"); return; }
-    if ((a.type === "buy" || a.type === "lease") && !opts.quiet) showUndo(a);
+    if (opts.quiet) return;          // a batch (fill, paste, bulk): the caller plays one consolidated cue
+    if (a.type === "buy" || a.type === "lease") showUndo(a);
     if (PLACE.has(a.type)) {
       const id = a.to || a.rack;
       SND("drop");
@@ -506,6 +507,8 @@
   /* ================= auto-pause (settings): stop time when something needs you ================= */
   function autoPause(st) {
     if (!S || S.over || !V.speed || V.skip) return;
+    if (V.apDay === S.day) return;      // only when the sim moved (a substep), not every frame
+    V.apDay = S.day;
     const ap = SET.ap || {};
     const prev = V.apSeen;
     let failed = 0;
@@ -541,7 +544,9 @@
         b.classList.toggle("dim", dim);
         if (dim) b.setAttribute("aria-disabled", "true"); else b.removeAttribute("aria-disabled");
       }
-      if (b.title !== res.msg && !b.hasAttribute("data-keep-title")) b.title = res.msg;
+      // actBtn titles are the check message; hand-written buttons keep their explanation and gain the reason when refused
+      if (b.hasAttribute("data-afford")) { if (b.title !== res.msg) b.title = res.msg; }
+      else { if (b._t0 == null) b._t0 = b.title || ""; const t = dim && !b.hasAttribute("data-keep-title") ? `${b._t0}${b._t0 ? " · " : ""}${res.msg}` : b._t0; if (b.title !== t) b.title = t; }
     }
     const leasing = V.lease && on("finance");
     for (const el of document.querySelectorAll("#tray .item[data-item]")) {
@@ -567,6 +572,8 @@
       }
     }
     if (S && V.skip && !S.over && !anyModal() && !(drag && drag.started)) skipFrame();
+    const tSim = performance.now();
+    let tRen = tSim, tAft = tSim, tFx = tSim;
     if (S) {
       const dragging = drag && drag.started;
       let st = null;
@@ -574,13 +581,16 @@
         const sig = signature();
         if ((sig !== V.sig && now - V.lastFull > 200) || now - V.lastFull > 1000) st = renderAll();
         else { st = Sim.stats(S); renderHUD(st); renderProgress(); }
+        tRen = performance.now();
         afterTick();
         autoPause(st);
         refreshAfford();
         if (now - V.alertsT > 500) { V.alertsT = now; renderAlerts(st); }
         if (V.hover && now - V.hover.t > 1000) refreshHover();
+        tAft = performance.now();
       }
       fxFrame(st || Sim.stats(S), dtSec, now);
+      tFx = performance.now();
       undoTick(now);
       if (V.ghost && !S.over) V.ghost.to(S.day);          // posts to the worker only when the day changes
       if (dragging && anyModal()) cancelDrag("a card opened");
@@ -589,6 +599,7 @@
     if (FXON()) FX.tick(now);
     const ft = performance.now() - t0;
     V.perf.frames++; if (ft > V.perf.worst) V.perf.worst = ft;
+    if (V.profOn) { (V.fprof = V.fprof || []).push([ft, tSim - t0, tRen - tSim, tAft - tRen, tFx - tAft, performance.now() - tFx]); if (V.fprof.length > 3000) V.fprof.shift(); }
     if (V.perf.samples.length >= 2000) V.perf.samples.shift(); V.perf.samples.push(ft);
     requestAnimationFrame(frame);
   }
@@ -1221,7 +1232,11 @@
     F.style.setProperty("--season", warm > 0 ? `rgba(255,140,40,${(0.07 * warm).toFixed(3)})` : `rgba(70,140,255,${(0.07 * -warm).toFixed(3)})`);
     const fades = F.querySelectorAll("[data-fill]");
     if (fades.length) requestAnimationFrame(() => fades.forEach(el => { el.style.background = el.dataset.fill; el.removeAttribute("data-fill"); }));
-    if (FXON()) FX.afterFloor(F);
+    if (FXON()) {
+      FX.afterFloor(F);
+      if (V.rectHall !== V.hall) { V.rectHall = V.hall; FX.clearRects(); }
+      if (!V.floorRO && window.ResizeObserver) { V.floorRO = new ResizeObserver(() => FX.clearRects()); V.floorRO.observe(F); }
+    }
     if (V.hl) applyHighlight();
   }
 
@@ -1230,9 +1245,17 @@
     const res = Sim.check(S, { type: "cancelJob", id: j.id });
     return res.ok ? `<span class="jx" role="button" tabindex="0" data-canceljob="${j.id}" title="${esc(L("job.cancel"))}: ${esc(res.msg)}" aria-label="${esc(L("job.cancel"))}">${icon("cross")}</span>` : "";
   }
+  /* cached by what the chip shows (phase, whole days, bar %, cash bucket for the ✕ check): renderProgress runs every frame */
+  const progCache = new Map();
   function progInner(j) {
+    const w = Math.round((1 - jobFrac(j)) * 100), key = `${j.id}|${j.phase}|${Math.ceil(j.left)}|${w}|${Math.floor(S.cash / 5)}`;
+    const c = progCache.get(j.id);
+    if (c && c.key === key) return c.html;
     const [ic, txt] = jobLabel(j);
-    return `${ic}${txt}${cancelX(j)}<i style="width:${Math.round((1 - jobFrac(j)) * 100)}%"></i>`;
+    const html = `${ic}${txt}${cancelX(j)}<i style="width:${w}%"></i>`;
+    if (progCache.size > 400) progCache.clear();
+    progCache.set(j.id, { key, html });
+    return html;
   }
   function renderProgress() {
     document.querySelectorAll("[data-prog]").forEach(el => {
@@ -1241,7 +1264,10 @@
       if (el._h !== html) { el._h = html; el.innerHTML = html; }
     });
     const jl = $("jobs");
-    if (jl) { const html = jobsHTML(); if (jl._h !== html) { jl._h = html; jl.innerHTML = html; } }
+    if (jl) {
+      const k = S.jobs.filter(j => j.to === V.selected || j.rack === V.selected).map(j => `${j.id}${j.phase}${Math.round(j.left * 10)}`).join() + "|" + V.selected + "|" + Math.floor(S.cash / 5);
+      if (jl._k !== k) { jl._k = k; const html = jobsHTML(); if (jl._h !== html) { jl._h = html; jl.innerHTML = html; } }
+    }
     renderSold();
   }
 
@@ -1852,6 +1878,8 @@
       <button class="toggle mini" data-act='${esc(JSON.stringify({ type: "policy", key: "autoRenew", on: !S.policy.autoRenew }))}' data-keep-title aria-pressed="${!!S.policy.autoRenew}" title="${esc(L("board.autoRenewTip"))}"><span class="sw"></span><small>${esc(L("board.autoRenew"))}</small></button></div>`;
     const cards = list.map(o => offerCard(o, st)).join("") + Array.from({ length: OFFER_STRIP_MAX - list.length }, (_, i) => `<div class="ocard empty">${i === 0 && !list.length ? `${icon("mail")}<small>${esc(L("board.none"))}</small>` : ""}</div>`).join("");
     const pills = S.contracts.map(c => contractPill(c, st)).join("");
+    if (V.boardSeen.size > 100) V.boardSeen = new Set(S.offers.map(o => o.id));   // bounded: only live offers matter
+    if (previewCache.size > 30) previewCache.clear();
     el.innerHTML = head + cards + `<div class="cpills" role="list" aria-label="${esc(L("board.active"))}">${pills}</div>`;
     if (V.hl) applyHighlight();
   }
@@ -1885,8 +1913,11 @@
       dlog("[offer] new", o.id, o.kind, o.cust, o.units, o.days, o.price, o.bts ? "bts" : "");
       if (n++) continue;
       SND("chime", null, 400);
-      const b = $("board-badge"), st = $("stage").getBoundingClientRect();
-      if (FXON() && b) FX.fly(st.right - 40 * STZ(), st.top + 90 * STZ(), b, (KIND[kindOf(o)] || KIND.web)[0], kindCol(kindOf(o)));
+      const k = kindOf(o);
+      if (FXON()) requestAnimationFrame(() => {
+        const b = $("board-badge"), st = Stage.rect || { x: 0, y: 0, w: innerWidth };
+        if (b) FX.fly(st.x + st.w - 40 * STZ(), st.y + 90 * STZ(), b, (KIND[k] || KIND.web)[0], kindCol(k));
+      });
       sr(`${o.cust}: ${L("kind." + kindOf(o))}`);
     }
   }
@@ -2013,12 +2044,16 @@
   const TOLD = new Set(["tax", "repair", "sale"]);
   function cashEventFx(list) {
     if (!list.length) return;
+    requestAnimationFrame(() => { if (S) cashEventFxNow(list); });   // rects read at the next frame start (no forced layout)
+  }
+  function cashEventFxNow(list) {
     const fx = FXON(), cr = $("h-cashchip").getBoundingClientRect(), br = $("offerstrip").getBoundingClientRect();
     const floatAt = (r, txt, col, size) => { if (fx && r && r.width) FX.floatText(r.left + r.width / 2, r.bottom + 6, txt, col, size || 15); };
     let tot = 0, lossBig = 0;
     for (const e of list) {
       const amt = e.amt || 0;
-      if (e.kind === "contract") { SND("chaching", amt || 1); floatAt(br, `+${money(amt)}`, "#7FE0A8", 18); if (fx) FX.sparks(br.left + br.width / 2, br.top + 10, "#7FE0A8", 18, 220); }
+      // a job paid: the money rises from the board (no sparks: at 8x they kept the whole screen in the canvas's dirty rect)
+      if (e.kind === "contract") { SND("chaching", amt || 1); floatAt(br, `+${money(amt)}`, "#7FE0A8", 18); }
       else if (e.kind === "contractLost" || e.kind === "contractCancel") {
         SND(e.kind === "contractLost" ? "crunch" : "fail", null, 300);
         const cust = (e.label || "").split(/ terminated| cancelled/)[0];
@@ -3039,6 +3074,9 @@
   });
   document.addEventListener("keydown", e => {
     if (e.target.closest && e.target.closest("input, textarea, select")) return;
+    // the ✕ on a job is a span (it sits inside the rack tile's button): Enter / Space activate it like a button
+    const cjk = e.target.closest && e.target.closest("[data-canceljob]");
+    if (cjk && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); e.stopPropagation(); if (S && !anyDialogOpen()) cancelJobAt(+cjk.dataset.canceljob, cjk); return; }
     const mod = e.metaKey || e.ctrlKey, k = e.key;
     if ((k === "f" || k === "F") && !mod && !e.altKey) { toggleFullscreen(); return; }   // also on the menu and over cards
     if (k === "?" || (k === "/" && e.shiftKey)) { e.preventDefault(); if ($("keys").open) $("keys").close(); else if (!anyDialogOpen()) openKeys(); return; }
@@ -3083,7 +3121,8 @@
     const from = e.target.closest && e.target.closest("#floor [data-rack], #tray .item[data-item], .ocard[data-offer], [data-contract]");
     if (!from || (e.relatedTarget && from.contains(e.relatedTarget))) return;
     if (from.matches("#floor [data-rack]")) V.hoverRack = null;
-    if (V.hover && V.hover.anchor === from) hoverHide();
+    // by id, not by element: the floor re-renders every second, so the hovered tile may be a newer copy of the anchor
+    if (V.hover && (V.hover.anchor === from || (V.hover.kind === "rack" ? from.dataset.rack : from.dataset.item) === V.hover.id)) hoverHide();
     if (V.hl && V.hl.key !== "click" && from.matches(".ocard[data-offer], [data-contract]")) highlightRacks(null);
   });
   document.addEventListener("pointerup", () => { V.down = false; }, true);
