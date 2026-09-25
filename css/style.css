@@ -547,3 +547,92 @@ body.leasing .item[data-lease="1"] { border-color: var(--c-lease); box-shadow: i
   .rack-detail { grid-template-columns: 84px minmax(0, 1fr); }
   .goal { flex-wrap: wrap; }
 }
+
+/* ================= game feel (docs/GAME_FEEL.md): display only, transforms/opacity, never blocks input ================= */
+#fx-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; margin: 0; padding: 0; border: 0; background: transparent; overflow: visible; pointer-events: none; z-index: 45; }
+#fx-flash { position: fixed; inset: 0; pointer-events: none; z-index: 44; opacity: 0; }
+dialog #fx-canvas { z-index: 5; }
+
+/* gauges ease; the cash chip shows runway above the bankruptcy line with a damage ghost */
+.chip .bar i { transition: width .35s cubic-bezier(.2,.8,.3,1); }
+.chip .bar.runway i { transition: none; }
+.chip .bar.runway i.ghostbar { background: #FFFFFF; opacity: .45; }
+.chip { position: relative; }
+.chip.over::after, .chip.near::after, .chip.danger::after { content: ""; position: absolute; inset: -4px -6px; border-radius: 6px; pointer-events: none; animation: fx-pulse 1s ease-in-out infinite alternate; }
+.chip.over::after, .chip.danger::after { box-shadow: 0 0 0 2px var(--hud-bad), 0 0 14px rgba(255,132,102,.55); }
+.chip.near::after { box-shadow: 0 0 0 1.5px #E0A43A, 0 0 10px rgba(224,164,58,.45); animation-duration: 1.6s; }
+@keyframes fx-pulse { from { opacity: .25; } to { opacity: 1; } }
+.chip.danger .big { color: var(--hud-bad); }
+#mutebtn[aria-pressed] { background: var(--hud-2); color: var(--hud-ink); }
+
+/* floor life: calendar tint, blackout overlay, drifting cold air */
+.floor { position: relative; isolation: isolate; box-shadow: inset 0 0 0 2000px var(--season, transparent); }
+.floor::before { content: ""; position: absolute; inset: 0; background: #04070B; opacity: 0; transition: opacity .8s; z-index: -1; pointer-events: none; }
+body.blackout .floor::before { opacity: .42; }
+body.blackout .floor .hall { background: var(--panel); }   /* the grid column keeps its numbers readable in the dark */
+.aisle.cold { position: relative; overflow: hidden; background-image: none; }
+.aisle.cold::before { content: ""; position: absolute; top: 0; bottom: 0; left: -16px; right: 0; background-image: radial-gradient(rgba(60,125,217,.35) 1px, transparent 1.5px); background-size: 8px 8px; animation: fx-drift 1.6s linear infinite; animation-delay: var(--drift-delay, 0s); pointer-events: none; }
+.aisle.cold > * { position: relative; }
+@keyframes fx-drift { from { transform: translateX(0); } to { transform: translateX(8px); } }
+
+/* racks: fan (speed ∝ kW) and LED strip (blink ∝ utilisation) */
+.rack .fan { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px 0 0 -13px; border-radius: 50%; pointer-events: none; opacity: .3;
+  background: conic-gradient(from 0deg, rgba(255,255,255,.95) 0 22deg, transparent 22deg 90deg, rgba(255,255,255,.95) 90deg 112deg, transparent 112deg 180deg, rgba(255,255,255,.95) 180deg 202deg, transparent 202deg 270deg, rgba(255,255,255,.95) 270deg 292deg, transparent 292deg);
+  -webkit-mask: radial-gradient(circle, transparent 3px, #000 3.5px, #000 12px, transparent 12.5px); mask: radial-gradient(circle, transparent 3px, #000 3.5px, #000 12px, transparent 12.5px);
+  animation: fx-spin 1s linear infinite; will-change: transform; }
+@keyframes fx-spin { to { transform: rotate(360deg); } }
+.rack .front.blink { animation: fx-led 1s steps(2, jump-none) infinite; }
+.rack .front.bad { background: #FF6A4A; }
+@keyframes fx-led { 0% { opacity: .95; } 100% { opacity: .3; } }
+body.paused .rack .fan, body.paused .rack .front.blink, body.paused .aisle.cold::before { animation-play-state: paused; }
+
+/* rack event animations (applied by FX.rackAnim with a negative delay so they survive re-renders) */
+@keyframes fx-thunk { 0% { transform: scale(1); } 30% { transform: scale(1.08, .86); } 62% { transform: scale(.97, 1.05); } 100% { transform: scale(1); } }
+@keyframes fx-on { 0% { box-shadow: 0 0 0 0 rgba(127,224,168,0); filter: brightness(1); } 25% { box-shadow: 0 0 0 3px #7FE0A8, 0 0 18px rgba(127,224,168,.8); filter: brightness(1.35); } 100% { box-shadow: 0 2px 0 rgba(0,0,0,.25); filter: brightness(1); } }
+@keyframes fx-jolt { 0%, 100% { transform: translateX(0); box-shadow: 0 2px 0 rgba(0,0,0,.25); } 15% { transform: translateX(-4px); box-shadow: 0 0 0 3px #FF6A4A, 0 0 16px rgba(255,106,74,.7); } 35% { transform: translateX(3px); } 55% { transform: translateX(-2px); } 75% { transform: translateX(1px); } }
+@keyframes fx-off { 0% { filter: brightness(1); } 25% { filter: brightness(.5); } 40% { filter: brightness(.9); } 100% { filter: brightness(.45) saturate(.35); } }
+@keyframes fx-relight { 0% { filter: brightness(.45) saturate(.35); } 45% { filter: brightness(1.55); } 100% { filter: brightness(1); } }
+
+/* drag: the card lifts (anticipation), tilts with velocity (JS sets `rotate`), the source dims */
+.ghost { left: 0; top: 0; transform: none; will-change: transform; }
+.ghost .gcard { transition: rotate .08s linear; }
+.ghost .gcard.lift { animation: fx-lift .22s cubic-bezier(.34,1.56,.64,1) both; box-shadow: 0 14px 28px rgba(0,0,0,.38); }
+@keyframes fx-lift { from { scale: 1; } to { scale: 1.08; } }
+[data-drag].lifting { opacity: .4; scale: .96; }
+
+/* last bullet: final quarter gets a gold frame */
+body.finalq .floor { outline: 3px solid var(--sel); outline-offset: -1px; box-shadow: inset 0 0 0 2000px var(--season, transparent), 0 0 22px rgba(255,210,74,.45); }
+body.finalq #h-when .big { color: var(--sel); }
+
+/* chapter card pops in; bullets rise one by one */
+dialog[open].chap, dialog[open].overdlg { animation: fx-pop .38s cubic-bezier(.34,1.56,.64,1) both; }
+@keyframes fx-pop { from { opacity: 0; transform: scale(.9) translateY(10px); } to { opacity: 1; transform: none; } }
+.chap li { animation: fx-rise .35s ease-out both; animation-delay: calc(var(--i, 0) * 90ms + 180ms); }
+@keyframes fx-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* end-screen tally */
+.tally { display: grid; gap: 3px; margin-bottom: 6px; }
+.tally .trow { display: flex; justify-content: space-between; gap: 12px; font-size: 13.5px; color: var(--ink-2); opacity: 0; transform: translateX(-10px); }
+.tally .trow.in { animation: fx-in .3s cubic-bezier(.34,1.56,.64,1) forwards; }
+.tally .trow b { color: var(--ink); font: 600 16px var(--display); }
+@keyframes fx-in { to { opacity: 1; transform: none; } }
+#final-score.landed { animation: fx-land .5s cubic-bezier(.34,1.56,.64,1); color: var(--c-frontier); }
+@keyframes fx-land { 0% { transform: scale(1); } 35% { transform: scale(1.18); } 100% { transform: scale(1); } }
+
+/* quarter tally card (bottom-left, never blocks input) */
+.qcard { position: fixed; left: 50%; top: calc(var(--hud-h, 60px) + 6px); z-index: 48; pointer-events: none; background: var(--hud); color: var(--hud-ink); display: flex; align-items: center; gap: 16px; white-space: nowrap;
+  border-radius: 8px; padding: 7px 14px; box-shadow: 0 10px 26px rgba(0,0,0,.35); opacity: 0; transform: translate(-50%, -14px) scale(.96); transition: opacity .25s, transform .35s cubic-bezier(.34,1.56,.64,1); }
+.qcard.show { opacity: 1; transform: translate(-50%, 0); }
+.qcard .qh { display: flex; align-items: center; gap: 6px; font: 600 16px var(--display); }
+.qcard .qr { display: flex; align-items: baseline; gap: 6px; font-size: 12.5px; color: var(--hud-ink-2); }
+.qcard .qr b { font: 600 14px var(--display); }
+.qcard .qr.qp { border-left: 1px solid var(--hud-2); padding-left: 14px; color: var(--hud-ink); }
+.qcard .qr.qp b { font-size: 20px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .rack .fan, .rack .front.blink, .aisle.cold::before, .chip.over::after, .chip.near::after, .chip.danger::after { animation: none !important; }
+  .chip.over::after, .chip.near::after, .chip.danger::after { opacity: 1; }
+  dialog[open].chap, dialog[open].overdlg, .chap li, .ghost .gcard.lift, #final-score.landed { animation-duration: .01s !important; animation-delay: 0s !important; }
+  .tally .trow.in { animation-duration: .01s; }
+}
+@media (max-width: 560px) { .qcard { white-space: normal; flex-wrap: wrap; gap: 4px 12px; max-width: calc(100vw - 24px); } .qcard .qr.qp { border-left: 0; padding-left: 0; } }

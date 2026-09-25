@@ -65,13 +65,15 @@
   <symbol id="game" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="10" rx="4"/><path d="M7 13h4M9 11v4M16 12h.01M18 14h.01"/></symbol>
   <symbol id="film" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="1"/><path d="M10 9v6l5-3z"/></symbol>
   <symbol id="minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="sound" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></symbol>
+  <symbol id="mute" viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="m17 9 5 6M22 9l-5 6"/></symbol>
   <symbol id="factory" viewBox="0 0 24 24"><path d="M3 21V10l6 4V10l6 4V6h6v15z"/></symbol>
 </svg>
 
 <header class="hud" id="hud">
   <button class="iconbtn" id="menubtn" title="Main menu"><svg class="i"><use href="#burger"/></svg></button>
   <span class="logo">Halcyon</span>
-  <div class="chip" title="Cash and current net income per day"><svg class="i"><use href="#coin"/></svg><div><span class="big" id="h-cash"></span><span class="delta" id="h-cash-d"></span><small id="h-rate" style="display:block"></small></div></div>
+  <div class="chip" id="h-cashchip" title="Cash and current net income per day"><svg class="i"><use href="#coin"/></svg><div><span class="big" id="h-cash"></span><span class="delta" id="h-cash-d"></span><small id="h-rate" style="display:block"></small><div class="bar runway" id="h-runway"><i class="ghostbar"></i><i class="now"></i></div></div></div>
   <div class="chip click" id="h-techs" title="Technicians install, move, repair and sell hardware. Filled = free"></div>
   <div class="chip" id="h-when"></div>
   <div class="speed" role="group" aria-label="Game speed">
@@ -96,6 +98,7 @@
     <button class="iconbtn" data-drawer="energy" id="db-energy" title="Energy, facilities and environment" hidden><svg class="i"><use href="#bolt"/></svg><span class="dot" hidden></span></button>
     <button class="iconbtn" data-drawer="affairs" id="db-affairs" title="Reputation and policy" hidden><svg class="i"><use href="#flag"/></svg><span class="dot" hidden></span></button>
   </div>
+  <button class="iconbtn" id="mutebtn" title="Sound (M)"><svg class="i"><use href="#sound"/></svg></button>
   <button class="iconbtn" id="helpbtn" title="Replay the current chapter card"><svg class="i"><use href="#help"/></svg></button>
   <div class="pop" id="pop" hidden></div>
 </header>
@@ -143,6 +146,7 @@
 </aside>
 
 <div class="toast" id="toast" role="status"></div>
+<div class="qcard" id="qcard" aria-live="polite"></div>
 
 <div class="mainmenu" id="mainmenu">
   <div class="menucard">
@@ -174,6 +178,8 @@
 <script src="js/content.js"></script>
 <script src="js/sim.js"></script>
 <script src="bots/bots.js"></script>
+<script src="js/fx.js"></script>
+<script src="js/audio.js"></script>
 <script src="js/ui.js"></script>
 </body>
 </html>

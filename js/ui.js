@@ -19,8 +19,12 @@
     speed: 1, lastSpeed: 1, mode: "role", hall: 1, selected: "A1", selDev: null, armed: null, lease: false,
     seenChapter: -1, chapQueue: [], newsKey: "", acc: 0, overShown: false, sig: "", drawer: null, pop: null,
     newsCat: "all", menu: true, ppaKw: 100, confirm: null, confirmT: 0, saveBucket: -1, sandbox: false,
-    down: false, lastFull: 0, wfLast: false, perf: { frames: 0, worst: 0 },
+    down: false, lastFull: 0, wfLast: false, perf: { frames: 0, worst: 0, samples: [] },
+    // game feel (display only): previous-state snapshot for the event diff, rolling counters, gauge ghosts
+    fxPrev: null, cashOff: 0, scoreOff: 0, cashT: null, scoreT: null, cashPeak: 0, ghostFrac: 1, ghostHold: 0,
+    fillPrev: {}, earnAcc: {}, earnLast: {}, earnT: 0, steamT: 0, finalQ: false, lastCount: -1, tilt: 0,
   };
+  const FXON = () => !!window.FX, SND = (name, arg, gap) => { if (window.SFX) SFX.play(name, arg, gap); };
 
   /* ================= palette: read from CSS tokens (single source of truth) ================= */
   const cssVar = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
@@ -185,7 +189,11 @@
   /* ================= game lifecycle ================= */
   function resetView() {
     Object.assign(V, { hall: 1, selected: "A1", selDev: null, armed: null, lease: false, chapQueue: [], overShown: false, acc: 0,
-      drawer: null, pop: null, newsCat: "all", confirm: null, wfLast: false });
+      drawer: null, pop: null, newsCat: "all", confirm: null, wfLast: false,
+      fxPrev: null, cashOff: 0, scoreOff: 0, cashT: null, scoreT: null, cashPeak: S.cash, ghostFrac: 1, ghostHold: 0,
+      fillPrev: {}, earnAcc: {}, earnLast: {}, finalQ: false, lastCount: -1 });
+    if (FXON()) { FX.clearAll(); FX.clearRackAnims(); }
+    document.body.classList.remove("blackout", "finalq");
     V.newsKey = newsKey();
     V.saveBucket = Math.floor(S.day / 30) * 1000 + Math.floor(S.day / 90);
     closeDrawer(); closePop();
@@ -223,7 +231,7 @@
 
   function act(a) {
     const res = Sim.check(S, a);
-    if (!res.ok) { toast(res.msg); dlog("rejected", a, res.msg); return false; }
+    if (!res.ok) { toast(res.msg); dlog("rejected", a, res.msg); SND("nope", null, 150); return false; }
     const cash0 = S.cash;
     Sim.apply(S, a);
     const d = S.cash - cash0;
@@ -234,7 +242,24 @@
     dlog("action", a, res.msg);
     if (!["transit", "hire", "fire", "borrow", "repay", "repairPolicy", "mode", "workload"].includes(a.type)) toast(res.msg);
     renderAll();
+    fxAct(a);
     return true;
+  }
+  /* feedback for a successful player action: physical placement gets a squash "thunk" + dust + drop sound */
+  const PLACE = new Set(["buy", "lease", "move", "unstore"]), STAMP = new Set(["signContract", "acceptRound", "buildHall", "grid", "ups", "solar", "ppa", "pr", "lobby", "spine", "crac", "cooling", "buyback", "tank", "forward"]);
+  function fxAct(a) {
+    if (PLACE.has(a.type)) {
+      const id = a.to || a.rack;
+      SND("drop");
+      if (FXON()) {
+        FX.rackAnim(id, "fx-thunk", 360, 0, false, "cubic-bezier(.3,1.6,.5,1)");
+        const c = FX.rackCenter(id);
+        if (c) FX.dust(c.x, c.bottom - 4, c.w * 0.8);
+      }
+    } else if (STAMP.has(a.type)) SND("stamp");
+    else if (a.type === "borrow") SND("chaching", a.amount || K.LOAN_STEP);
+    else if (["sell", "store", "returnLease", "repair"].includes(a.type)) SND("pickup");
+    else SND("tick", 4, 40);
   }
 
   /* ================= loop ================= */
@@ -250,16 +275,20 @@
     }
     if (S) {
       const dragging = drag && drag.started;
+      let st = null;
       if (!dragging && !V.down) {
         const sig = signature();
-        if ((sig !== V.sig && now - V.lastFull > 200) || now - V.lastFull > 1000) renderAll();
-        else { renderHUD(Sim.stats(S)); renderProgress(); }
+        if ((sig !== V.sig && now - V.lastFull > 200) || now - V.lastFull > 1000) st = renderAll();
+        else { st = Sim.stats(S); renderHUD(st); renderProgress(); }
         afterTick();
       }
+      fxFrame(st || Sim.stats(S), dtSec, now);
       autosave();
     }
+    if (FXON()) FX.tick(now);
     const ft = performance.now() - t0;
     V.perf.frames++; if (ft > V.perf.worst) V.perf.worst = ft;
+    if (V.perf.samples.length >= 2000) V.perf.samples.shift(); V.perf.samples.push(ft);
     requestAnimationFrame(frame);
   }
   const newsKey = () => S.news.length ? `${S.news.length}|${S.news[0].day}|${S.news[0].title}` : "0";
@@ -280,7 +309,235 @@
       if (hot.length) toast(hot[0].title);
     }
     maybeChapter();
-    if (S.over && !V.overShown) { V.overShown = true; store.del(SAVE_KEY); store.del(META_KEY); showOver(); }
+    if (S.over && !V.overShown) {
+      V.overShown = true; store.del(SAVE_KEY); store.del(META_KEY);
+      if (S.over === "end") { showOver(); return; }
+      // make losing legible: the racks power down one by one with a descending tone, then the lessons screen
+      dlog("fx: power down", S.over);
+      SND("powerDown");
+      document.body.classList.add("blackout");
+      if (FXON()) S.racks.filter(r => r.devices.length).forEach((r, i) => FX.rackAnim(r.id, "fx-off", 420, i * 60, true, "ease-in"));
+      const s0 = S;   // a new game started during the power-down must not get this game's end screen
+      setTimeout(() => { if (S === s0) showOver(); }, FXON() && !FX.reduced ? 1800 : 150);
+    }
+  }
+
+  /* ================= game feel: event layer (display only; never touches sim numbers) =================
+   * Diffs the previous vs current state once per sim day (or after an action) and emits effects:
+   * install, fail, sale, outage start/end, launch, vendor death, quarter, milestone, throttle, final quarter.
+   * Every frame it also rolls the counters, eases the cash gauge ghost, floats money and steam, and drives the hum. */
+  const MILESTONES = [[1000, "$1M"], [10000, "$10M"], [100000, "$100M"]];
+  const outageOn = () => on("facilities") && !!S.outage && S.day >= S.outage.start;
+  function fxSnap(st) {
+    const inst = new Map(), pend = new Set(), failed = new Set(), thr = new Set();
+    for (const r of S.racks) {
+      for (const d of r.devices) { inst.set(d.uid, r.id); if (d.failed) failed.add(d.uid); }
+      for (const d of r.pending) pend.add(d.uid);
+      const pr = st.perRack[r.id];
+      if (pr && pr.throttle < 1) thr.add(r.id);
+    }
+    const sells = new Map();
+    for (const j of S.jobs) if (j.kind === "sell") sells.set(j.id, j);
+    const dead = Object.keys(S.vendors).filter(v => S.vendors[v].dead);
+    return { day: S.day, inst, pend, failed, thr, sells, dead, gen: Sim.currentGen(S), q: S.lastQuarter ? S.lastQuarter.q : null,
+      outage: outageOn(), dark: outageOn() && !S.ups, score: Sim.score(S), cash: S.cash };
+  }
+  function rackOrder(hall) {   // column-major sweep: the wave runs along the rows like a breaker trip
+    return S.racks.filter(r => r.hall === hall).sort((a, b) => a.col - b.col || a.row - b.row);
+  }
+  function fxAtRack(id, fn) { if (!FXON()) return; const c = FX.rackCenter(id); if (c) fn(c); }
+  function fxEvents(P, N, st) {
+    const fx = FXON();
+    // installs (pending -> installed): green sparks, LEDs light up
+    let n = 0;
+    for (const [uid, rid] of N.inst) if (!P.inst.has(uid) && P.pend.has(uid) && n++ < 6) {
+      SND("install", null, 120);
+      if (fx) { FX.rackAnim(rid, "fx-on", 700); fxAtRack(rid, c => FX.sparks(c.x, c.y, "#7FE0A8", 22, 240)); }
+    }
+    // failures: red sparks + smoke where it broke
+    n = 0;
+    for (const uid of N.failed) if (!P.failed.has(uid) && n++ < 6) {
+      const rid = N.inst.get(uid);
+      SND("fail", null, 150);
+      if (fx && rid) { FX.rackAnim(rid, "fx-jolt", 420); fxAtRack(rid, c => { FX.sparks(c.x, c.y, "#FF6A4A", 26, 280); FX.smoke(c.x, c.top + 10, 6); }); }
+      dlog("fx: failure", uid, rid);
+    }
+    // completed sales: cha-ching, pitch by amount, "+$Xk" rising from the rack it left
+    for (const [id, j] of P.sells) if (!N.sells.has(id)) {
+      SND("chaching", j.value || 1);
+      if (fx) fxAtRack(j.rack, c => FX.floatText(c.x, c.top, `+${money(j.value || 0)}`, "#FFD24A", 16));
+    }
+    // throttling begins: a soft warning beep + an orange puff (rate-limited)
+    for (const rid of N.thr) if (!P.thr.has(rid)) {
+      SND("warn", null, 4000);
+      if (fx) fxAtRack(rid, c => FX.sparks(c.x, c.top + 6, "#FFB054", 8, 120));
+      break;
+    }
+    // grid outage: strong shake + red flash + alarm + racks go black one by one; relight in a wave on restore
+    if (N.outage && !P.outage) {
+      dlog("fx: outage start", { ups: !!S.ups });
+      if (N.dark) {
+        SND("alarm"); SND("powerDown");
+        if (fx) {
+          FX.shake(0.9); FX.flash("#E0402A", 700, 0.45);
+          for (const hall of [1, 2]) rackOrder(hall).forEach((r, i) => FX.rackAnim(r.id, "fx-off", 380, 120 + i * 55, true, "ease-in"));
+        }
+        document.body.classList.add("blackout");
+      } else { SND("warn"); if (fx) { FX.shake(0.35); FX.flash("#E0A43A", 450, 0.22); } }
+    } else if (!N.outage && P.outage) {
+      dlog("fx: outage end");
+      document.body.classList.remove("blackout");
+      if (P.dark) {
+        SND("powerUp");
+        if (fx) {
+          FX.clearRackAnims(e => e.hold);
+          FX.flash("#FFFFFF", 350, 0.18);
+          for (const hall of [1, 2]) rackOrder(hall).forEach((r, i) => FX.rackAnim(r.id, "fx-relight", 520, i * 45));
+        }
+      }
+    }
+    // generation launch: prices crash (medium shake + low boom), said where the prices live
+    if (N.gen > P.gen) {
+      dlog("fx: gen launch", N.gen);
+      SND("launch");
+      if (fx) {
+        FX.shake(0.5); FX.flash("#E0A43A", 400, 0.16);
+        const m = $("market-chart").getBoundingClientRect();
+        if (m.width && m.bottom > 0 && m.top < innerHeight) FX.floatText(m.left + m.width / 2, m.top + m.height / 2, `Gen ${N.gen} ships · prices ↓`, "#FF8466", 18);
+      }
+    }
+    // vendor death: medium shake + crunch; red sparks on every rack holding a bricked part
+    const newDead = N.dead.filter(v => !P.dead.includes(v));
+    if (newDead.length) {
+      dlog("fx: vendor death", newDead);
+      SND("crunch");
+      if (fx) {
+        FX.shake(0.5);
+        for (const r of hallRacks(V.hall)) if (r.devices.some(d => newDead.includes(item(d.type).vendor))) {
+          FX.rackAnim(r.id, "fx-jolt", 420);
+          fxAtRack(r.id, c => { FX.sparks(c.x, c.y, "#FF6A4A", 18, 220); FX.smoke(c.x, c.top + 10, 4); });
+        }
+      }
+    }
+    // quarter close: white flash + chime + a tally card
+    if (N.q != null && N.q !== P.q) {
+      SND("chime");
+      if (fx) FX.flash("#FFFFFF", 380, 0.28);
+      quarterCard(S.lastQuarter);
+    }
+    // score milestones: confetti from the score chip
+    for (const [m, label] of MILESTONES) if (P.score < m && N.score >= m) {
+      dlog("fx: milestone", label);
+      SND("fanfare");
+      toast(`Score passed ${label}`);
+      if (fx) { const r = $("h-score").getBoundingClientRect(); FX.confetti(r.left + r.width / 2, r.bottom, 90, 0.8); }
+    }
+  }
+  function fxFrame(st, dt, now) {
+    if (S.over && V.overShown) { if (window.SFX) SFX.setHum(0, 1, false, true); return; }
+    const N = V.fxPrev && S.day === V.fxPrev.day ? null : fxSnap(st);
+    if (N) {
+      const P = V.fxPrev;
+      if (P) {
+        const dDays = N.day - P.day;
+        fxEvents(P, N, st);
+        // money floaters: accumulate each visible rack's exact earnings; a big jump (fast-forward / load) is not "earned on screen"
+        if (dDays > 0 && dDays <= 3) for (const r of hallRacks(V.hall)) { const pr = st.perRack[r.id]; if (pr && pr.rev > 0) V.earnAcc[r.id] = (V.earnAcc[r.id] || 0) + pr.rev * dDays; }
+        else if (dDays > 3) V.earnAcc = {};
+        // discrete cash / score jumps roll (display only); continuous earnings are shown exactly
+        const flow = Math.abs(st.net) * Math.max(0, dDays) * 3 + 2;
+        const dc = N.cash - P.cash, ds = N.score - P.score;
+        if (dDays <= 3 && Math.abs(dc) > flow) V.cashOff += dc;
+        if (dDays <= 3 && Math.abs(ds) > Math.max(flow * 3, Math.abs(P.score) * 0.002 + 2)) V.scoreOff += ds;
+      }
+      V.fxPrev = N;
+    }
+    // cash rolled by an action (buy/sell/borrow) happens between days: catch it too
+    if (V.fxPrev && S.cash !== V.fxPrev.cash && S.day === V.fxPrev.day) { V.cashOff += S.cash - V.fxPrev.cash; V.fxPrev.cash = S.cash; }
+    const tau = FXON() && FX.reduced ? 0.05 : 0.38, k = 1 - Math.exp(-dt / tau);
+    const big = Math.abs(V.cashOff) > 10;
+    V.cashOff = Math.abs(V.cashOff) < 0.5 ? 0 : V.cashOff * (1 - k);
+    V.scoreOff = Math.abs(V.scoreOff) < 0.5 ? 0 : V.scoreOff * (1 - k);
+    if (big) SND("tick", 2, 70);   // Balatro-style ticking while a big change rolls
+    $("h-cash").textContent = money(S.cash - V.cashOff);
+    runway(dt, now);
+    // final quarter: gold frame, drum-roll countdown over the last 10 days
+    const left = K.END_DAY - S.day;
+    if (left <= 90 && !V.finalQ && !S.over) {
+      V.finalQ = true; document.body.classList.add("finalq");
+      toast("Final quarter: make it count"); SND("drum", 0);
+      dlog("fx: final quarter");
+    }
+    const cd = Math.ceil(left);
+    if (V.finalQ && cd <= 10 && cd !== V.lastCount && cd > 0) {
+      V.lastCount = cd; SND("drum", 10 - cd);
+      try { $("h-when").animate([{ transform: "scale(1.12)" }, { transform: "scale(1)" }], { duration: 260, easing: "ease-out" }); } catch (e) { /* no WAAPI */ }
+    }
+    // spatial particles: money floaters and heat steam, only while time runs and for the visible hall
+    const live = running() && !(V.fxPrev && V.fxPrev.dark);
+    if (FXON() && live && !FX.reduced) {
+      if (now - V.earnT > 220) {
+        V.earnT = now;
+        let best = null, amt = 0;
+        for (const id in V.earnAcc) if (V.earnAcc[id] > amt && now - (V.earnLast[id] || 0) > 1400) { best = id; amt = V.earnAcc[id]; }
+        if (best && amt >= 0.1) {
+          const c = FX.rackCenter(best);
+          if (c) {
+            FX.floatText(c.x, c.top + 4, `+${amt < 10 ? "$" + amt.toFixed(1) + "k" : money(amt)}`, "#7FE0A8", Math.min(22, 11 + 4 * Math.log10(1 + amt * 2)));
+            SND("coin", amt, 450);
+          }
+          V.earnAcc[best] = 0; V.earnLast[best] = now;
+        }
+      }
+      if (on("heat") && now - V.steamT > 380) {
+        V.steamT = now;
+        for (const r of hallRacks(V.hall)) {
+          const pr = st.perRack[r.id];
+          if (!pr || pr.inlet <= 30 || !r.devices.length) continue;
+          const c = FX.rackCenter(r.id);
+          if (c) { FX.steam(c.x, c.top + 6); if (pr.inlet > K.T_LIMIT) FX.steam(c.x, c.top + 6); }
+        }
+      }
+    }
+    if (window.SFX) SFX.setHum(st.kw, S.gridKw, running(), !!(V.fxPrev && V.fxPrev.dark));
+    if (drag && drag.started && drag.card && FXON() && !FX.reduced) {   // tilt settles back when the pointer stops
+      V.tilt *= Math.exp(-dt * 9);
+      drag.card.style.rotate = V.tilt.toFixed(2) + "deg";
+    }
+  }
+  /* cash gauge = runway above the bankruptcy line relative to your peak; a damage ghost shows what a drop took */
+  function runway(dt, now) {
+    const el = $("h-runway"); if (!el) return;
+    const floor = on("finance") ? -S.creditLimit : K.BANKRUPT;
+    V.cashPeak = Math.max(V.cashPeak || 0, S.cash);
+    const frac = clamp01((S.cash - floor) / Math.max(1, V.cashPeak - floor));
+    if (frac >= V.ghostFrac) { V.ghostFrac = frac; V.ghostHold = now; }
+    else if (now - V.ghostHold > 450) V.ghostFrac += (frac - V.ghostFrac) * (1 - Math.exp(-dt / 0.3));
+    if (!el._i) el._i = { ghost: el.querySelector(".ghostbar"), now: el.querySelector(".now") };
+    el._i.now.style.width = (frac * 100).toFixed(1) + "%";
+    el._i.ghost.style.width = (V.ghostFrac * 100).toFixed(1) + "%";
+    el._i.now.style.background = frac < 0.15 ? COL.hudBad : frac < 0.35 ? "#E0A43A" : COL.hudGood;
+    const chip = $("h-cashchip");
+    chip.classList.toggle("danger", frac < 0.15);
+    chip.title = `Cash and current net income per day. Bar: cash above the bankruptcy line (${money(floor)}) relative to your peak (${money(V.cashPeak)}).`;
+  }
+  /* quarter tally card: revenue − costs = profit, ticking up; display only, pointer-events none */
+  let qcardT;
+  function quarterCard(L) {
+    const el = $("qcard"); if (!el || !L) return;
+    const rev = L.web + L.train + L.infer + L.frontier + L.contracts;
+    const cost = L.power + L.upkeep + L.salaries + L.transit + L.interest + L.lease + L.water + L.diesel + L.carbonTax + L.fines + L.penalties + L.repairs + L.other + L.tax;
+    const profit = rev - cost, q = L.q;
+    el.innerHTML = `<div class="qh">${icon("trend")}Q${q % 4 + 1} Y${Math.floor(q / 4) + 1} closed</div>
+      <div class="qr"><span>Revenue</span><b style="color:var(--hud-good)">+${money(rev)}</b></div><div class="qr"><span>Costs</span><b style="color:var(--hud-bad)">−${money(cost)}</b></div>
+      <div class="qr qp"><span>Profit</span><b id="qcard-p">$0k</b></div>`;
+    el.classList.remove("show"); void el.offsetWidth; el.classList.add("show");
+    const pEl = $("qcard-p");
+    pEl.style.color = profit >= 0 ? "var(--hud-good)" : "var(--hud-bad)";
+    if (FXON()) FX.tween(0, profit, 900, "outCubic", v => { pEl.textContent = money(v); }, () => { pEl.textContent = money(profit); });
+    else pEl.textContent = money(profit);
+    clearTimeout(qcardT); qcardT = setTimeout(() => el.classList.remove("show"), 3600);
+    dlog("fx: quarter", q, { rev: rev.toFixed(1), cost: cost.toFixed(1) });
   }
   function autosave() {
     if (S.over) return;
@@ -308,6 +565,7 @@
     document.body.classList.toggle("leasing", V.lease && on("finance"));
     const dt = performance.now() - t0;
     if (DEBUG && dt > 12) console.log("[ui] slow renderAll", dt.toFixed(1) + "ms");
+    return st;
   }
 
   function barChip(el, ic, color, val, cap, unitTxt, projVal, over, fmt) {
@@ -315,8 +573,21 @@
     const p = v => Math.max(0, Math.min(100, v / cap * 100));
     const d = projVal != null ? projVal - val : 0;
     el.classList.toggle("over", !!over);
-    el.innerHTML = `${icon(ic, `color:${color}`)}<div><span class="big">${fmt(val)}</span> <small>/ ${fmt(cap)} ${unitTxt}</small>${Math.abs(d) >= .05 ? `<span class="delta" style="color:${d > 0 ? COL.hudBad : COL.hudGood}">${d > 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}</span>` : ""}
-      <div class="bar">${projVal != null ? `<i class="proj" style="width:${p(projVal)}%;background:${color}"></i>` : ""}<i style="width:${p(val)}%;background:${color}"></i></div></div>`;
+    // built once, then patched in place so the bar widths can ease (CSS transition) instead of being replaced every frame
+    let b = el._bc;
+    if (!b || b.ic !== ic || b.color !== color) {
+      el.innerHTML = `${icon(ic, `color:${color}`)}<div><span class="big"></span> <small></small><span class="delta"></span>
+        <div class="bar"><i class="proj" style="background:${color}"></i><i class="now" style="background:${color}"></i></div></div>`;
+      b = el._bc = { ic, color, big: el.querySelector(".big"), small: el.querySelector("small"), delta: el.querySelector(".delta"), proj: el.querySelector("i.proj"), now: el.querySelector("i.now"), v: {} };
+    }
+    const setT = (k, node, txt) => { if (b.v[k] !== txt) { b.v[k] = txt; node.textContent = txt; } };
+    setT("big", b.big, fmt(val));
+    setT("small", b.small, `/ ${fmt(cap)} ${unitTxt}`);
+    setT("delta", b.delta, Math.abs(d) >= .05 ? `${d > 0 ? "+" : "−"}${Math.abs(d).toFixed(1)}` : "");
+    b.delta.style.color = d > 0 ? COL.hudBad : COL.hudGood;
+    const wNow = p(val).toFixed(1) + "%", wProj = projVal != null ? p(projVal).toFixed(1) + "%" : "0%";
+    if (b.v.w !== wNow) { b.v.w = wNow; b.now.style.width = wNow; }
+    if (b.v.wp !== wProj) { b.v.wp = wProj; b.proj.style.width = wProj; b.proj.style.display = projVal != null ? "" : "none"; }
   }
   function show(el, v) { if (el.hidden === v) el.hidden = !v; }
   function transitNeed(st) {
@@ -324,7 +595,7 @@
     return raw / K.TRANSIT_PER;
   }
   function renderHUD(st, proj) {
-    $("h-cash").textContent = money(S.cash);
+    $("h-cash").textContent = money(S.cash - V.cashOff);   // cashOff: the rolling (display-only) remainder of a discrete jump
     const rate = $("h-rate");
     rate.textContent = perDay(st.net) + (proj ? `  →  ${perDay(proj.net)}` : "");
     rate.style.color = (proj || st).net >= 0 ? COL.hudGood : COL.hudBad;
@@ -350,6 +621,7 @@
     for (const h of st.halls) if (h.roomT > hot.roomT) hot = h;
     const tProj = proj ? Math.max(...proj.halls.map(h => h.roomT)) : null;
     barChip(ht, "temp", COL.hudBad, hot.roomT, K.T_LIMIT, "°C", tProj, hot.roomT > K.T_LIMIT - 1.5, v => v.toFixed(1));
+    ht.classList.toggle("near", on("heat") && hot.roomT > K.T_LIMIT - 3.5 && hot.roomT <= K.T_LIMIT - 1.5);   // gauge glows before the limit
     const arrow = hot.tTarget > hot.roomT + 0.1 ? "rising" : hot.tTarget < hot.roomT - 0.1 ? "falling" : "steady";
     ht.title = st.halls.map(h => `Hall ${h.n}: ${h.roomT.toFixed(1)} °C → ${h.tTarget.toFixed(1)}, cooling ${h.heatCap.toFixed(0)} kW`).join("\n") + `\nRoom is ${arrow}. Racks throttle above ${K.T_LIMIT} °C inlet.`;
     ht.classList.toggle("lockmask", !on("heat"));
@@ -394,7 +666,7 @@
     }
     // score
     const sc = Sim.score(S);
-    $("h-score").innerHTML = `${icon("flag", "color:var(--sel)")}<div><span class="big">${money(sc)}</span><small style="display:block">score · worth ${money(Sim.netWorth(S))}</small></div>`;
+    $("h-score").innerHTML = `${icon("flag", "color:var(--sel)")}<div><span class="big">${money(sc - V.scoreOff)}</span><small style="display:block">score · worth ${money(Sim.netWorth(S))}</small></div>`;
     $("h-score").title = on("investors") ? "Score = your equity % × company value (net worth + 2 years of earnings) × reputation factor."
       : "Score = net worth (cash + resale − debt) + 2 years of current earnings.";
     document.querySelectorAll(".speed button").forEach(b => b.setAttribute("aria-pressed", +b.dataset.speed === V.speed));
@@ -521,6 +793,7 @@
       return;
     }
     let h = "";
+    const nowMs = performance.now();
     const L = V.hall === 1 ? "ABC" : "DEF";
     [[1, "cold", "Cold aisle"], [3, "hot", "Hot aisle"], [5, "cold", "Cold aisle"], [7, "hot", "Hot aisle"]].forEach(([row, k, l]) =>
       h += `<div class="aisle ${k}" style="grid-row:${row}">${icon(k === "cold" ? "snow" : "flame")}${l}</div>`);
@@ -563,13 +836,32 @@
       if (pr.frontier && pr.trainGpus) flags.push("star");
       const nFail = r.devices.filter(d => d.failed).length, nLease = r.devices.concat(r.pending).filter(d => d.leased).length;
       const tip = `${r.id}: ${R[role].name}. ${perDay(pr.rev)}, ${pr.kw.toFixed(1)} kW, inlet ${pr.inlet.toFixed(1)} °C, ${free}U free${pr.netF < 1 ? `, network short (${Math.round(pr.netF * 100)} %)` : ""}${pr.throttle < 1 ? `, throttled to ${Math.round(pr.throttle * 100)} %` : ""}${nFail ? `, ${nFail} failed` : ""}${nLease ? `, ${nLease} leased` : ""}`;
+      // idle life (display only): fan speed follows the rack's kW, LED blink rate follows how much of it is delivered.
+      // Negative animation-delay keeps the phase continuous across the floor's re-renders.
+      const load = clamp01(pr.kw / K.RACK_KW), util = pr.rev > 0.01 ? clamp01(pr.throttle * Math.min(1, pr.netF == null ? 1 : pr.netF)) : 0;
+      const fanDur = 1.7 - 1.35 * load, ledDur = 0.3 + 1.5 * (1 - util), tS = nowMs / 1000;
+      const fan = pr.kw > 0.05 ? `<span class="fan" style="animation-duration:${fanDur.toFixed(2)}s;animation-delay:${(-(tS % fanDur)).toFixed(2)}s"></span>` : "";
+      const led = util > 0 ? ` style="animation-duration:${ledDur.toFixed(2)}s;animation-delay:${(-(tS % ledDur)).toFixed(2)}s"` : "";
+      const fillCol = rackColor(r, st), prevCol = V.fillPrev[r.id];
+      V.fillPrev[r.id] = fillCol;
+      const fillStyle = prevCol && prevCol !== fillCol ? `background:${prevCol}" data-fill="${fillCol}` : `background:${fillCol}`;   // cross-fade: start at the old colour
       h += `<button class="rack ${r.row === 1 ? "front-bottom" : "front-top"}${r.tank ? " tank" : ""}${tgt}" style="${pos}" data-rack="${r.id}" aria-pressed="${r.id === V.selected}" title="${esc(tip)}">
-        <span class="fill" style="background:${rackColor(r, st)}"></span><span class="front"></span>
+        <span class="fill" style="${fillStyle}"></span>${fan}<span class="front${util > 0 ? " blink" : ""}${nFail ? " bad" : ""}"${led}></span>
         ${pr.rev > 0.05 ? `<span class="earn">$${pr.rev.toFixed(1)}k</span>` : ""}${nLease ? `<span class="leasetag">LEASE</span>` : ""}
         <span class="flags">${flags.map(f => icon(f, f === "star" ? `color:${COL.frontier}` : "")).join("")}</span><span class="id">${r.id}</span>${free ? `<span class="free">${free}U</span>` : ""}
         ${nFail ? `<span class="xmark" title="${nFail} failed">${icon("cross")}</span>` : ""}${prog}</button>`;
     }
     F.innerHTML = h;
+    floorLife(F, nowMs);
+  }
+  /* post-render juice for the floor: colour cross-fades, cold-air drift phase, calendar tint, rack animations */
+  function floorLife(F, nowMs) {
+    F.style.setProperty("--drift-delay", (-((nowMs / 1000) % 1.6)).toFixed(2) + "s");
+    const doy = S.day % 360, warm = Math.cos(2 * Math.PI * (doy - 200) / 360);   // summer peaks ~day 200 (same as the goal hint)
+    F.style.setProperty("--season", warm > 0 ? `rgba(255,140,40,${(0.07 * warm).toFixed(3)})` : `rgba(70,140,255,${(0.07 * -warm).toFixed(3)})`);
+    const fades = F.querySelectorAll("[data-fill]");
+    if (fades.length) requestAnimationFrame(() => fades.forEach(el => { el.style.background = el.dataset.fill; el.removeAttribute("data-fill"); }));
+    if (FXON()) FX.afterFloor(F);
   }
 
   function renderProgress() {
@@ -1062,17 +1354,21 @@
       for (let i = V.seenChapter + 1; i <= S.chapter; i++) if (!CH[i].mech || S.mech[CH[i].mech] !== false) V.chapQueue.push(i);
       V.seenChapter = S.chapter;
     }
-    if (V.chapQueue.length && !anyDialogOpen() && !V.menu) showChapter(V.chapQueue.shift());
+    if (V.chapQueue.length && !anyDialogOpen() && !V.menu) showChapter(V.chapQueue.shift(), true);
   }
-  function showChapter(i) {
+  function showChapter(i, fresh) {
     const c = CH[i], m = CH_META[c.key] || { icons: [], col: "info", where: "" };
     const col = COL[m.col] || COL.info;
     $("ct").textContent = c.title;
     $("csub").textContent = `Chapter ${i + 1} of ${CH.length} · ${dateOf(S.day)} · game paused`;
-    $("cbody").innerHTML = `<ul>${c.bullets.map((b, k) => `<li><span class="av" style="background:${col}">${icon(m.icons[k] || "flag")}</span><span>${esc(b)}</span></li>`).join("")}</ul>
+    $("cbody").innerHTML = `<ul>${c.bullets.map((b, k) => `<li style="--i:${k}"><span class="av" style="background:${col}">${icon(m.icons[k] || "flag")}</span><span>${esc(b)}</span></li>`).join("")}</ul>
       ${m.where ? `<div class="where">${icon("help", "width:16px;height:16px")}<span>${esc(m.where)}</span></div>` : ""}`;
     openDialog($("chapter"));
     dlog("chapter card", i, c.key);
+    if (fresh && i > 0) {   // a newly unlocked chapter is a small celebration: confetti over the card + a soft chord
+      SND("chord");
+      if (FXON()) { const r = $("chapter").getBoundingClientRect(); FX.confetti(r.left + r.width / 2, r.top + 8, 80, 0.9); }
+    }
     renderAll();
   }
   function showSandboxCard() {
@@ -1082,7 +1378,8 @@
       <div class="chaps">${CH.map((c, i) => { const m = CH_META[c.key]; return `<span><span class="av" style="background:${COL[m.col] || COL.info}">${icon(m.icons[0])}</span>${i + 1}. ${esc(c.title)}</span>`; }).join("")}</div>`;
     openDialog($("chapter"));
   }
-  function openDialog(d) { if (!d.open) d.showModal(); }
+  function openDialog(d) { if (!d.open) d.showModal(); if (FXON()) FX.hostCanvas(d); }   // the one fx canvas follows the modal into the top layer
+  for (const id of ["chapter", "over"]) $(id).addEventListener("close", () => { if (FXON()) FX.hostCanvas(document.querySelector("dialog[open]")); });
   document.querySelectorAll("dialog [data-close]").forEach(b => b.addEventListener("click", () => b.closest("dialog").close()));
   $("chapter").addEventListener("close", () => { renderAll(); setTimeout(maybeChapter, 0); });
   $("helpbtn").addEventListener("click", () => showChapter(S.chapter));
@@ -1119,11 +1416,43 @@
       $("bots").innerHTML = `${bar("you", "You", COL.sel)}${bar("greedy", "Greedy bot", COL.net)}${bar("planner", "Planner bot", COL.train)}
         <div class="sub">Same seed, same events. Greedy buys whatever pays best today. Planner looks ahead: seasons, launches, vendor news, pilots, per-kW upgrades.</div>`;
     };
-    $("obody").innerHTML = `<div class="score"><div class="big" style="font-size:38px">${money(sm.score)}</div><div class="sub">${S.over === "bankrupt" ? "Cash fell below your credit line." : S.over === "fired" ? "Two missed board targets in a row. Your equity counts at half." : `Founder equity value after ${Math.floor(S.day)} days.`}</div><div id="bots" style="display:grid;gap:8px"></div></div>
+    $("obody").innerHTML = `<div class="score"><div class="tally" id="tally"></div><div class="big" id="final-score" style="font-size:38px">${money(sm.score)}</div><div class="sub">${S.over === "bankrupt" ? "Cash fell below your credit line." : S.over === "fired" ? "Two missed board targets in a row. Your equity counts at half." : `Founder equity value after ${Math.floor(S.day)} days.`}</div><div id="bots" style="display:grid;gap:8px"></div></div>
       <div class="cols">${breakdown}${lessons}</div>${curtain}`;
     drawBots();
     openDialog($("over"));
+    runTally(sm);
     runBots(rows, drawBots);
+  }
+  /* last bullet: the score tallies up step by step (net worth + earnings, × reputation, × ownership), Balatro-style.
+   * Each step's number is the exact value from Sim.summary; the big number rolls between them. */
+  function runTally(sm) {
+    const el = $("tally"), big = $("final-score"); if (!el || !big) return;
+    const steps = [["Net worth", money(sm.netWorth), sm.netWorth], ["+ Earnings multiple", money(sm.earnings), sm.netWorth + sm.earnings],
+      [`× Reputation`, "×" + sm.repFactor.toFixed(2), sm.companyValue]];
+    if (sm.own < 0.999) steps.push(["× Your ownership", pct(sm.own), sm.companyValue * sm.own]);
+    if (S.over === "fired") steps.push(["× Fired", "×" + K.FIRED_SCORE, sm.score]);
+    steps[steps.length - 1][2] = sm.score;
+    el.innerHTML = steps.map(([a, b], i) => `<div class="trow" data-i="${i}"><span>${esc(a)}</span><b>${esc(b)}</b></div>`).join("");
+    const fast = !FXON() || FX.reduced, gap = fast ? 60 : 520;
+    let cur = 0;
+    big.textContent = money(0);
+    steps.forEach(([, , v], i) => setTimeout(() => {
+      if (!$("tally") || $("tally") !== el) return;   // dialog replaced (replay)
+      el.querySelector(`[data-i="${i}"]`).classList.add("in");
+      SND("tick", i * 3);
+      const from = cur; cur = v;
+      if (FXON()) FX.tween(from, v, fast ? 60 : 420, "outCubic", x => { big.textContent = money(x); }, () => { big.textContent = money(v); });
+      else big.textContent = money(v);
+      if (i === steps.length - 1) setTimeout(() => {
+        big.textContent = money(sm.score);
+        big.classList.add("landed");
+        if (S.over === "end") {
+          SND("fanfare");
+          if (FXON()) { const r = big.getBoundingClientRect(); FX.confetti(r.left + r.width / 2, r.top + r.height / 2, 120, 1); FX.sparks(r.left + r.width / 2, r.top + r.height / 2, "#FFD24A", 30, 320); }
+        }
+        dlog("fx: tally done", sm.score.toFixed(1));
+      }, fast ? 60 : 460);
+    }, 250 + i * gap));
   }
   function runBots(rows, draw) {
     const BUDGET = 8000, SLICE = 14, runId = (V.botRun = (V.botRun || 0) + 1);
@@ -1180,7 +1509,7 @@
       ["flag", "Chapters unlock one mechanic at a time: power, GPUs, heat, generations, failures, networks, contracts, memory, finance, facilities, energy, environment, investors, reputation, policy, disruption."],
       ["news", "Vendors, investors and politicians are biased. Trust the news that follows up, measure with pilots, and watch time."],
       ["trend", "Score = your equity × company value after 5 years. At the end, two bots replay your seed so you can compare."],
-      ["pause", "Space pauses. Keys 1-4 set 1x/2x/4x/8x. M cycles map modes. Esc closes drawers."]]
+      ["pause", "Space pauses. Keys 1-4 set 1x/2x/4x/8x. V cycles map modes. M mutes sound. Esc closes drawers."]]
       .map(([ic, t]) => `<div>${icon(ic)}<span>${t}</span></div>`).join("");
   });
   $("menubtn").addEventListener("click", () => showMenu(true));
@@ -1275,17 +1604,34 @@
       document.body.classList.add("dragging");
       drag.ghost = document.createElement("div");
       drag.ghost.className = "ghost";
-      drag.ghost.innerHTML = `<div class="gcard">${icon(info.icon)}${esc(info.name)}${drag.p.kind === "new" && V.lease && on("finance") && item(drag.p.item).role === "gpu" ? " (lease)" : ""}</div><div class="msg"></div>`;
+      drag.ghost.innerHTML = `<div class="gcard lift">${icon(info.icon)}${esc(info.name)}${drag.p.kind === "new" && V.lease && on("finance") && item(drag.p.item).role === "gpu" ? " (lease)" : ""}</div><div class="msg"></div>`;
       document.body.appendChild(drag.ghost);
+      drag.card = drag.ghost.querySelector(".gcard");
+      drag.src.classList.add("lifting");
+      drag.lx = e.clientX; drag.lt = performance.now(); V.tilt = 0;
+      SND("pickup");
       dlog("drag start", drag.p);
     }
     e.preventDefault();
-    drag.ghost.style.left = e.clientX + "px"; drag.ghost.style.top = e.clientY + "px";
-    const target = findTarget(e.clientX, e.clientY);
+    // tilt with pointer velocity (follow-through); settles back in fxFrame when the pointer stops
+    const tNow = performance.now(), vx = (e.clientX - drag.lx) / Math.max(8, tNow - drag.lt);
+    drag.lx = e.clientX; drag.lt = tNow;
+    V.tilt = Math.max(-14, Math.min(14, V.tilt * 0.6 + vx * 9));
+    if (!FXON() || !FX.reduced) drag.card.style.rotate = V.tilt.toFixed(2) + "deg";
+    let target = findTarget(e.clientX, e.clientY), gx = e.clientX, gy = e.clientY;
     clearMarks();
     const msg = drag.ghost.querySelector(".msg");
-    const ev = evaluate(drag.p, target);
+    let ev = evaluate(drag.p, target);
+    // coyote time: magnetic targets — nothing valid under the pointer, but a valid target within 40 px snaps
+    drag.snap = null;
+    if (!ev.res) {
+      const m = magnet(e.clientX, e.clientY, target);
+      if (m) { target = m.el; ev = m.ev; drag.snap = m; gx = e.clientX + (m.cx - e.clientX) * 0.35; gy = e.clientY + (m.cy - e.clientY) * 0.35; }
+    }
+    drag.ghost.style.transform = `translate(${gx.toFixed(1)}px,${gy.toFixed(1)}px) translate(-50%,-60%)`;
+    drag.gx = gx; drag.gy = gy;
     const st = Sim.stats(S);
+    drag.bad = ev.res && !ev.res.ok;
     if (!ev.res) { msg.style.display = "none"; renderHUD(st); drag.op = null; return; }
     target.classList.add(ev.res.ok ? "drop-ok" : "drop-bad");
     let level = ev.res.ok ? "ok" : "bad", text = ev.res.msg, proj = null;
@@ -1301,15 +1647,56 @@
     renderHUD(st, proj);
     drag.op = ev.op;
   });
+  /* nearest valid drop target within MAGNET px of the pointer (rects cached per drag: the DOM does not re-render mid-drag) */
+  const MAGNET = 40;
+  function magnet(x, y, under) {
+    if (!drag.cands) drag.cands = [...document.querySelectorAll(TARGETS)].map(el => ({ el, r: el.getBoundingClientRect() })).filter(c => c.r.width > 0);
+    let best = null;
+    for (const c of drag.cands) {
+      if (c.el === under) continue;
+      const dx = Math.max(c.r.left - x, 0, x - c.r.right), dy = Math.max(c.r.top - y, 0, y - c.r.bottom), d = Math.hypot(dx, dy);
+      if (d > MAGNET || (best && d >= best.d)) continue;
+      const ev = evaluate(drag.p, c.el);
+      if (ev.res && ev.res.ok) best = { el: c.el, ev, d, cx: (c.r.left + c.r.right) / 2, cy: (c.r.top + c.r.bottom) / 2 };
+    }
+    return best;
+  }
+  addEventListener("scroll", () => { if (drag) drag.cands = null; }, true);
+  /* the ghost's exit: squash into the target (commit), shake "no" (invalid), or fly home (dropped on nothing) */
+  function ghostExit(g, src, how) {
+    const reduced = !FXON() || FX.reduced;
+    if (reduced || !g.card || !g.ghost.animate) { g.ghost.remove(); return; }
+    const base = `translate(${g.gx.toFixed(1)}px,${g.gy.toFixed(1)}px) translate(-50%,-60%)`;
+    let a;
+    if (how === "commit") {
+      const to = g.snap ? `translate(${g.snap.cx.toFixed(1)}px,${g.snap.cy.toFixed(1)}px) translate(-50%,-60%)` : base;
+      a = g.ghost.animate([{ transform: base, opacity: 1 }, { transform: to, opacity: 1, offset: 0.45 }, { transform: to, opacity: 0 }], { duration: 200, easing: "ease-in" });
+      g.card.animate([{ scale: "1.08" }, { scale: "1.3 0.62", offset: 0.55 }, { scale: "0.6 0.2" }], { duration: 200, easing: "ease-in" });
+    } else if (how === "bad") {
+      a = g.card.animate([0, -10, 9, -7, 5, -2, 0].map(x => ({ translate: `${x}px 0` })), { duration: 320, easing: "ease-out" });
+      g.ghost.animate([{ opacity: 1 }, { opacity: 1, offset: 0.7 }, { opacity: 0 }], { duration: 320 });
+    } else {
+      const r = src && src.isConnected ? src.getBoundingClientRect() : null;
+      const to = r ? `translate(${(r.left + r.width / 2).toFixed(1)}px,${(r.top + r.height / 2).toFixed(1)}px) translate(-50%,-60%)` : base;
+      a = g.ghost.animate([{ transform: base, opacity: 1 }, { transform: to, opacity: 0.2 }], { duration: 240, easing: "cubic-bezier(.2,.8,.3,1)" });
+    }
+    a.onfinish = () => g.ghost.remove();
+    setTimeout(() => g.ghost.isConnected && g.ghost.remove(), 600);   // safety
+  }
   function endDrag(commitIt) {
     V.down = false;
     if (!drag) return;
     if (drag.started) {
-      drag.ghost.remove(); document.body.classList.remove("dragging"); clearMarks();
+      const g = drag;
+      document.body.classList.remove("dragging"); clearMarks();
+      g.src.classList.remove("lifting");
       suppressClick = true; setTimeout(() => suppressClick = false, 0);
-      const op = drag.op; drag = null;
-      dlog("drag end", op);
-      if (commitIt && op) { V.armed = null; act(op); } else renderAll();
+      const op = g.op; drag = null;
+      dlog("drag end", op, g.snap ? "(magnet)" : "");
+      const ok = commitIt && op;
+      ghostExit(g, g.src, ok ? "commit" : commitIt && g.bad ? "bad" : "home");
+      if (!ok && commitIt && g.bad) SND("nope");
+      if (ok) { V.armed = null; act(op); } else renderAll();
       return;
     }
     drag = null;
@@ -1322,7 +1709,7 @@
   function tapTarget(target) {   // tap-to-place: armed payload + tapped target
     const ev = evaluate(V.armed, target);
     if (!ev.res) return false;
-    if (!ev.res.ok) { toast(ev.res.msg); return true; }
+    if (!ev.res.ok) { toast(ev.res.msg); SND("nope"); try { target.animate([0, -6, 5, -3, 0].map(x => ({ translate: `${x}px 0` })), { duration: 260 }); } catch (e) { /* no WAAPI */ } return true; }
     if (act(ev.op)) { V.armed = null; renderAll(); }
     return true;
   }
@@ -1397,13 +1784,23 @@
     if (e.code === "Space") { e.preventDefault(); setSpeed(V.speed ? 0 : V.lastSpeed); }
     else if (SPEEDS[e.key]) setSpeed(SPEEDS[e.key]);
     else if (e.key === "Escape") { if (V.armed) { V.armed = null; renderAll(); } else if (V.pop) closePop(); else if (V.drawer) closeDrawer(); }
-    else if (e.key === "m") { const ms = MAP_MODES.filter(m => on(m.ch)); V.mode = ms[(ms.findIndex(m => m.key === V.mode) + 1) % ms.length].key; renderAll(); }
+    else if (e.key === "m" || e.key === "M") toggleMute();
+    else if (e.key === "v" || e.key === "V") { const ms = MAP_MODES.filter(m => on(m.ch)); V.mode = ms[(ms.findIndex(m => m.key === V.mode) + 1) % ms.length].key; renderAll(); }
   });
   document.addEventListener("pointerup", () => { V.down = false; }, true);
 
   /* ================= feedback ================= */
   let toastT;
   function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("show"); clearTimeout(toastT); toastT = setTimeout(() => el.classList.remove("show"), 2600); }
+  function renderMute() {
+    const b = $("mutebtn"); if (!b || !window.SFX) return;
+    b.innerHTML = icon(SFX.muted ? "mute" : "sound");
+    b.setAttribute("aria-pressed", String(!SFX.muted));
+    b.title = SFX.muted ? "Sound off (M)" : "Sound on (M)";
+  }
+  function toggleMute() { if (!window.SFX) return; SFX.toggle(); renderMute(); toast(SFX.muted ? "Sound off" : "Sound on"); }
+  if ($("mutebtn")) $("mutebtn").addEventListener("click", toggleMute);
+  renderMute();
   let cashT;
   function flashCash(d) {
     const el = $("h-cash-d");
