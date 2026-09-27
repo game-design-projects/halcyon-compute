@@ -10,9 +10,18 @@ cp bots/bots.js "$OUT/bots/"
 # stamp the build id (tag or short SHA) and the optional telemetry endpoint into the bundle
 BUILD_ID="${GITHUB_REF_NAME:-$(git rev-parse --short HEAD 2>/dev/null || echo dev)}"
 printf 'window.HALCYON_BUILD = "%s";\nwindow.HALCYON_TELEMETRY_URL = "%s";\n' "$BUILD_ID" "${TELEMETRY_URL:-}" > "$OUT/js/build.js"
+# cache-busting: itch serves every build from the same upload URL, so browsers kept stale JS/CSS (telemetry saw a
+# v0.4.5 client after v0.4.8 shipped). Append ?v=<build> to every local src/href in the bundled index.html.
+python3 - "$OUT/index.html" "$BUILD_ID" <<'PY'
+import re, sys
+p, v = sys.argv[1], sys.argv[2]
+s = open(p).read()
+s = re.sub(r'((?:src|href)="(?!https?:|data:|mailto:|#)[^"?]+\.(?:js|css))"', lambda m: f'{m.group(1)}?v={v}"', s)
+open(p, "w").write(s)
+PY
 # every local src/href in index.html must exist in the bundle
 missing=0
-for ref in $(grep -oE '(src|href)="[^"#]+"' index.html | sed -E 's/^(src|href)="//; s/"$//' | grep -vE '^(https?:|data:|mailto:)'); do
+for ref in $(grep -oE '(src|href)="[^"#]+"' "$OUT/index.html" | sed -E 's/^(src|href)="//; s/"$//; s/\?v=.*$//' | grep -vE '^(https?:|data:|mailto:)'); do
   [ -e "$OUT/$ref" ] || { echo "missing in bundle: $ref" >&2; missing=1; }
 done
 [ "$missing" -eq 0 ]

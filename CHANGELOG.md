@@ -6,6 +6,13 @@ release plus the fix and merged back here afterwards.
 
 ## [Unreleased]
 
+## [0.4.9] - 2026-09-26
+
+### Fixed
+- Players could keep running an old build: itch serves every release from the same upload URL, so browsers cached
+  the JS/CSS (telemetry saw a v0.4.5 client two releases later). The web bundle now adds `?v=<release>` to every
+  script and stylesheet, so each release loads fresh files.
+
 ## [0.4.8] - 2026-09-25
 
 ### Changed
